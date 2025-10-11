@@ -85,36 +85,51 @@ export function decidePreflopAction(
   const toCall = currentBet - playerBet;
   const canCheck = toCall === 0;
 
-  // Simple pre-flop: mostly call/check, occasionally raise with good hands
+  // Simple pre-flop: mostly check/fold, occasionally bet with premium hands
   if (canCheck) {
-    // No bet to face
-    if (strength > 0.6 && Math.random() < config.aggression * 0.5) {
-      const betAmount = Math.min(Math.floor(playerChips * 0.2), playerChips);
+    // No bet to face - check unless premium hand
+    if (strength > 0.75 && Math.random() < config.aggression * 0.4) {
+      const betAmount = Math.min(Math.floor(playerChips * 0.15), playerChips);
       return { type: 'bet', amount: betAmount };
     }
     return { type: 'check' };
   }
 
-  // Facing a bet
+  // Facing a bet - be more selective (fold more often for realistic 8-max)
   if (toCall >= playerChips) {
-    // All-in call decision
-    if (strength > 0.7 || (strength > 0.5 && Math.random() < 0.3)) {
+    // All-in call decision - only with very strong hands
+    if (strength > 0.8) {
       return { type: 'allin', amount: playerChips };
     }
     return { type: 'fold' };
   }
 
-  // Fold if weak and bet is significant
-  if (strength < 0.3 && toCall > playerChips * 0.1) {
+  // Fold weak/medium hands more aggressively
+  if (strength < 0.5) {
     return { type: 'fold' };
   }
 
-  // Call or raise based on strength
-  if (strength > 0.7 && Math.random() < config.aggression) {
-    const raiseAmount = Math.min(currentBet + minRaise, playerChips);
-    return { type: 'raise', amount: raiseAmount };
+  // Good hand (0.5-0.7) - fold if bet is large
+  if (strength < 0.7) {
+    if (toCall > playerChips * 0.15) {
+      return { type: 'fold' };
+    }
+    // Call only if cheap
+    if (Math.random() < 0.6) {
+      return { type: 'call', amount: toCall };
+    }
+    return { type: 'fold' };
   }
 
+  // Strong hand (0.7-0.8) - call most of the time
+  if (strength < 0.8) {
+    if (toCall > playerChips * 0.25) {
+      return { type: 'fold' };
+    }
+    return { type: 'call', amount: toCall };
+  }
+
+  // Premium hand (0.8+) - always call
   return { type: 'call', amount: toCall };
 }
 

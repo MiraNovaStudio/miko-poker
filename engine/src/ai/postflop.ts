@@ -102,7 +102,7 @@ export function decidePostflopAction(
     return { type: 'check' };
   }
 
-  // Facing a bet
+  // Facing a bet - ONLY call or fold (no re-raising to prevent infinite loops)
   if (toCall >= playerChips) {
     // All-in call decision
     if (strength > 0.8 || (strength > 0.6 && Math.random() < 0.4)) {
@@ -111,13 +111,8 @@ export function decidePostflopAction(
     return { type: 'fold' };
   }
 
-  // Strong hand - raise or call
+  // Strong hand - call (no re-raising)
   if (strength > 0.75) {
-    if (Math.random() < config.aggression * 0.7) {
-      const raiseSize = Math.floor(pot * (0.5 + Math.random() * 0.5));
-      const raiseAmount = Math.min(currentBet + Math.max(minRaise, raiseSize), playerChips);
-      return { type: 'raise', amount: raiseAmount };
-    }
     return { type: 'call', amount: toCall };
   }
 
@@ -138,12 +133,7 @@ export function decidePostflopAction(
     return { type: 'fold' };
   }
 
-  // Weak hand - bluff raise occasionally, otherwise fold
-  if (shouldBluff && Math.random() < 0.15) {
-    const raiseAmount = Math.min(currentBet + minRaise, playerChips);
-    return { type: 'raise', amount: raiseAmount };
-  }
-
+  // Weak hand - fold (no bluff raises)
   // Cheap call with weak hand if pot odds very favorable
   if (toCall < pot * 0.15 && Math.random() < 0.3) {
     return { type: 'call', amount: toCall };

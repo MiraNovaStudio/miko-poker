@@ -71,6 +71,10 @@ export class GameTable extends Component {
     private playerChipLabels: Map<string, Label> = new Map(); // playerId -> chip label
     private dealerButtonNode: Node | null = null;
     private currentActivePlayer: string | null = null; // Track whose turn it is
+    
+    // Pot tracking (proper poker logic)
+    private potAmount: number = 0;        // Accumulated pot from completed rounds
+    private outstandingAmount: number = 0; // Current bets in progress (not yet in pot)
 
     start() {
         console.log('=== GameTable.start() ===');
@@ -327,7 +331,15 @@ export class GameTable extends Component {
         }
 
         const gameState = this.engine.getGameState();
-        console.log(`Players: ${gameState.players.length}, Dealer: ${gameState.dealerIndex}`);
+        const sbIndex = (gameState.dealerIndex + 1) % gameState.players.length;
+        const bbIndex = (gameState.dealerIndex + 2) % gameState.players.length;
+        const utgIndex = (gameState.dealerIndex + 3) % gameState.players.length;
+        
+        console.log(`Players: ${gameState.players.length}, Dealer: ${gameState.dealerIndex} (${gameState.players[gameState.dealerIndex]?.id})`);
+        console.log(`  SB: ${sbIndex} (${gameState.players[sbIndex]?.id})`);
+        console.log(`  BB: ${bbIndex} (${gameState.players[bbIndex]?.id})`);
+        console.log(`  UTG (first to act): ${utgIndex} (${gameState.players[utgIndex]?.id})`);
+        console.log(`  Current player to act: ${gameState.currentPlayerIndex} (${gameState.players[gameState.currentPlayerIndex]?.id})`);
         
         // Reset player highlighting
         if (this.currentActivePlayer) {
@@ -359,12 +371,12 @@ export class GameTable extends Component {
      * Initialize pot and total labels at start of hand
      */
     private initializeLabels() {
-        if (this.potLabel) {
-            this.potLabel.string = 'Pot: $0';
-        }
-        if (this.totalLabel) {
-            this.totalLabel.string = 'Total: $0';
-        }
+        // Reset pot tracking
+        this.potAmount = 0;
+        this.outstandingAmount = 0;
+        
+        // Update labels
+        this.updateAllPotLabels();
         
         // Clear all bet labels
         this.playerBetLabels.forEach((label, playerId) => {
@@ -372,55 +384,62 @@ export class GameTable extends Component {
             label.node.active = false;
         });
         
-        console.log('💰 Labels initialized: Pot and Total set to $0, all bet labels cleared');
+        console.log('💰 Labels initialized: Pot=$0, Outstanding=$0, Total=$0');
     }
 
     /**
-     * Update ONLY the pot label (called when betting round closes)
+     * Calculate outstanding bets from current player bets
      */
-    private updatePotLabel() {
-        if (!this.engine) return;
-
+    private calculateOutstanding(): number {
+        if (!this.engine) return 0;
+        
         const gameState = this.engine.getGameState();
-        const pot = gameState.pot;
-
-        if (this.potLabel) {
-            this.potLabel.string = `Pot: $${pot}`;
-        }
-
-        console.log(`💰 Pot updated: $${pot}`);
-    }
-
-    /**
-     * Update ONLY the total label (pot + outstanding bets)
-     */
-    private updateTotalLabel() {
-        if (!this.engine) return;
-
-        const gameState = this.engine.getGameState();
-        const pot = gameState.pot;
-
-        // Calculate total outstanding bets from current betting round
-        let outstandingBets = 0;
+        let outstanding = 0;
+        
         gameState.players.forEach(player => {
             if (!player.folded && player.bet > 0) {
-                outstandingBets += player.bet;
+                outstanding += player.bet;
             }
         });
+        
+        return outstanding;
+    }
 
-        const total = pot + outstandingBets;
-
+    /**
+     * Update all pot-related labels (pot, total)
+     */
+    private updateAllPotLabels() {
+        const total = this.potAmount + this.outstandingAmount;
+        
+        if (this.potLabel) {
+            this.potLabel.string = `Pot: $${this.potAmount}`;
+        }
+        
         if (this.totalLabel) {
             this.totalLabel.string = `Total: $${total}`;
         }
+        
+        console.log(`💰 Labels: Pot=$${this.potAmount}, Outstanding=$${this.outstandingAmount}, Total=$${total}`);
+    }
 
-        console.log(`💰 Total updated: Pot=$${pot} + Outstanding=$${outstandingBets} = Total=$${total}`);
+    /**
+     * Move outstanding bets into pot (called when betting round completes)
+     */
+    private finalizeBettingRound() {
+        // Move outstanding bets into pot
+        this.potAmount += this.outstandingAmount;
+        this.outstandingAmount = 0;
+        
+        console.log(`💰 Round finalized: All bets moved to pot. New pot=$${this.potAmount}`);
+        
+        // Update labels
+        this.updateAllPotLabels();
     }
 
     /**
      * Update a player's bet label
      */
-    private updatePlayerBetLabel(playerId: string, amount: number) {
+    private updatePlayerBetLabel(playerId: string, amount: number, actionText?: string) {
         const betLabel = this.playerBetLabels.get(playerId);
         if (!betLabel) {
             console.error(`  ❌ No bet label found for ${playerId}`);
@@ -428,7 +447,18 @@ export class GameTable extends Component {
             return;
         }
         
-        if (amount > 0) {
+        if (actionText) {
+            // Show action text (Check, Fold, SB, BB, etc.)
+            betLabel.string = actionText;
+            betLabel.node.active = true;
+            const nodePos = betLabel.node.getPosition();
+            const worldPos = betLabel.node.getWorldPosition();
+            console.log(`  💵 ${playerId} bet label SET: "${actionText}"`);
+            console.log(`      Node active: ${betLabel.node.active}, parent: ${betLabel.node.parent?.name}`);
+            console.log(`      Position: (${nodePos.x.toFixed(0)}, ${nodePos.y.toFixed(0)}), World: (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+            console.log(`      Font size: ${betLabel.fontSize}, Color: (${betLabel.color.r}, ${betLabel.color.g}, ${betLabel.color.b}, ${betLabel.color.a})`);
+        } else if (amount > 0) {
+            // Show bet amount
             betLabel.string = `$${amount}`;
             betLabel.node.active = true;
             const nodePos = betLabel.node.getPosition();
@@ -437,6 +467,7 @@ export class GameTable extends Component {
             console.log(`      Node active: ${betLabel.node.active}, parent: ${betLabel.node.parent?.name}`);
             console.log(`      Position: (${nodePos.x.toFixed(0)}, ${nodePos.y.toFixed(0)}), World: (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
         } else {
+            // Hide label
             betLabel.string = '';
             betLabel.node.active = false;
             console.log(`  💵 ${playerId} bet label HIDDEN`);
@@ -590,8 +621,8 @@ export class GameTable extends Component {
             // Bottom players (slots 0, 1, 7) - place label ABOVE cards
             betLabelY = 40;
         } else if (slotPos.y > 100) {
-            // Top players (slots 3, 4, 5) - place label BELOW cards
-            betLabelY = -40;
+            // Top players (slots 3, 4, 5) - place label BELOW cards/name/stack
+            betLabelY = -80; // Further down to avoid name/stack overlap
         } else {
             // Side players (slots 2, 6) - place label to the side
             if (slotPos.x < 0) {
@@ -670,16 +701,27 @@ export class GameTable extends Component {
         const type = isAnte ? 'ante' : 'blind';
         console.log(`💰 ${playerId} posted ${type}: $${amount}`);
         
-        // Update player's bet label to show blind
+        // Update player's bet label to show SB/BB label
         if (!this.engine) return;
         const gameState = this.engine.getGameState();
         const player = gameState.players.find(p => p.id === playerId);
         if (player) {
-            this.updatePlayerBetLabel(playerId, player.bet);
+            // Determine if this is SB or BB based on amount
+            let blindLabel = '';
+            if (amount === this.smallBlind) {
+                blindLabel = `SB $${amount}`;
+            } else if (amount === this.bigBlind) {
+                blindLabel = `BB $${amount}`;
+            } else {
+                blindLabel = `$${amount}`;
+            }
+            
+            this.updatePlayerBetLabel(playerId, player.bet, blindLabel);
         }
         
-        // Update total label (blinds are outstanding bets)
-        this.updateTotalLabel();
+        // Update outstanding bets and labels
+        this.outstandingAmount = this.calculateOutstanding();
+        this.updateAllPotLabels();
     }
 
     /**
@@ -805,14 +847,11 @@ export class GameTable extends Component {
     private onStreetChanged(street: string, communityCards: EngineCard[]) {
         console.log(`🎴 Street: ${street.toUpperCase()} - Betting round ended, moving bets to pot`);
         
-        // Update pot (betting round ended, bets moved to pot)
-        this.updatePotLabel();
+        // Finalize betting round: move outstanding bets to pot
+        this.finalizeBettingRound();
         
         // Clear bet labels for new round
         this.clearAllBetLabels();
-        
-        // Update total (should equal pot now since no outstanding bets)
-        this.updateTotalLabel();
         
         if (this.statusLabel) {
             this.statusLabel.string = street.toUpperCase();
@@ -856,10 +895,13 @@ export class GameTable extends Component {
         
         if (player) {
             if (action.type === 'fold') {
-                // Hide bet label for folded players
-                this.updatePlayerBetLabel(playerId, 0);
+                // Show "Fold" text
+                this.updatePlayerBetLabel(playerId, 0, 'Fold');
+            } else if (action.type === 'check') {
+                // Show "Check" text
+                this.updatePlayerBetLabel(playerId, 0, 'Check');
             } else {
-                // Update bet label to show current bet this round
+                // Update bet label to show current bet amount (bet, call, raise)
                 this.updatePlayerBetLabel(playerId, player.bet);
             }
         }
@@ -867,19 +909,24 @@ export class GameTable extends Component {
         // Update all chip labels (chips decrease when betting)
         this.updateAllChipLabels();
         
-        // Update total label only (pot doesn't change until round ends)
-        this.updateTotalLabel();
+        // Recalculate outstanding bets and update pot/total labels
+        this.outstandingAmount = this.calculateOutstanding();
+        this.updateAllPotLabels();
     }
 
     /**
      * Called when pot is updated (from engine)
      */
     private onPotUpdated(amount: number) {
-        // Update pot label (pot changed from engine)
-        this.updatePotLabel();
-        
-        // Update total label (pot changed, so total changes too)
-        this.updateTotalLabel();
+        // Sync pot from engine (in case engine moved bets to pot)
+        if (this.engine) {
+            const gameState = this.engine.getGameState();
+            this.potAmount = gameState.pot;
+            
+            // Recalculate outstanding and update labels
+            this.outstandingAmount = this.calculateOutstanding();
+            this.updateAllPotLabels();
+        }
     }
 
     /**

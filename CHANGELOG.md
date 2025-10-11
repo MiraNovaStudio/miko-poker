@@ -2,6 +2,45 @@
 
 All notable changes to the MikoPoker project will be documented in this file.
 
+## [UI] - 2025-10-11 22:10
+
+### GameTable UI - Check/Fold Labels
+- Enhanced logging for Check/Fold action labels (position, color, font size)
+- Verified Check/Fold labels use same system as bet amount labels
+- Labels should persist during betting round until street changes
+
+## [UI] - 2025-10-11 22:00
+
+### GameTable UI
+- Added SB/BB labels showing "SB $5" and "BB $10" for blind positions
+- Added detailed logging for dealer, SB, BB, UTG positions on hand start
+- Verified action starts at UTG (Under The Gun) after big blind
+
+## [Engine 0.2.1] - 2025-10-11 21:45
+
+### AI Behavior - Tighter Preflop Play
+- AI now folds more often preflop (typical 8-max behavior: 2-4 players per hand)
+- Fold any hand < 0.5 strength when facing a bet
+- Only bet with premium hands (> 0.75 strength) when no bet to face
+- More selective calling: good hands (0.5-0.7) fold if bet > 15% of stack
+- No re-raising to prevent infinite betting loops
+- AI can bet/raise when no bet is facing them
+- AI will only call or fold when facing a bet (no re-raises)
+
+## [UI] - 2025-10-11 21:30
+
+### GameTable UI - Pot Logic Fix
+- Fixed pot/outstanding/total tracking to follow proper poker rules
+- Pot now only updates when betting round completes (not per action)
+- Outstanding tracks current bets, resets when moved to pot
+- Total always shows Pot + Outstanding in real-time
+
+## [UI] - 2025-10-11 21:15
+
+### GameTable UI
+- Bet labels show action text for Check/Fold instead of amounts
+- Adjusted top player bet label position (Y=-80) to avoid name/stack overlap
+
 ## [UI] - 2025-10-11 21:00
 
 ### GameTable UI
