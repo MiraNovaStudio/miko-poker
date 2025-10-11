@@ -132,7 +132,7 @@ export class GameTable extends Component {
 
         // Add UITransform
         const transform = this.dealerButtonNode.addComponent(UITransform);
-        transform.setContentSize(40, 40);
+        transform.setContentSize(30, 30);
 
         // Add sprite
         const sprite = this.dealerButtonNode.addComponent(Sprite);
@@ -144,11 +144,13 @@ export class GameTable extends Component {
                 // Fallback to text label
                 const label = this.dealerButtonNode!.addComponent(Label);
                 label.string = 'D';
-                label.fontSize = 24;
+                label.fontSize = 16;
                 label.color = new Color(255, 255, 255, 255);
                 return;
             }
             sprite.spriteFrame = spriteFrame;
+            sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+            console.log('✅ Dealer button loaded and sized to 30x30');
         });
         
         this.dealerButtonNode.active = false; // Hide until we position it
@@ -303,10 +305,21 @@ export class GameTable extends Component {
 
         const dealerSlot = this.slotLayoutManager.getSlot(dealerIndex);
         if (dealerSlot) {
-            const pos = dealerSlot.getPosition();
-            this.dealerButtonNode.setPosition(pos.x + 60, pos.y + 40, 0);
+            // Re-parent dealer button to the dealer's slot for consistent positioning
+            this.dealerButtonNode.setParent(dealerSlot);
+            this.dealerButtonNode.setPosition(50, 50, 0); // Relative to slot
+            
+            // Ensure size is correct
+            const transform = this.dealerButtonNode.getComponent(UITransform);
+            if (transform) {
+                transform.setContentSize(30, 30);
+            }
+            
+            // Fallback: Apply scale if sizing doesn't work
+            // this.dealerButtonNode.setScale(0.15, 0.15, 1);
+            
             this.dealerButtonNode.active = true;
-            console.log(`🔘 Dealer button at seat ${dealerIndex}`);
+            console.log(`🔘 Dealer button at seat ${dealerIndex}, size 30x30`);
         }
     }
 
@@ -381,6 +394,17 @@ export class GameTable extends Component {
         
         // Instantiate card from prefab
         const cardNode = instantiate(this.cardPrefab);
+        
+        // IMPORTANT: Set card size immediately after instantiation
+        const cardTransform = cardNode.getComponent(UITransform);
+        if (cardTransform) {
+            cardTransform.setContentSize(60, 84);
+            console.log('    📏 Card size set to 60x84');
+        }
+        
+        // Fallback: Apply scale if sizing doesn't work
+        // cardNode.setScale(0.3, 0.3, 1);
+        
         cardNode.setParent(parent);
         cardNode.setPosition(xOffset, 0, 0);
         cardNode.active = true; // Make sure it's active
