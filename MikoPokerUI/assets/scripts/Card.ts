@@ -51,6 +51,7 @@ export class Card extends Component {
      * @param faceUp Whether to show face-up or back
      */
     setCard(data: CardData, faceUp: boolean = true) {
+        console.log(`      💳 Card.setCard called: ${data.rank}${data.suit}, faceUp: ${faceUp}`);
         this.cardData = data;
         this.isFaceUp = faceUp;
         this.updateDisplay();
@@ -84,19 +85,35 @@ export class Card extends Component {
      * Update the visual display based on current state
      */
     private updateDisplay() {
-        if (!this.cardSprite || !this.cardData) return;
+        console.log(`      ⚙️ Card.updateDisplay called`);
+        
+        if (!this.cardSprite) {
+            console.error('      ❌ cardSprite is null!');
+            return;
+        }
+        
+        if (!this.cardData) {
+            console.error('      ❌ cardData is null!');
+            return;
+        }
+
+        console.log(`      Sprite: ${this.cardSprite ? '✅' : '❌'}, Data: ${this.cardData ? '✅' : '❌'}`);
 
         if (this.isFaceUp) {
             // Load and display card face
+            console.log('      Loading card face...');
             this.loadCardFace();
         } else {
             // Load and display card back
+            console.log('      Loading card back...');
             this.loadCardBack();
         }
 
         // Update debug label if enabled
         if (this.debugLabel) {
             this.debugLabel.string = `${this.cardData.rank}${this.cardData.suit}`;
+            this.debugLabel.node.active = true;
+            console.log(`      Debug label set: ${this.debugLabel.string}`);
         }
     }
 
@@ -106,17 +123,23 @@ export class Card extends Component {
     private loadCardFace() {
         if (!this.cardData) return;
 
-        const path = this.getCardResourcePath(this.cardData);
+        const path = this.getCardResourcePath(this.cardData) + '/spriteFrame';
+        console.log(`      📂 Loading card face from: ${path}`);
         
         resources.load(path, SpriteFrame, (err, spriteFrame) => {
             if (err) {
-                console.error(`Failed to load card: ${path}`, err);
+                console.error(`      ❌ Failed to load card: ${path}`, err);
                 this.showDebugLabel();
                 return;
             }
             
+            console.log(`      ✅ Card face loaded successfully: ${path}`);
+            
             if (this.cardSprite) {
                 this.cardSprite.spriteFrame = spriteFrame;
+                console.log('      ✅ SpriteFrame assigned to sprite');
+            } else {
+                console.error('      ❌ cardSprite is null when trying to assign spriteFrame');
             }
         });
     }
@@ -125,15 +148,22 @@ export class Card extends Component {
      * Load card back sprite
      */
     private loadCardBack() {
-        resources.load('card_back', SpriteFrame, (err, spriteFrame) => {
+        console.log('      📂 Loading card back from: card_back/spriteFrame');
+        
+        resources.load('card_back/spriteFrame', SpriteFrame, (err, spriteFrame) => {
             if (err) {
-                console.error('Failed to load card back', err);
+                console.error('      ❌ Failed to load card back', err);
                 this.showDebugLabel();
                 return;
             }
             
+            console.log('      ✅ Card back loaded successfully');
+            
             if (this.cardSprite) {
                 this.cardSprite.spriteFrame = spriteFrame;
+                console.log('      ✅ Card back spriteFrame assigned');
+            } else {
+                console.error('      ❌ cardSprite is null when trying to assign card back');
             }
         });
     }

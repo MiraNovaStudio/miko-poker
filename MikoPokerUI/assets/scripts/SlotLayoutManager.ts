@@ -3,7 +3,7 @@
  * Supports 2-max (heads-up), 4-max, 6-max, and 8-max games
  */
 
-import { _decorator, Component, Node, Vec3, UITransform } from 'cc';
+import { _decorator, Component, Node, Vec3, UITransform, Label, Color } from 'cc';
 
 const { ccclass, property } = _decorator;
 
@@ -150,7 +150,15 @@ export class SlotLayoutManager extends Component {
 
         // Add UITransform component
         const transform = slot.addComponent(UITransform);
-        transform.setContentSize(150, 100);
+        transform.setContentSize(150, 150);
+
+        // DEBUG: Add visual indicator for slot position
+        const debugLabel = slot.addComponent(Label);
+        debugLabel.string = `Slot ${index}`;
+        debugLabel.fontSize = 12;
+        debugLabel.color = new Color(255, 255, 0, 255);
+        
+        console.log(`✅ Created Slot ${index} at position (${config.position.x.toFixed(0)}, ${config.position.y.toFixed(0)})`);
 
         return slot;
     }

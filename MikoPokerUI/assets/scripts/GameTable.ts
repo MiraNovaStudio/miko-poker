@@ -52,9 +52,39 @@ export class GameTable extends Component {
     private dealerButtonNode: Node | null = null;
 
     start() {
+        console.log('=== GameTable.start() ===');
+        console.log('SlotLayoutManager:', this.slotLayoutManager ? '✅ Assigned' : '❌ Missing');
+        console.log('Card Prefab:', this.cardPrefab ? '✅ Assigned' : '❌ Missing');
+        console.log('Pot Label:', this.potLabel ? '✅ Assigned' : '❌ Missing');
+        console.log('Status Label:', this.statusLabel ? '✅ Assigned' : '❌ Missing');
+        console.log('Community Cards Node:', this.communityCardsNode ? '✅ Assigned' : '❌ Missing');
+        
         this.initializeEngine();
         this.createDealerButton();
-        this.startFirstHand();
+        
+        // Wait a frame for SlotLayoutManager to create slots
+        this.scheduleOnce(() => {
+            console.log('=== Starting First Hand (delayed) ===');
+            this.debugSlots();
+            this.startFirstHand();
+        }, 0.1);
+    }
+
+    /**
+     * Debug: Log all slot positions
+     */
+    private debugSlots() {
+        if (!this.slotLayoutManager) {
+            console.error('❌ SlotLayoutManager is null!');
+            return;
+        }
+
+        const slots = this.slotLayoutManager.getAllSlots();
+        console.log(`📍 Total slots created: ${slots.length}`);
+        slots.forEach((slot, index) => {
+            const pos = slot.getPosition();
+            console.log(`  Slot ${index}: position (${pos.x.toFixed(0)}, ${pos.y.toFixed(0)}), active: ${slot.active}`);
+        });
     }
 
     /**
@@ -108,7 +138,7 @@ export class GameTable extends Component {
         const sprite = this.dealerButtonNode.addComponent(Sprite);
         
         // Load dealer button sprite
-        resources.load('dealer_button', SpriteFrame, (err, spriteFrame) => {
+        resources.load('dealer_button/spriteFrame', SpriteFrame, (err, spriteFrame) => {
             if (err) {
                 console.error('Failed to load dealer button sprite', err);
                 // Fallback to text label
@@ -179,14 +209,24 @@ export class GameTable extends Component {
      * Called when a new hand starts
      */
     private onHandStarted() {
-        console.log('🎴 Hand Started');
+        console.log('=== 🎴 HAND STARTED ===');
         
-        if (!this.engine || !this.slotLayoutManager) return;
+        if (!this.engine) {
+            console.error('❌ Engine is null!');
+            return;
+        }
+        
+        if (!this.slotLayoutManager) {
+            console.error('❌ SlotLayoutManager is null!');
+            return;
+        }
 
         const gameState = this.engine.getGameState();
+        console.log(`Players: ${gameState.players.length}, Dealer: ${gameState.dealerIndex}`);
         
         // Update all player slots
         gameState.players.forEach((player, index) => {
+            console.log(`Updating slot ${index} for player ${player.id}`);
             this.updatePlayerSlot(player, index);
         });
 
@@ -197,22 +237,40 @@ export class GameTable extends Component {
         if (this.statusLabel) {
             this.statusLabel.string = 'New Hand - Dealing Cards...';
         }
+        
+        console.log('=== Hand Started Complete ===');
     }
 
     /**
      * Update a player slot with current information
      */
     private updatePlayerSlot(player: PlayerState, seatIndex: number) {
-        if (!this.slotLayoutManager) return;
+        if (!this.slotLayoutManager) {
+            console.error(`❌ SlotLayoutManager is null when updating seat ${seatIndex}`);
+            return;
+        }
 
         const slotNode = this.slotLayoutManager.getSlot(seatIndex);
-        if (!slotNode) return;
+        if (!slotNode) {
+            console.error(`❌ Could not get slot node for seat ${seatIndex}`);
+            return;
+        }
+
+        console.log(`  ⚙️ Updating slot ${seatIndex} for ${player.id}`);
+        const slotPos = slotNode.getPosition();
+        console.log(`    Slot position: (${slotPos.x.toFixed(0)}, ${slotPos.y.toFixed(0)})`);
 
         // Store mapping
         this.playerSlots.set(player.id, slotNode);
 
-        // Clear existing content
-        slotNode.removeAllChildren();
+        // Clear existing content (except debug label)
+        const children = slotNode.children;
+        for (let i = children.length - 1; i >= 0; i--) {
+            const child = children[i];
+            if (child.name !== 'Label') { // Don't remove debug label
+                child.destroy();
+            }
+        }
 
         // Create player name label
         const nameNode = new Node('PlayerName');
@@ -234,7 +292,7 @@ export class GameTable extends Component {
         chipsLabel.fontSize = 14;
         chipsLabel.color = new Color(255, 255, 0, 255);
 
-        console.log(`📍 Seat ${seatIndex}: ${player.id} - $${player.chips}`);
+        console.log(`    ✅ Slot ${seatIndex} updated: ${player.id} - $${player.chips}`);
     }
 
     /**
@@ -264,10 +322,18 @@ export class GameTable extends Component {
      * Called when cards are dealt to a player
      */
     private onCardsDealt(playerId: string, cards: EngineCard[]) {
-        console.log(`🎴 Cards dealt to ${playerId}:`, cards);
+        console.log(`=== 🎴 CARDS DEALT to ${playerId} ===`);
+        console.log(`  Cards:`, cards.map(c => `${c.rank}${c.suit}`).join(', '));
 
         const slotNode = this.playerSlots.get(playerId);
-        if (!slotNode) return;
+        if (!slotNode) {
+            console.error(`  ❌ No slot node found for ${playerId}`);
+            console.log(`  Available slots:`, Array.from(this.playerSlots.keys()));
+            return;
+        }
+
+        const slotPos = slotNode.getPosition();
+        console.log(`  Slot position: (${slotPos.x.toFixed(0)}, ${slotPos.y.toFixed(0)})`);
 
         // Find or create card container
         let cardsNode = slotNode.getChildByName('Cards');
@@ -275,16 +341,24 @@ export class GameTable extends Component {
             cardsNode = new Node('Cards');
             cardsNode.setParent(slotNode);
             cardsNode.setPosition(0, 20, 0);
+            console.log(`  ✅ Created Cards container at (0, 20) relative to slot`);
         } else {
             // Clear existing cards
             cardsNode.removeAllChildren();
+            console.log(`  ♻️ Cleared existing cards`);
         }
 
         // Display both cards
         const isFaceUp = playerId === 'player'; // Only show player's cards face-up
+        console.log(`  Cards will be ${isFaceUp ? 'FACE-UP' : 'FACE-DOWN'}`);
+        
         cards.forEach((card, index) => {
-            this.createCard(cardsNode!, card, index * 35 - 17.5, isFaceUp);
+            const xOffset = index * 35 - 17.5;
+            console.log(`  Creating card ${index + 1}: ${card.rank}${card.suit} at x=${xOffset}`);
+            this.createCard(cardsNode!, card, xOffset, isFaceUp);
         });
+        
+        console.log(`=== Cards dealt complete for ${playerId} ===`);
     }
 
     /**
@@ -295,16 +369,24 @@ export class GameTable extends Component {
      * @param faceUp Whether to show face up or back
      */
     private createCard(parent: Node, cardData: EngineCard, xOffset: number, faceUp: boolean) {
+        console.log(`    🎴 createCard called: ${cardData.rank}${cardData.suit}, x=${xOffset}, faceUp=${faceUp}`);
+        
         if (!this.cardPrefab) {
-            console.error('Card prefab not assigned!');
+            console.error('    ❌ Card prefab not assigned! Using fallback.');
             this.createFallbackCard(parent, cardData, xOffset, faceUp);
             return;
         }
 
+        console.log('    ⚙️ Instantiating card from prefab...');
+        
         // Instantiate card from prefab
         const cardNode = instantiate(this.cardPrefab);
         cardNode.setParent(parent);
         cardNode.setPosition(xOffset, 0, 0);
+        cardNode.active = true; // Make sure it's active
+        
+        const worldPos = cardNode.getWorldPosition();
+        console.log(`    Card world position: (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}, ${worldPos.z.toFixed(0)})`);
 
         // Get Card component and set data
         const cardComponent = cardNode.getComponent(CardComponent);
@@ -313,10 +395,12 @@ export class GameTable extends Component {
                 rank: cardData.rank,
                 suit: cardData.suit
             };
+            console.log('    ⚙️ Setting card data...');
             cardComponent.setCard(data, faceUp);
-            console.log(`  ├─ Card created: ${cardData.rank}${cardData.suit} (${faceUp ? 'face-up' : 'face-down'})`);
+            console.log(`    ✅ Card created: ${cardData.rank}${cardData.suit} (${faceUp ? 'face-up' : 'face-down'})`);
         } else {
-            console.error('Card component not found on prefab!');
+            console.error('    ❌ Card component not found on prefab!');
+            this.createFallbackCard(parent, cardData, xOffset, faceUp);
         }
     }
 
