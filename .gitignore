@@ -1,0 +1,20 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+coverage/
+
+# Build outputs
+engine/dist/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Cocos Creator project (inside ui/)
+ui/library/
+ui/temp/
+ui/local/        # if present
+ui/build/        # if you export builds here

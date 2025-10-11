@@ -1,0 +1,11 @@
+{
+  "name": "miko-poker",
+  "private": true,
+  "workspaces": ["engine", "ui"],
+  "scripts": {
+    "clean": "npm -w @miko/engine run clean",
+    "build": "npm -w @miko/engine run build",
+    "test": "npm -w @miko/engine run test",
+    "lint": "npm -w @miko/engine run lint"
+  }
+}
