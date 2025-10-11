@@ -3,7 +3,7 @@
  * Evaluates 5-7 card hands and determines the best possible hand
  */
 
-import type { Card, Rank, Suit, HandStrength } from './types';
+import type { Card, Rank, Suit, HandStrength } from './types.js';
 
 // Map ranks to numerical values (Ace high = 14)
 const RANK_VALUES: Record<Rank, number> = {

@@ -2,8 +2,8 @@
  * Pre-flop AI decision logic
  */
 
-import type { Card, PlayerAction } from '../types';
-import type { AIConfig } from './ai-config';
+import type { Card, PlayerAction } from '../types.js';
+import type { AIConfig } from './ai-config.js';
 
 /**
  * Game context for AI decisions

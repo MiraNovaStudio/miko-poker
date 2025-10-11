@@ -2,7 +2,7 @@
  * Pot management including side pots
  */
 
-import type { Player } from './player';
+import type { Player } from './player.js';
 
 export interface PotInfo {
   amount: number;

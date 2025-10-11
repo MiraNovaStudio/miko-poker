@@ -2,9 +2,9 @@
  * Post-flop AI decision logic
  */
 
-import type { Card, PlayerAction } from '../types';
-import type { AIConfig } from './ai-config';
-import { evaluateHand } from '../hand-evaluator';
+import type { Card, PlayerAction } from '../types.js';
+import type { AIConfig } from './ai-config.js';
+import { evaluateHand } from '../hand-evaluator.js';
 
 /**
  * Game context for post-flop decisions

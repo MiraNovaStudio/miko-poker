@@ -2,8 +2,8 @@
  * Betting round management
  */
 
-import type { Player } from './player';
-import type { PlayerAction } from './types';
+import type { Player } from './player.js';
+import type { PlayerAction } from './types.js';
 
 export interface BettingRoundState {
   currentBet: number;

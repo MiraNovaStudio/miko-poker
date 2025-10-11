@@ -2,7 +2,7 @@
  * Deck management
  */
 
-import type { Card, Suit, Rank } from './types';
+import type { Card, Suit, Rank } from './types.js';
 
 export class Deck {
   private cards: Card[];

@@ -6,8 +6,8 @@
 export const version = '0.1.0';
 
 // Main game engine
-export { PokerGameEngine } from './game-engine';
-export type { GameState, GameResult, GameEvent } from './game-engine';
+export { PokerGameEngine } from './game-engine.js';
+export type { GameState, GameResult, GameEvent } from './game-engine.js';
 
 // Types
 export type { 
@@ -19,7 +19,7 @@ export type {
   PlayerState,
   HandStrength,
   GameConfig 
-} from './types';
+} from './types.js';
 
 // Hand evaluation
 export { 
@@ -27,25 +27,25 @@ export {
   compareHands, 
   getHandName,
   getRankName
-} from './hand-evaluator';
+} from './hand-evaluator.js';
 
 // Components (if needed for advanced usage)
-export { Deck } from './deck';
-export { Player } from './player';
-export { PotManager } from './pot';
-export { BettingRound } from './betting';
+export { Deck } from './deck.js';
+export { Player } from './player.js';
+export { PotManager } from './pot.js';
+export { BettingRound } from './betting.js';
 
 // AI
-export { PokerAI } from './ai/PokerAI';
-export type { GameContext } from './ai/PokerAI';
-export type { AIConfig, AIDifficulty } from './ai/ai-config';
-export { getAIPreset, createCustomAI, AI_PRESETS } from './ai/ai-config';
+export { PokerAI } from './ai/PokerAI.js';
+export type { GameContext } from './ai/PokerAI.js';
+export type { AIConfig, AIDifficulty } from './ai/ai-config.js';
+export { getAIPreset, createCustomAI, AI_PRESETS } from './ai/ai-config.js';
 
 // Game modes
-export { GameModeManager, STANDARD_STRUCTURES } from './game-mode';
+export { GameModeManager, STANDARD_STRUCTURES } from './game-mode.js';
 export type { 
   GameType, 
   BlindLevel, 
   BlindStructure, 
   GameModeConfig 
-} from './game-mode';
+} from './game-mode.js';

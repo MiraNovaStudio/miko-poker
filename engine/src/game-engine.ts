@@ -3,14 +3,14 @@
  * Orchestrates all game components and provides the primary API
  */
 
-import { Deck } from './deck';
-import { Player } from './player';
-import { PotManager } from './pot';
-import { BettingRound } from './betting';
-import { evaluateHand, compareHands, getHandName } from './hand-evaluator';
-import { PokerAI } from './ai/PokerAI';
-import { GameModeManager, STANDARD_STRUCTURES, type BlindStructure } from './game-mode';
-import type { Card, Street, PlayerAction, GameConfig, PlayerState } from './types';
+import { Deck } from './deck.js';
+import { Player } from './player.js';
+import { PotManager } from './pot.js';
+import { BettingRound } from './betting.js';
+import { evaluateHand, compareHands, getHandName } from './hand-evaluator.js';
+import { PokerAI } from './ai/PokerAI.js';
+import { GameModeManager, STANDARD_STRUCTURES, type BlindStructure } from './game-mode.js';
+import type { Card, Street, PlayerAction, GameConfig, PlayerState } from './types.js';
 
 /**
  * Current game state

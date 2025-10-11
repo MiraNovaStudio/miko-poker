@@ -2,7 +2,7 @@
  * Player state management
  */
 
-import type { Card, PlayerState } from './types';
+import type { Card, PlayerState } from './types.js';
 
 export class Player {
   id: string;

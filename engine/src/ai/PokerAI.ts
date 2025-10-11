@@ -2,11 +2,11 @@
  * Main AI controller for poker decisions
  */
 
-import type { Card, Street, PlayerAction } from '../types';
-import type { AIConfig } from './ai-config';
-import { getAIPreset, type AIDifficulty } from './ai-config';
-import { decidePreflopAction, evaluatePreflopHand } from './preflop';
-import { decidePostflopAction, evaluatePostflopHand } from './postflop';
+import type { Card, Street, PlayerAction } from '../types.js';
+import type { AIConfig } from './ai-config.js';
+import { getAIPreset, type AIDifficulty } from './ai-config.js';
+import { decidePreflopAction, evaluatePreflopHand } from './preflop.js';
+import { decidePostflopAction, evaluatePostflopHand } from './postflop.js';
 
 /**
  * Game context for AI decisions
