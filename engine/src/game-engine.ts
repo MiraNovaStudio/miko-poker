@@ -8,9 +8,13 @@ import { Player } from './player';
 import { PotManager } from './pot';
 import { BettingRound } from './betting';
 import { evaluateHand, compareHands, getHandName } from './hand-evaluator';
-import { PokerAI } from './ai';
+import { PokerAI } from './ai/PokerAI';
+import { GameModeManager, STANDARD_STRUCTURES, type BlindStructure } from './game-mode';
 import type { Card, Street, PlayerAction, GameConfig, PlayerState } from './types';
 
+/**
+ * Current game state
+ */
 export interface GameState {
   street: Street;
   pot: number;
@@ -26,16 +30,24 @@ export interface GameState {
   callAmount: number;
   minRaiseAmount: number;
   minBetAmount: number;
+  gameType?: 'cash' | 'sng' | 'tournament';
+  currentBlindLevel?: number;
 }
 
+/**
+ * Hand result information
+ */
 export interface GameResult {
-  winners: string[]; // player IDs
+  winners: string[];
   winningHand?: string;
   playerHand?: string;
   opponentHand?: string;
   potAmount: number;
 }
 
+/**
+ * Game events for UI integration
+ */
 export type GameEvent = 
   | { type: 'hand_started' }
   | { type: 'cards_dealt'; playerId: string; cards: Card[] }
@@ -43,15 +55,22 @@ export type GameEvent =
   | { type: 'player_action'; playerId: string; action: PlayerAction }
   | { type: 'pot_updated'; amount: number }
   | { type: 'hand_complete'; result: GameResult }
-  | { type: 'game_over'; winnerId: string };
+  | { type: 'game_over'; winnerId: string }
+  | { type: 'blind_posted'; playerId: string; amount: number; isAnte?: boolean }
+  | { type: 'level_changed'; level: number; smallBlind: number; bigBlind: number; ante: number }
+  | { type: 'game_mode_changed'; gameType: 'cash' | 'sng' | 'tournament' };
 
+/**
+ * Main poker game engine
+ */
 export class PokerGameEngine {
   private config: GameConfig;
   private players: Player[];
   private deck: Deck;
   private pot: PotManager;
   private bettingRound: BettingRound;
-  private ai: PokerAI;
+  private aiInstances: Map<string, PokerAI>;
+  private gameMode: GameModeManager;
   
   private street: Street;
   private communityCards: Card[];
@@ -60,19 +79,40 @@ export class PokerGameEngine {
   private handInProgress: boolean;
   private eventListeners: ((event: GameEvent) => void)[];
 
+  /**
+   * Create a new poker game engine
+   * @param config Game configuration
+   */
   constructor(config?: Partial<GameConfig>) {
     this.config = {
       smallBlind: config?.smallBlind ?? 5,
       bigBlind: config?.bigBlind ?? 10,
       startingChips: config?.startingChips ?? 1000,
       maxPlayers: config?.maxPlayers ?? 2,
-      minRaise: config?.minRaise ?? 10
+      minRaise: config?.minRaise ?? 10,
+      gameType: config?.gameType ?? 'cash',
+      blindStructure: config?.blindStructure
     };
 
     this.deck = new Deck();
     this.pot = new PotManager();
-    this.bettingRound = new BettingRound(this.config.minRaise);
-    this.ai = new PokerAI({ aggression: 0.6, skill: 0.7 });
+    this.bettingRound = new BettingRound(this.config.minRaise ?? 10);
+    this.aiInstances = new Map();
+    
+    // Initialize game mode manager
+    const gameType = this.config.gameType ?? 'cash';
+    if (gameType === 'tournament' || gameType === 'sng') {
+      const structureName = this.config.blindStructure ?? 'standard';
+      const structure = STANDARD_STRUCTURES[structureName] || STANDARD_STRUCTURES.standard;
+      this.gameMode = new GameModeManager({
+        type: gameType,
+        blindStructure: structure,
+        currentLevel: 0
+      });
+      this.gameMode.startLevelTimer();
+    } else {
+      this.gameMode = new GameModeManager({ type: 'cash' });
+    }
     
     this.players = [];
     this.communityCards = [];
@@ -85,8 +125,10 @@ export class PokerGameEngine {
 
   /**
    * Initialize game with players
+   * @param playerIds Array of player IDs
+   * @param aiDifficulties Optional map of player ID to AI difficulty
    */
-  initGame(playerIds: string[]): void {
+  initGame(playerIds: string[], aiDifficulties?: Map<string, 'easy' | 'normal' | 'hard' | 'pro'>): void {
     if (playerIds.length < 2) {
       throw new Error('Need at least 2 players');
     }
@@ -94,9 +136,22 @@ export class PokerGameEngine {
       throw new Error(`Maximum ${this.config.maxPlayers} players allowed`);
     }
 
-    this.players = playerIds.map(id => new Player(id, this.config.startingChips));
+    // Get starting chips from game mode for tournaments
+    const startingChips = this.gameMode.isTournament() 
+      ? (this.gameMode.getConfig().blindStructure?.startingChips ?? this.config.startingChips)
+      : this.config.startingChips;
+
+    this.players = playerIds.map(id => new Player(id, startingChips));
     this.players[0].isDealer = true;
     this.dealerIndex = 0;
+
+    // Create AI instances for each AI player
+    for (const id of playerIds) {
+      if (id !== 'player' && id.startsWith('ai')) {
+        const difficulty = aiDifficulties?.get(id) ?? 'normal';
+        this.aiInstances.set(id, new PokerAI(difficulty, id));
+      }
+    }
   }
 
   /**
@@ -105,6 +160,23 @@ export class PokerGameEngine {
   startNewHand(): void {
     if (this.players.length < 2) {
       throw new Error('Need at least 2 players to start');
+    }
+
+    // Check for blind level advance in tournaments
+    if (this.gameMode.shouldAdvanceLevel()) {
+      const advanced = this.gameMode.advanceLevel();
+      if (advanced) {
+        const level = this.gameMode.getCurrentLevel();
+        if (level) {
+          this.emitEvent({
+            type: 'level_changed',
+            level: level.level,
+            smallBlind: level.smallBlind,
+            bigBlind: level.bigBlind,
+            ante: level.ante
+          });
+        }
+      }
     }
 
     // Check if game is over (only one player with chips)
@@ -151,6 +223,9 @@ export class PokerGameEngine {
 
   /**
    * Process a player action
+   * @param playerId Player ID
+   * @param action Player action
+   * @returns True if action was processed successfully
    */
   processAction(playerId: string, action: PlayerAction): boolean {
     if (!this.handInProgress) {
@@ -189,11 +264,18 @@ export class PokerGameEngine {
 
   /**
    * Get AI decision for current player
+   * @param playerId Player ID
+   * @returns Player action
    */
   getAIAction(playerId: string): PlayerAction {
     const player = this.players.find(p => p.id === playerId);
     if (!player) {
       throw new Error('Player not found');
+    }
+
+    const ai = this.aiInstances.get(playerId);
+    if (!ai) {
+      throw new Error('No AI instance for this player');
     }
 
     const context = {
@@ -208,11 +290,13 @@ export class PokerGameEngine {
       communityCards: this.communityCards
     };
 
-    return this.ai.decide(context);
+    return ai.decide(context);
   }
 
   /**
    * Process AI action for current player
+   * @param playerId Player ID
+   * @returns The action taken
    */
   processAIAction(playerId: string): PlayerAction {
     const action = this.getAIAction(playerId);
@@ -336,6 +420,7 @@ export class PokerGameEngine {
 
   /**
    * End hand when all but one player folds
+   * @param winner Winner player
    */
   private endHandByFold(winner: Player): void {
     const potAmount = this.getCurrentPot();
@@ -352,137 +437,37 @@ export class PokerGameEngine {
   }
 
   /**
-   * Get current game state
-   */
-  getGameState(): GameState {
-    const currentPlayer = this.players[this.currentPlayerIndex];
-    const currentBet = this.bettingRound.getCurrentBet();
-    const toCall = currentBet - currentPlayer.bet;
-
-    return {
-      street: this.street,
-      pot: this.getCurrentPot(),
-      communityCards: [...this.communityCards],
-      players: this.players.map(p => p.getState()),
-      currentPlayerIndex: this.currentPlayerIndex,
-      dealerIndex: this.dealerIndex,
-      canCheck: toCall === 0,
-      canBet: toCall === 0 && currentPlayer.chips > 0,
-      canCall: toCall > 0 && currentPlayer.chips >= toCall,
-      canRaise: toCall > 0 && currentPlayer.chips > toCall,
-      canFold: toCall > 0,
-      callAmount: Math.min(toCall, currentPlayer.chips),
-      minRaiseAmount: currentBet + this.bettingRound.getMinRaise(),
-      minBetAmount: this.config.bigBlind
-    };
-  }
-
-  /**
-   * Get player by ID
-   */
-  getPlayer(playerId: string): PlayerState | undefined {
-    return this.players.find(p => p.id === playerId)?.getState();
-  }
-
-  /**
-   * Get all players
-   */
-  getPlayers(): PlayerState[] {
-    return this.players.map(p => p.getState());
-  }
-
-  /**
-   * Get current pot including current bets
-   */
-  getCurrentPot(): number {
-    const currentBets = this.players.reduce((sum, p) => sum + p.bet, 0);
-    return this.pot.getTotalPot() + currentBets;
-  }
-
-  /**
-   * Check if hand is in progress
-   */
-  isHandInProgress(): boolean {
-    return this.handInProgress;
-  }
-
-  /**
-   * Get community cards
-   */
-  getCommunityCards(): Card[] {
-    return [...this.communityCards];
-  }
-
-  /**
-   * Get current street
-   */
-  getCurrentStreet(): Street {
-    return this.street;
-  }
-
-  /**
-   * Subscribe to game events
-   */
-  on(listener: (event: GameEvent) => void): void {
-    this.eventListeners.push(listener);
-  }
-
-  /**
-   * Unsubscribe from game events
-   */
-  off(listener: (event: GameEvent) => void): void {
-    const index = this.eventListeners.indexOf(listener);
-    if (index > -1) {
-      this.eventListeners.splice(index, 1);
-    }
-  }
-
-  /**
-   * Emit game event to all listeners
-   */
-  private emitEvent(event: GameEvent): void {
-    for (const listener of this.eventListeners) {
-      listener(event);
-    }
-  }
-
-  /**
-   * Update game configuration
-   */
-  updateConfig(config: Partial<GameConfig>): void {
-    this.config = { ...this.config, ...config };
-    if (config.minRaise !== undefined) {
-      this.bettingRound = new BettingRound(config.minRaise);
-    }
-  }
-
-  /**
-   * Get game configuration
-   */
-  getConfig(): GameConfig {
-    return { ...this.config };
-  }
-
-  /**
-   * Set AI configuration
-   */
-  setAIConfig(config: Parameters<typeof this.ai.setConfig>[0]): void {
-    this.ai.setConfig(config);
-  }
-
-  /**
-   * Post blinds based on player count
+   * Post blinds based on game mode and player count
    */
   private postBlinds(): void {
+    // Get blind amounts from game mode
+    const smallBlind = this.gameMode.isTournament() 
+      ? this.gameMode.getSmallBlind() 
+      : this.config.smallBlind;
+    const bigBlind = this.gameMode.isTournament() 
+      ? this.gameMode.getBigBlind() 
+      : this.config.bigBlind;
+    const ante = this.gameMode.getAnte();
+
     if (this.players.length === 2) {
       // Heads-up: Dealer is small blind, other is big blind
       const sbPlayer = this.players[this.dealerIndex];
       const bbPlayer = this.players[(this.dealerIndex + 1) % 2];
       
-      sbPlayer.placeBet(this.config.smallBlind);
-      bbPlayer.placeBet(this.config.bigBlind);
+      const sbAmount = sbPlayer.placeBet(smallBlind);
+      this.emitEvent({ type: 'blind_posted', playerId: sbPlayer.id, amount: sbAmount });
       
-      this.bettingRound.setInitialBet(this.config.bigBlind);
+      // Big blind + ante if tournament
+      let bbAmount = bbPlayer.placeBet(bigBlind);
+      this.emitEvent({ type: 'blind_posted', playerId: bbPlayer.id, amount: bbAmount });
+      
+      if (this.gameMode.hasBigBlindAnte()) {
+        const anteAmount = bbPlayer.placeBet(ante);
+        this.emitEvent({ type: 'blind_posted', playerId: bbPlayer.id, amount: anteAmount, isAnte: true });
+        bbAmount += anteAmount;
+      }
+      
+      this.bettingRound.setInitialBet(bigBlind);
     } else {
       // Multiplayer: Player after dealer is small blind, next is big blind
       const sbIndex = (this.dealerIndex + 1) % this.players.length;
@@ -491,15 +476,26 @@ export class PokerGameEngine {
       const sbPlayer = this.players[sbIndex];
       const bbPlayer = this.players[bbIndex];
       
-      sbPlayer.placeBet(this.config.smallBlind);
-      bbPlayer.placeBet(this.config.bigBlind);
+      const sbAmount = sbPlayer.placeBet(smallBlind);
+      this.emitEvent({ type: 'blind_posted', playerId: sbPlayer.id, amount: sbAmount });
       
-      this.bettingRound.setInitialBet(this.config.bigBlind);
+      // Big blind + ante if tournament
+      let bbAmount = bbPlayer.placeBet(bigBlind);
+      this.emitEvent({ type: 'blind_posted', playerId: bbPlayer.id, amount: bbAmount });
+      
+      if (this.gameMode.hasBigBlindAnte()) {
+        const anteAmount = bbPlayer.placeBet(ante);
+        this.emitEvent({ type: 'blind_posted', playerId: bbPlayer.id, amount: anteAmount, isAnte: true });
+        bbAmount += anteAmount;
+      }
+      
+      this.bettingRound.setInitialBet(bigBlind);
     }
   }
 
   /**
    * Get first player to act preflop
+   * @returns Player index
    */
   private getFirstToActPreflop(): number {
     if (this.players.length === 2) {
@@ -522,6 +518,7 @@ export class PokerGameEngine {
 
   /**
    * Get first player to act postflop
+   * @returns Player index
    */
   private getFirstToActPostflop(): number {
     // First active player after dealer (small blind position in multiplayer)
@@ -535,5 +532,151 @@ export class PokerGameEngine {
     
     return firstIndex;
   }
-}
 
+  /**
+   * Get current game state
+   * @returns Current game state
+   */
+  getGameState(): GameState {
+    const currentPlayer = this.players[this.currentPlayerIndex];
+    const currentBet = this.bettingRound.getCurrentBet();
+    const toCall = currentBet - currentPlayer.bet;
+
+    return {
+      street: this.street,
+      pot: this.getCurrentPot(),
+      communityCards: [...this.communityCards],
+      players: this.players.map(p => p.getState()),
+      currentPlayerIndex: this.currentPlayerIndex,
+      dealerIndex: this.dealerIndex,
+      canCheck: toCall === 0,
+      canBet: toCall === 0 && currentPlayer.chips > 0,
+      canCall: toCall > 0 && currentPlayer.chips >= toCall,
+      canRaise: toCall > 0 && currentPlayer.chips > toCall,
+      canFold: toCall > 0,
+      callAmount: Math.min(toCall, currentPlayer.chips),
+      minRaiseAmount: currentBet + this.bettingRound.getMinRaise(),
+      minBetAmount: this.gameMode.isTournament() ? this.gameMode.getBigBlind() : this.config.bigBlind,
+      gameType: this.config.gameType,
+      currentBlindLevel: this.gameMode.getCurrentLevel()?.level
+    };
+  }
+
+  /**
+   * Get player by ID
+   * @param playerId Player ID
+   * @returns Player state or undefined
+   */
+  getPlayer(playerId: string): PlayerState | undefined {
+    return this.players.find(p => p.id === playerId)?.getState();
+  }
+
+  /**
+   * Get all players
+   * @returns Array of player states
+   */
+  getPlayers(): PlayerState[] {
+    return this.players.map(p => p.getState());
+  }
+
+  /**
+   * Get current pot including current bets
+   * @returns Total pot amount
+   */
+  getCurrentPot(): number {
+    const currentBets = this.players.reduce((sum, p) => sum + p.bet, 0);
+    return this.pot.getTotalPot() + currentBets;
+  }
+
+  /**
+   * Check if hand is in progress
+   * @returns True if hand is active
+   */
+  isHandInProgress(): boolean {
+    return this.handInProgress;
+  }
+
+  /**
+   * Get community cards
+   * @returns Array of community cards
+   */
+  getCommunityCards(): Card[] {
+    return [...this.communityCards];
+  }
+
+  /**
+   * Get current street
+   * @returns Current street
+   */
+  getCurrentStreet(): Street {
+    return this.street;
+  }
+
+  /**
+   * Get game mode manager
+   * @returns GameModeManager instance
+   */
+  getGameMode(): GameModeManager {
+    return this.gameMode;
+  }
+
+  /**
+   * Subscribe to game events
+   * @param listener Event listener function
+   */
+  on(listener: (event: GameEvent) => void): void {
+    this.eventListeners.push(listener);
+  }
+
+  /**
+   * Unsubscribe from game events
+   * @param listener Event listener function
+   */
+  off(listener: (event: GameEvent) => void): void {
+    const index = this.eventListeners.indexOf(listener);
+    if (index > -1) {
+      this.eventListeners.splice(index, 1);
+    }
+  }
+
+  /**
+   * Emit game event to all listeners
+   * @param event Game event
+   */
+  private emitEvent(event: GameEvent): void {
+    for (const listener of this.eventListeners) {
+      listener(event);
+    }
+  }
+
+  /**
+   * Update game configuration
+   * @param config Partial game configuration
+   */
+  updateConfig(config: Partial<GameConfig>): void {
+    this.config = { ...this.config, ...config };
+    if (config.minRaise !== undefined) {
+      this.bettingRound = new BettingRound(config.minRaise);
+    }
+  }
+
+  /**
+   * Get game configuration
+   * @returns Current game configuration
+   */
+  getConfig(): GameConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Set AI configuration for a specific player
+   * @param playerId Player ID
+   * @param config AI configuration or difficulty
+   */
+  setAIConfig(playerId: string, config: 'easy' | 'normal' | 'hard' | 'pro'): void {
+    const ai = this.aiInstances.get(playerId);
+    if (ai) {
+      ai.setConfig(config);
+    }
+  }
+}

@@ -136,11 +136,16 @@ export class BettingRound {
 
   /**
    * Reset for new betting round
+   * Ensures clean state for new street
    */
   reset(): void {
     this.currentBet = 0;
     this.lastRaiseAmount = 0;
     this.lastAggressorIndex = -1;
+    // Verify clean state
+    if (this.currentBet !== 0 || this.lastRaiseAmount !== 0) {
+      throw new Error('Betting round reset failed - state not clean');
+    }
   }
 
   /**

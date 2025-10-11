@@ -34,5 +34,18 @@ export { Deck } from './deck';
 export { Player } from './player';
 export { PotManager } from './pot';
 export { BettingRound } from './betting';
-export { PokerAI } from './ai';
-export type { AIConfig, GameContext } from './ai';
+
+// AI
+export { PokerAI } from './ai/PokerAI';
+export type { GameContext } from './ai/PokerAI';
+export type { AIConfig, AIDifficulty } from './ai/ai-config';
+export { getAIPreset, createCustomAI, AI_PRESETS } from './ai/ai-config';
+
+// Game modes
+export { GameModeManager, STANDARD_STRUCTURES } from './game-mode';
+export type { 
+  GameType, 
+  BlindLevel, 
+  BlindStructure, 
+  GameModeConfig 
+} from './game-mode';

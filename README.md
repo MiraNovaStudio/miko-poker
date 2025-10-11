@@ -152,11 +152,14 @@ engine.processAIAction('ai');
 - [x] Player management
 - [x] Betting system with proper validation
 - [x] Pot management (main + side pots)
-- [x] AI opponent with configurable difficulty
+- [x] Modular AI system with difficulty presets
 - [x] Game engine orchestration
 - [x] Event system
-- [x] Comprehensive tests (21/21 passing)
-- [x] Full documentation
+- [x] Game modes (Cash, SNG, Tournament)
+- [x] Tournament blinds with antes
+- [x] Multiplayer support (2-8 players)
+- [x] Comprehensive tests (50+ tests)
+- [x] Full documentation with JSDoc
 
 ### Phase 2: UI Integration 🚧 READY TO START
 - [x] GameController template created

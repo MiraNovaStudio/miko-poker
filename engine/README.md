@@ -26,32 +26,53 @@ npm run build
 ```typescript
 import { PokerGameEngine } from '@miko/engine';
 
-// Create engine
-const engine = new PokerGameEngine({
+// Create cash game
+const cashGame = new PokerGameEngine({
+  gameType: 'cash',
   smallBlind: 5,
   bigBlind: 10,
-  startingChips: 1000
+  startingChips: 1000,
+  maxPlayers: 6
 });
+
+// OR Create tournament
+const tournament = new PokerGameEngine({
+  gameType: 'tournament',
+  blindStructure: 'turbo',  // 'standard', 'deep', or custom
+  maxPlayers: 8
+});
+
+// Initialize with AI difficulties
+const aiDifficulties = new Map([
+  ['ai1', 'easy'],
+  ['ai2', 'hard'],
+  ['ai3', 'pro']
+]);
+cashGame.initGame(['player', 'ai1', 'ai2'], aiDifficulties);
 
 // Listen to events
-engine.on((event) => {
-  console.log(event);
+cashGame.on((event) => {
+  switch (event.type) {
+    case 'blind_posted':
+      console.log(`${event.playerId} posts ${event.isAnte ? 'ante' : 'blind'}: $${event.amount}`);
+      break;
+    case 'level_changed':
+      console.log(`Level ${event.level}: ${event.smallBlind}/${event.bigBlind}`);
+      break;
+  }
 });
 
-// Initialize game
-engine.initGame(['player1', 'player2']);
-
 // Start hand
-engine.startNewHand();
+cashGame.startNewHand();
 
 // Get game state
-const state = engine.getGameState();
+const state = cashGame.getGameState();
 
 // Process player action
-engine.processAction('player1', { type: 'call', amount: 10 });
+cashGame.processAction('player', { type: 'call', amount: state.callAmount });
 
 // Let AI make decision
-engine.processAIAction('player2');
+cashGame.processAIAction('ai1');
 ```
 
 ## API Reference
@@ -129,7 +150,10 @@ type GameEvent =
   | { type: 'player_action'; playerId: string; action: PlayerAction }
   | { type: 'pot_updated'; amount: number }
   | { type: 'hand_complete'; result: GameResult }
-  | { type: 'game_over'; winnerId: string };
+  | { type: 'game_over'; winnerId: string }
+  | { type: 'blind_posted'; playerId: string; amount: number; isAnte?: boolean }
+  | { type: 'level_changed'; level: number; smallBlind: number; bigBlind: number; ante: number }
+  | { type: 'game_mode_changed'; gameType: 'cash' | 'sng' | 'tournament' };
 ```
 
 ## Hand Evaluation
@@ -168,14 +192,32 @@ const comparison = compareHands(hand1, hand2);
 
 ## AI Configuration
 
-Customize AI behavior:
+### Difficulty Presets
 
 ```typescript
-engine.setAIConfig({
-  aggression: 0.7,    // 0-1: How aggressive
-  tightness: 0.5,     // 0-1: How selective
-  bluffFrequency: 0.2, // 0-1: Bluff frequency
-  skill: 0.8          // 0-1: Overall skill
+// Use preset difficulties
+const difficulties = new Map([
+  ['ai1', 'easy'],   // Passive, makes mistakes
+  ['ai2', 'normal'], // Balanced play
+  ['ai3', 'hard'],   // Aggressive, good decisions
+  ['ai4', 'pro']     // Very aggressive, optimal play
+]);
+engine.initGame(['player', 'ai1', 'ai2', 'ai3', 'ai4'], difficulties);
+
+// Change difficulty mid-game
+engine.setAIConfig('ai1', 'pro');
+```
+
+### Custom AI Configuration
+
+```typescript
+import { createCustomAI } from '@miko/engine';
+
+const customAI = createCustomAI('normal', {
+  aggression: 0.8,     // 0-1: How aggressive
+  tightness: 0.6,      // 0-1: How selective
+  bluffFrequency: 0.3, // 0-1: Bluff frequency
+  skill: 0.9           // 0-1: Overall skill
 });
 ```
 

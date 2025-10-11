@@ -43,5 +43,7 @@ export interface GameConfig {
   startingChips: number;
   maxPlayers: number;
   minRaise?: number;
+  gameType?: 'cash' | 'sng' | 'tournament';
+  blindStructure?: string;  // Name of standard structure or 'custom'
 }
 
