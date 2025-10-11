@@ -137,7 +137,14 @@ export class Card extends Component {
             
             if (this.cardSprite) {
                 this.cardSprite.spriteFrame = spriteFrame;
-                console.log('      ✅ SpriteFrame assigned to sprite');
+                
+                // Set sprite to CUSTOM size mode and force it to 60x84
+                this.cardSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+                const spriteTransform = this.cardSprite.node.getComponent(UITransform);
+                if (spriteTransform) {
+                    spriteTransform.setContentSize(this.cardWidth, this.cardHeight);
+                    console.log(`      ✅ Sprite sized to ${this.cardWidth}x${this.cardHeight}`);
+                }
             } else {
                 console.error('      ❌ cardSprite is null when trying to assign spriteFrame');
             }
@@ -161,7 +168,14 @@ export class Card extends Component {
             
             if (this.cardSprite) {
                 this.cardSprite.spriteFrame = spriteFrame;
-                console.log('      ✅ Card back spriteFrame assigned');
+                
+                // Set sprite to CUSTOM size mode and force it to 60x84
+                this.cardSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+                const spriteTransform = this.cardSprite.node.getComponent(UITransform);
+                if (spriteTransform) {
+                    spriteTransform.setContentSize(this.cardWidth, this.cardHeight);
+                    console.log(`      ✅ Card back sprite sized to ${this.cardWidth}x${this.cardHeight}`);
+                }
             } else {
                 console.error('      ❌ cardSprite is null when trying to assign card back');
             }

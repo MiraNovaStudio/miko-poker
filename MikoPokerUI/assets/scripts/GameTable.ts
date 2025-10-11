@@ -3,7 +3,7 @@
  * Manages an 8-max cash game with card dealing, chip display, and player actions
  */
 
-import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Vec3, UITransform, Color, resources, Prefab, instantiate } from 'cc';
+import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Vec3, UITransform, Color, resources, Prefab, instantiate, Button, EditBox } from 'cc';
 import { SlotLayoutManager } from './SlotLayoutManager';
 import { Card as CardComponent, type CardData } from './Card';
 
@@ -28,6 +28,20 @@ export class GameTable extends Component {
 
     @property(Node)
     communityCardsNode: Node | null = null;
+
+    // === Action Buttons ===
+    
+    @property(Node)
+    leftButton: Node | null = null; // Check or Call
+
+    @property(Node)
+    middleButton: Node | null = null; // Bet or Raise
+
+    @property(Node)
+    rightButton: Node | null = null; // Fold
+
+    @property(EditBox)
+    betInput: EditBox | null = null; // For entering bet/raise amount
 
     // === Card Prefab ===
     
@@ -58,9 +72,15 @@ export class GameTable extends Component {
         console.log('Pot Label:', this.potLabel ? '✅ Assigned' : '❌ Missing');
         console.log('Status Label:', this.statusLabel ? '✅ Assigned' : '❌ Missing');
         console.log('Community Cards Node:', this.communityCardsNode ? '✅ Assigned' : '❌ Missing');
+        console.log('Left Button:', this.leftButton ? '✅ Assigned' : '❌ Missing');
+        console.log('Middle Button:', this.middleButton ? '✅ Assigned' : '❌ Missing');
+        console.log('Right Button:', this.rightButton ? '✅ Assigned' : '❌ Missing');
+        console.log('Bet Input:', this.betInput ? '✅ Assigned' : '❌ Missing');
         
         this.initializeEngine();
         this.createDealerButton();
+        this.setupButtonHandlers();
+        this.hideActionButtons(); // Hide until player's turn
         
         // Wait a frame for SlotLayoutManager to create slots
         this.scheduleOnce(() => {
@@ -183,6 +203,10 @@ export class GameTable extends Component {
 
             case 'cards_dealt':
                 this.onCardsDealt(event.playerId, event.cards);
+                break;
+
+            case 'action_required':
+                this.onActionRequired(event.playerId, event.validActions);
                 break;
 
             case 'street_changed':
@@ -402,8 +426,7 @@ export class GameTable extends Component {
             console.log('    📏 Card size set to 60x84');
         }
         
-        // Fallback: Apply scale if sizing doesn't work
-        // cardNode.setScale(0.3, 0.3, 1);
+        // Don't scale the card node - let the Card component handle sprite sizing
         
         cardNode.setParent(parent);
         cardNode.setPosition(xOffset, 0, 0);
@@ -501,11 +524,178 @@ export class GameTable extends Component {
     }
 
     /**
-     * Called when action is required from human player
+     * Setup button click handlers
      */
-    private onActionRequired() {
-        console.log('⏳ Action required from player');
-        // TODO: Enable action buttons
+    private setupButtonHandlers() {
+        if (this.leftButton) {
+            const button = this.leftButton.getComponent(Button);
+            if (button) {
+                button.node.on(Button.EventType.CLICK, this.onLeftButtonClick, this);
+            }
+        }
+
+        if (this.middleButton) {
+            const button = this.middleButton.getComponent(Button);
+            if (button) {
+                button.node.on(Button.EventType.CLICK, this.onMiddleButtonClick, this);
+            }
+        }
+
+        if (this.rightButton) {
+            const button = this.rightButton.getComponent(Button);
+            if (button) {
+                button.node.on(Button.EventType.CLICK, this.onRightButtonClick, this);
+            }
+        }
+
+        console.log('✅ Button handlers set up');
+    }
+
+    /**
+     * Hide all action buttons
+     */
+    private hideActionButtons() {
+        if (this.leftButton) this.leftButton.active = false;
+        if (this.middleButton) this.middleButton.active = false;
+        if (this.rightButton) this.rightButton.active = false;
+        if (this.betInput) this.betInput.node.active = false;
+    }
+
+    /**
+     * Show action buttons
+     */
+    private showActionButtons() {
+        if (this.leftButton) this.leftButton.active = true;
+        if (this.middleButton) this.middleButton.active = true;
+        if (this.rightButton) this.rightButton.active = true;
+    }
+
+    /**
+     * Update button labels based on valid actions
+     */
+    private updateButtonLabels(validActions: string[]) {
+        const hasCheck = validActions.includes('check');
+        const hasCall = validActions.includes('call');
+        const hasBet = validActions.includes('bet');
+        const hasRaise = validActions.includes('raise');
+
+        // Left Button: Check or Call
+        if (this.leftButton) {
+            const label = this.leftButton.getComponentInChildren(Label);
+            if (label) {
+                label.string = hasCheck ? 'Check' : 'Call';
+            }
+        }
+
+        // Middle Button: Bet or Raise
+        if (this.middleButton) {
+            const label = this.middleButton.getComponentInChildren(Label);
+            if (label) {
+                label.string = hasBet ? 'Bet' : 'Raise';
+            }
+        }
+
+        // Right Button: Always Fold
+        if (this.rightButton) {
+            const label = this.rightButton.getComponentInChildren(Label);
+            if (label) {
+                label.string = 'Fold';
+            }
+        }
+
+        // Show/Hide bet input based on whether Bet or Raise is available
+        if (this.betInput) {
+            this.betInput.node.active = hasBet || hasRaise;
+        }
+
+        console.log(`🔘 Buttons updated: ${hasCheck ? 'Check' : 'Call'} / ${hasBet ? 'Bet' : 'Raise'} / Fold`);
+    }
+
+    /**
+     * Get the bet amount from the input field
+     */
+    private getBetAmount(): number {
+        if (!this.betInput || !this.betInput.string) {
+            return this.bigBlind; // Default to big blind
+        }
+
+        const amount = parseInt(this.betInput.string);
+        return isNaN(amount) ? this.bigBlind : amount;
+    }
+
+    /**
+     * Left button click handler (Check or Call)
+     */
+    private onLeftButtonClick() {
+        if (!this.engine) return;
+
+        const label = this.leftButton?.getComponentInChildren(Label);
+        if (!label) return;
+
+        const action = label.string.toLowerCase(); // 'check' or 'call'
+        console.log(`🎯 Player clicked: ${action}`);
+
+        this.engine.processAction('player', { type: action as any });
+        this.hideActionButtons();
+    }
+
+    /**
+     * Middle button click handler (Bet or Raise)
+     */
+    private onMiddleButtonClick() {
+        if (!this.engine) return;
+
+        const label = this.middleButton?.getComponentInChildren(Label);
+        if (!label) return;
+
+        const action = label.string.toLowerCase(); // 'bet' or 'raise'
+        const amount = this.getBetAmount();
+
+        console.log(`🎯 Player clicked: ${action} $${amount}`);
+
+        this.engine.processAction('player', { type: action as any, amount });
+        this.hideActionButtons();
+    }
+
+    /**
+     * Right button click handler (Fold)
+     */
+    private onRightButtonClick() {
+        if (!this.engine) return;
+
+        console.log('🎯 Player clicked: fold');
+
+        this.engine.processAction('player', { type: 'fold' });
+        this.hideActionButtons();
+    }
+
+    /**
+     * Called when action is required from a player
+     */
+    private onActionRequired(playerId: string, validActions: string[]) {
+        console.log(`⏳ Action required from ${playerId}`, validActions);
+
+        if (playerId === 'player') {
+            // Human player's turn - show buttons
+            console.log('🎮 Showing action buttons for human player');
+            this.updateButtonLabels(validActions);
+            this.showActionButtons();
+
+            if (this.statusLabel) {
+                this.statusLabel.string = 'Your turn!';
+            }
+        } else {
+            // AI player's turn - hide buttons and let AI decide
+            console.log(`🤖 AI player ${playerId} is thinking...`);
+            this.hideActionButtons();
+
+            if (this.statusLabel) {
+                this.statusLabel.string = `${playerId} is thinking...`;
+            }
+
+            // AI will automatically process its action via the engine
+            // The engine's internal logic will handle AI decision-making
+        }
     }
 
     /**
