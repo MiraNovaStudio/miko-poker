@@ -175,7 +175,7 @@
     "_priority": 0,
     "_fov": 45,
     "_fovAxis": 0,
-    "_orthoHeight": 517.5251798561151,
+    "_orthoHeight": 464.10322580645163,
     "_near": 0,
     "_far": 2000,
     "_color": {
@@ -2363,6 +2363,18 @@
     },
     "communityCardsNode": {
       "__id__": 10
+    },
+    "leftButton": {
+      "__id__": 34
+    },
+    "middleButton": {
+      "__id__": 41
+    },
+    "rightButton": {
+      "__id__": 48
+    },
+    "betInput": {
+      "__id__": 64
     },
     "cardPrefab": {
       "__uuid__": "94c765fd-4fd4-4be3-8b56-af747df74e8e",

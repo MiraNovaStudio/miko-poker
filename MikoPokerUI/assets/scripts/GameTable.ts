@@ -24,6 +24,9 @@ export class GameTable extends Component {
     potLabel: Label | null = null;
 
     @property(Label)
+    totalLabel: Label | null = null;
+
+    @property(Label)
     statusLabel: Label | null = null;
 
     @property(Node)
@@ -63,6 +66,7 @@ export class GameTable extends Component {
     
     private engine: PokerGameEngine | null = null;
     private playerSlots: Map<string, Node> = new Map(); // playerId -> slot node
+    private playerBetLabels: Map<string, Label> = new Map(); // playerId -> bet label
     private dealerButtonNode: Node | null = null;
 
     start() {
@@ -70,6 +74,7 @@ export class GameTable extends Component {
         console.log('SlotLayoutManager:', this.slotLayoutManager ? '✅ Assigned' : '❌ Missing');
         console.log('Card Prefab:', this.cardPrefab ? '✅ Assigned' : '❌ Missing');
         console.log('Pot Label:', this.potLabel ? '✅ Assigned' : '❌ Missing');
+        console.log('Total Label:', this.totalLabel ? '✅ Assigned' : '❌ Missing');
         console.log('Status Label:', this.statusLabel ? '✅ Assigned' : '❌ Missing');
         console.log('Community Cards Node:', this.communityCardsNode ? '✅ Assigned' : '❌ Missing');
         console.log('Left Button:', this.leftButton ? '✅ Assigned' : '❌ Missing');
@@ -154,8 +159,9 @@ export class GameTable extends Component {
         const transform = this.dealerButtonNode.addComponent(UITransform);
         transform.setContentSize(30, 30);
 
-        // Add sprite
+        // Add sprite and set to CUSTOM size mode
         const sprite = this.dealerButtonNode.addComponent(Sprite);
+        sprite.sizeMode = Sprite.SizeMode.CUSTOM; // Set BEFORE loading sprite frame
         
         // Load dealer button sprite
         resources.load('dealer_button/spriteFrame', SpriteFrame, (err, spriteFrame) => {
@@ -169,8 +175,8 @@ export class GameTable extends Component {
                 return;
             }
             sprite.spriteFrame = spriteFrame;
-            sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-            console.log('✅ Dealer button loaded and sized to 30x30');
+            // Size mode already set above, UITransform already set to 30x30
+            console.log('✅ Dealer button loaded and sized to 30x30 (CUSTOM mode)');
         });
         
         this.dealerButtonNode.active = false; // Hide until we position it
@@ -183,6 +189,73 @@ export class GameTable extends Component {
         if (this.engine) {
             console.log('🎴 Starting first hand...');
             this.engine.startNewHand();
+            
+            // After starting hand, begin the auto-advance loop
+            this.scheduleOnce(() => {
+                this.advanceGame();
+            }, 0.5); // Small delay to let cards appear
+        }
+    }
+
+    /**
+     * Auto-advance the game - checks whose turn it is and either shows buttons or processes AI action
+     */
+    private advanceGame() {
+        if (!this.engine || !this.engine.isHandInProgress()) {
+            console.log('⏸️ No hand in progress, stopping auto-advance');
+            return;
+        }
+
+        const gameState = this.engine.getGameState();
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        
+        if (!currentPlayer) {
+            console.error('❌ No current player found!');
+            return;
+        }
+
+        console.log(`\n⏳ Current turn: ${currentPlayer.id} (index ${gameState.currentPlayerIndex})`);
+
+        // Check if current player has already folded or is all-in
+        if (currentPlayer.folded || currentPlayer.isAllIn) {
+            console.log(`  ⏭️ Player ${currentPlayer.id} can't act (folded: ${currentPlayer.folded}, all-in: ${currentPlayer.isAllIn})`);
+            // This shouldn't happen as the engine should skip them, but just in case
+            this.scheduleOnce(() => this.advanceGame(), 0.1);
+            return;
+        }
+
+        if (currentPlayer.id === 'player') {
+            // Human player's turn - show buttons with valid actions
+            const validActions: string[] = [];
+            if (gameState.canFold) validActions.push('fold');
+            if (gameState.canCheck) validActions.push('check');
+            if (gameState.canCall) validActions.push('call');
+            if (gameState.canBet) validActions.push('bet');
+            if (gameState.canRaise) validActions.push('raise');
+
+            this.onActionRequired(currentPlayer.id, validActions);
+            // Don't schedule another advanceGame - wait for player to click a button
+        } else {
+            // AI player's turn - automatically process action
+            console.log(`  🤖 AI player ${currentPlayer.id} is deciding...`);
+            
+            if (this.statusLabel) {
+                this.statusLabel.string = `${currentPlayer.id} is thinking...`;
+            }
+
+            // Get AI decision and process it
+            this.scheduleOnce(() => {
+                try {
+                    const action = this.engine!.getAIAction(currentPlayer.id);
+                    console.log(`  🎯 AI ${currentPlayer.id} chose:`, action);
+                    this.engine!.processAction(currentPlayer.id, action);
+                    
+                    // Continue to next player
+                    this.scheduleOnce(() => this.advanceGame(), 0.5);
+                } catch (error) {
+                    console.error(`❌ Error processing AI action:`, error);
+                }
+            }, 2.0); // 2 second delay to simulate thinking
         }
     }
 
@@ -250,6 +323,9 @@ export class GameTable extends Component {
         const gameState = this.engine.getGameState();
         console.log(`Players: ${gameState.players.length}, Dealer: ${gameState.dealerIndex}`);
         
+        // Initialize pot and total labels
+        this.initializeLabels();
+        
         // Update all player slots
         gameState.players.forEach((player, index) => {
             console.log(`Updating slot ${index} for player ${player.id}`);
@@ -265,6 +341,105 @@ export class GameTable extends Component {
         }
         
         console.log('=== Hand Started Complete ===');
+    }
+
+    /**
+     * Initialize pot and total labels at start of hand
+     */
+    private initializeLabels() {
+        if (this.potLabel) {
+            this.potLabel.string = 'Pot: $0';
+        }
+        if (this.totalLabel) {
+            this.totalLabel.string = 'Total: $0';
+        }
+        
+        // Clear all bet labels
+        this.playerBetLabels.forEach((label, playerId) => {
+            label.string = '';
+            label.node.active = false;
+        });
+        
+        console.log('💰 Labels initialized: Pot and Total set to $0, all bet labels cleared');
+    }
+
+    /**
+     * Update pot and total labels based on current game state
+     */
+    private updatePotAndTotalLabels() {
+        if (!this.engine) return;
+
+        const gameState = this.engine.getGameState();
+        const pot = gameState.pot;
+
+        // Calculate total outstanding bets
+        let outstandingBets = 0;
+        gameState.players.forEach(player => {
+            if (!player.folded && player.currentBet > 0) {
+                outstandingBets += player.currentBet;
+            }
+        });
+
+        const total = pot + outstandingBets;
+
+        // Update labels
+        if (this.potLabel) {
+            this.potLabel.string = `Pot: $${pot}`;
+        }
+        if (this.totalLabel) {
+            this.totalLabel.string = `Total: $${total}`;
+        }
+
+        console.log(`💰 Labels updated: Pot=$${pot}, Outstanding=$${outstandingBets}, Total=$${total}`);
+    }
+
+    /**
+     * Update a player's bet label
+     */
+    private updatePlayerBetLabel(playerId: string, amount: number) {
+        const betLabel = this.playerBetLabels.get(playerId);
+        if (betLabel) {
+            if (amount > 0) {
+                betLabel.string = `$${amount}`;
+                betLabel.node.active = true;
+                console.log(`  💵 ${playerId} bet label: $${amount}`);
+            } else {
+                betLabel.string = '';
+                betLabel.node.active = false;
+            }
+        }
+    }
+
+    /**
+     * Clear all player bet labels (called at end of betting round)
+     */
+    private clearAllBetLabels() {
+        console.log('🧹 Clearing all bet labels');
+        this.playerBetLabels.forEach((label, playerId) => {
+            label.string = '';
+            label.node.active = false;
+        });
+    }
+
+    /**
+     * Update all player chip labels from current game state
+     */
+    private updateAllChipLabels() {
+        if (!this.engine) return;
+
+        const gameState = this.engine.getGameState();
+        gameState.players.forEach(player => {
+            const slotNode = this.playerSlots.get(player.id);
+            if (slotNode) {
+                const chipsNode = slotNode.getChildByName('PlayerChips');
+                if (chipsNode) {
+                    const chipsLabel = chipsNode.getComponent(Label);
+                    if (chipsLabel) {
+                        chipsLabel.string = `$${player.chips}`;
+                    }
+                }
+            }
+        });
     }
 
     /**
@@ -318,6 +493,22 @@ export class GameTable extends Component {
         chipsLabel.fontSize = 14;
         chipsLabel.color = new Color(255, 255, 0, 255);
 
+        // Create bet label (initially hidden)
+        const betNode = new Node('PlayerBet');
+        betNode.setParent(slotNode);
+        betNode.setPosition(0, 40, 0); // Above the cards
+
+        const betLabel = betNode.addComponent(Label);
+        betLabel.string = '';
+        betLabel.fontSize = 14;
+        betLabel.color = player.id === 'player' 
+            ? new Color(255, 255, 0, 255)  // Yellow for human player
+            : new Color(200, 200, 200, 255); // Gray for AI
+        betNode.active = false; // Hidden initially
+
+        // Store bet label reference
+        this.playerBetLabels.set(player.id, betLabel);
+
         console.log(`    ✅ Slot ${seatIndex} updated: ${player.id} - $${player.chips}`);
     }
 
@@ -333,17 +524,19 @@ export class GameTable extends Component {
             this.dealerButtonNode.setParent(dealerSlot);
             this.dealerButtonNode.setPosition(50, 50, 0); // Relative to slot
             
-            // Ensure size is correct
+            // CRITICAL: Set sprite to CUSTOM mode and enforce size
+            const sprite = this.dealerButtonNode.getComponent(Sprite);
+            if (sprite) {
+                sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+            }
+            
             const transform = this.dealerButtonNode.getComponent(UITransform);
             if (transform) {
                 transform.setContentSize(30, 30);
             }
             
-            // Fallback: Apply scale if sizing doesn't work
-            // this.dealerButtonNode.setScale(0.15, 0.15, 1);
-            
             this.dealerButtonNode.active = true;
-            console.log(`🔘 Dealer button at seat ${dealerIndex}, size 30x30`);
+            console.log(`🔘 Dealer button at seat ${dealerIndex}, size 30x30 (CUSTOM mode enforced)`);
         }
     }
 
@@ -353,6 +546,17 @@ export class GameTable extends Component {
     private onBlindPosted(playerId: string, amount: number, isAnte?: boolean) {
         const type = isAnte ? 'ante' : 'blind';
         console.log(`💰 ${playerId} posted ${type}: $${amount}`);
+        
+        // Update player's bet label to show blind
+        if (!this.engine) return;
+        const gameState = this.engine.getGameState();
+        const player = gameState.players.find(p => p.id === playerId);
+        if (player) {
+            this.updatePlayerBetLabel(playerId, player.currentBet);
+        }
+        
+        // Update pot and total
+        this.updatePotAndTotalLabels();
     }
 
     /**
@@ -478,6 +682,12 @@ export class GameTable extends Component {
     private onStreetChanged(street: string, communityCards: EngineCard[]) {
         console.log(`🎴 Street: ${street.toUpperCase()}`);
         
+        // Clear bet labels (betting round ended, bets moved to pot)
+        this.clearAllBetLabels();
+        
+        // Update pot and total (bets should now be in the pot)
+        this.updatePotAndTotalLabels();
+        
         if (this.statusLabel) {
             this.statusLabel.string = street.toUpperCase();
         }
@@ -512,15 +722,35 @@ export class GameTable extends Component {
         if (this.statusLabel) {
             this.statusLabel.string = actionText;
         }
+
+        // Update bet label for this player
+        if (!this.engine) return;
+        const gameState = this.engine.getGameState();
+        const player = gameState.players.find(p => p.id === playerId);
+        
+        if (player) {
+            if (action.type === 'fold') {
+                // Hide bet label for folded players
+                this.updatePlayerBetLabel(playerId, 0);
+            } else {
+                // Update bet label to show current bet
+                this.updatePlayerBetLabel(playerId, player.currentBet);
+            }
+        }
+        
+        // Update all chip labels (chips decrease when betting)
+        this.updateAllChipLabels();
+        
+        // Update pot and total
+        this.updatePotAndTotalLabels();
     }
 
     /**
      * Called when pot is updated
      */
     private onPotUpdated(amount: number) {
-        if (this.potLabel) {
-            this.potLabel.string = `Pot: $${amount}`;
-        }
+        // Update both pot and total labels
+        this.updatePotAndTotalLabels();
     }
 
     /**
@@ -555,6 +785,7 @@ export class GameTable extends Component {
      * Hide all action buttons
      */
     private hideActionButtons() {
+        console.log('🙈 Hiding action buttons');
         if (this.leftButton) this.leftButton.active = false;
         if (this.middleButton) this.middleButton.active = false;
         if (this.rightButton) this.rightButton.active = false;
@@ -565,9 +796,19 @@ export class GameTable extends Component {
      * Show action buttons
      */
     private showActionButtons() {
-        if (this.leftButton) this.leftButton.active = true;
-        if (this.middleButton) this.middleButton.active = true;
-        if (this.rightButton) this.rightButton.active = true;
+        console.log('👀 Showing action buttons');
+        if (this.leftButton) {
+            this.leftButton.active = true;
+            console.log('  ✅ Left button visible');
+        }
+        if (this.middleButton) {
+            this.middleButton.active = true;
+            console.log('  ✅ Middle button visible');
+        }
+        if (this.rightButton) {
+            this.rightButton.active = true;
+            console.log('  ✅ Right button visible');
+        }
     }
 
     /**
@@ -637,6 +878,9 @@ export class GameTable extends Component {
 
         this.engine.processAction('player', { type: action as any });
         this.hideActionButtons();
+        
+        // Continue game to next player
+        this.scheduleOnce(() => this.advanceGame(), 0.5);
     }
 
     /**
@@ -655,6 +899,9 @@ export class GameTable extends Component {
 
         this.engine.processAction('player', { type: action as any, amount });
         this.hideActionButtons();
+        
+        // Continue game to next player
+        this.scheduleOnce(() => this.advanceGame(), 0.5);
     }
 
     /**
@@ -667,17 +914,24 @@ export class GameTable extends Component {
 
         this.engine.processAction('player', { type: 'fold' });
         this.hideActionButtons();
+        
+        // Continue game to next player
+        this.scheduleOnce(() => this.advanceGame(), 0.5);
     }
 
     /**
      * Called when action is required from a player
      */
     private onActionRequired(playerId: string, validActions: string[]) {
-        console.log(`⏳ Action required from ${playerId}`, validActions);
+        console.log('');
+        console.log('=== ⏳ ACTION REQUIRED ===');
+        console.log(`  Player: ${playerId}`);
+        console.log(`  Valid Actions:`, validActions);
+        console.log(`  Is Human Player: ${playerId === 'player'}`);
 
         if (playerId === 'player') {
             // Human player's turn - show buttons
-            console.log('🎮 Showing action buttons for human player');
+            console.log('  🎮 This is the HUMAN player - showing buttons!');
             this.updateButtonLabels(validActions);
             this.showActionButtons();
 
@@ -686,7 +940,7 @@ export class GameTable extends Component {
             }
         } else {
             // AI player's turn - hide buttons and let AI decide
-            console.log(`🤖 AI player ${playerId} is thinking...`);
+            console.log(`  🤖 This is an AI player - hiding buttons`);
             this.hideActionButtons();
 
             if (this.statusLabel) {
@@ -696,6 +950,8 @@ export class GameTable extends Component {
             // AI will automatically process its action via the engine
             // The engine's internal logic will handle AI decision-making
         }
+        console.log('=== END ACTION REQUIRED ===');
+        console.log('');
     }
 
     /**
@@ -703,6 +959,14 @@ export class GameTable extends Component {
      */
     private onHandEnded(result: any) {
         console.log('🏁 Hand Ended:', result);
+        
+        this.hideActionButtons(); // Make sure buttons are hidden
+        
+        // Clear all bet labels
+        this.clearAllBetLabels();
+        
+        // Update all chip labels to show final chip counts
+        this.updateAllChipLabels();
 
         if (this.statusLabel) {
             const winners = result.winners.join(', ');
@@ -714,6 +978,11 @@ export class GameTable extends Component {
             if (this.engine && !this.engine.isHandInProgress()) {
                 console.log('🎴 Starting next hand...');
                 this.engine.startNewHand();
+                
+                // Restart the auto-advance loop for new hand
+                this.scheduleOnce(() => {
+                    this.advanceGame();
+                }, 0.5);
             }
         }, 3);
     }
