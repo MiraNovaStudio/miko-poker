@@ -12,7 +12,7 @@ const { ccclass, property } = _decorator;
  */
 export interface CardData {
     rank: string;  // A, K, Q, J, 10, 9, 8, 7, 6, 5, 4, 3, 2
-    suit: string;  // ♠, ♥, ♦, ♣
+    suit: string;  // spades, hearts, diamonds, clubs
 }
 
 @ccclass('Card')
@@ -203,15 +203,18 @@ export class Card extends Component {
             '2': '2'
         };
 
+        // Engine sends suits as strings: 'spades', 'hearts', 'diamonds', 'clubs'
         const suitMap: Record<string, string> = {
-            '♠': 'spades',
-            '♥': 'hearts',
-            '♦': 'diamonds',
-            '♣': 'clubs'
+            'spades': 'spades',
+            'hearts': 'hearts',
+            'diamonds': 'diamonds',
+            'clubs': 'clubs'
         };
 
         const rankName = rankMap[data.rank] || data.rank.toLowerCase();
-        const suitName = suitMap[data.suit] || 'spades';
+        const suitName = suitMap[data.suit] || data.suit.toLowerCase();
+
+        console.log(`      Card path: rank=${data.rank} (${rankName}), suit=${data.suit} (${suitName})`);
 
         return `cards/${rankName}_of_${suitName}`;
     }

@@ -1,8 +1,16 @@
 # Changelog
 
-All notable changes to the MikoPoker Engine will be documented in this file.
+All notable changes to the MikoPoker project will be documented in this file.
 
-## [0.2.0] - 2025-10-11
+## [UI] - 2025-10-11 21:00
+
+### GameTable UI
+- Implemented overlay container system for bet labels (always render on top)
+- Smart bet label positioning based on seat location (above/below/sides to avoid card overlap)
+- Bet labels now persist for entire betting round, clear on street change
+- Active player highlighting: name/chips become bold during their turn
+
+## [Engine 0.2.0] - 2025-10-11
 
 ### Added
 

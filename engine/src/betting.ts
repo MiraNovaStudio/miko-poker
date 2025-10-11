@@ -108,7 +108,7 @@ export class BettingRound {
    * A round is complete when all active players have either:
    * - Folded
    * - Gone all-in
-   * - Matched the current bet (and we've gone around to the last aggressor)
+   * - Matched the current bet (and everyone has had a chance to act after the last raise)
    */
   isRoundComplete(players: Player[], startingIndex: number, currentIndex: number): boolean {
     const activePlayers = players.filter(p => p.canAct());
@@ -125,13 +125,22 @@ export class BettingRound {
       return false;
     }
 
-    // If there was no aggressor (all checks), round is complete
+    // If there was no aggressor (all checks), round is complete after one full orbit
     if (this.lastAggressorIndex === -1) {
-      return currentIndex === startingIndex && activePlayers.every(p => p.bet === 0);
+      // For preflop with blinds, wait until we're back past the big blind
+      if (this.currentBet > 0) {
+        // There's a bet (blinds) but no aggressor yet - need to go around once
+        return currentIndex === startingIndex;
+      }
+      // All checked, one orbit complete
+      return currentIndex === startingIndex;
     }
 
-    // Round is complete if we're back to the last aggressor
-    return currentIndex === this.lastAggressorIndex;
+    // Round is complete if we're PAST the last aggressor 
+    // (everyone after the raise has had a chance to act)
+    // The next player to act would be the one after the last aggressor
+    const nextAfterAggressor = (this.lastAggressorIndex + 1) % players.length;
+    return currentIndex === nextAfterAggressor;
   }
 
   /**
