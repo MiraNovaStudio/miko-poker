@@ -97,7 +97,6 @@ export class GameTable extends Component {
         console.log('SlotLayoutManager:', this.slotLayoutManager ? '✅ Assigned' : '❌ Missing');
         console.log('Card Prefab:', this.cardPrefab ? '✅ Assigned' : '❌ Missing');
         console.log('Pot Label:', this.potLabel ? '✅ Assigned' : '❌ Missing');
-        console.log('Total Label:', this.totalLabel ? '✅ Assigned' : '❌ Missing');
         console.log('Status Label:', this.statusLabel ? '✅ Assigned' : '❌ Missing');
         console.log('Community Cards Node:', this.communityCardsNode ? '✅ Assigned' : '❌ Missing');
         console.log('Left Button:', this.leftButton ? '✅ Assigned' : '❌ Missing');
@@ -236,6 +235,19 @@ export class GameTable extends Component {
         }
 
         const gameState = this.engine.getGameState();
+
+        // CRITICAL: Check if all remaining players are all-in or folded
+        // If so, skip remaining betting and go straight to showdown
+        const activePlayers = gameState.players.filter((p: any) => !p.folded);
+        const canActPlayers = activePlayers.filter((p: any) => !p.allIn);
+
+        if (canActPlayers.length === 0 && activePlayers.length > 1) {
+            console.log(`[HAND #${this.handCounter}] 🚀 All players are all-in! Auto-advancing to showdown...`);
+            // Force hand to complete - all remaining players are all-in
+            this.engine.forceHandComplete();
+            return;
+        }
+
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
 
         if (!currentPlayer) {
@@ -427,11 +439,7 @@ export class GameTable extends Component {
      * Initialize pot and total labels at start of hand
      */
     private initializeLabels() {
-        // Reset pot tracking
-        this.potAmount = 0;
-        this.outstandingAmount = 0;
-
-        // Update labels
+        // Update labels from engine state
         this.updateAllPotLabels();
 
         // Clear all bet labels
@@ -440,7 +448,7 @@ export class GameTable extends Component {
             label.node.active = false;
         });
 
-        console.log('💰 Labels initialized: Pot=$0, Outstanding=$0, Total=$0');
+        console.log('💰 Labels initialized from engine');
     }
 
     /**
@@ -462,48 +470,45 @@ export class GameTable extends Component {
     }
 
     /**
-     * Update all pot-related labels (pot, total)
+     * Update all pot-related labels
+     * Uses engine's pot directly for accurate display
      */
     private updateAllPotLabels() {
-        const total = this.potAmount + this.outstandingAmount;
+        if (!this.engine) return;
+
+        const gameState = this.engine.getGameState();
+
+        // Pot = what's been collected into the pot by the engine
+        const enginePot = gameState.pot;
 
         if (this.potLabel) {
             // Check if there are side pots
-            if (this.engine) {
-                const sidePots = this.engine.getSidePots();
-                if (sidePots && sidePots.length > 0) {
-                    // Display main pot + side pots
-                    let potText = `Main: $${this.potAmount}`;
-                    sidePots.forEach((pot: any, index: number) => {
-                        potText += ` | Side ${index + 1}: $${pot.amount}`;
-                    });
-                    this.potLabel.string = potText;
-                } else {
-                    this.potLabel.string = `Pot: $${this.potAmount}`;
-                }
+            const sidePots = this.engine.getSidePots();
+            if (sidePots && sidePots.length > 0) {
+                // Display main pot + side pots
+                let potText = `Main: $${enginePot}`;
+                sidePots.forEach((pot: any, index: number) => {
+                    potText += ` | Side ${index + 1}: $${pot.amount}`;
+                });
+                this.potLabel.string = potText;
             } else {
-                this.potLabel.string = `Pot: $${this.potAmount}`;
+                this.potLabel.string = `Pot: $${enginePot}`;
             }
         }
 
-        if (this.totalLabel) {
-            this.totalLabel.string = `Total: $${total}`;
-        }
-
-        console.log(`💰 Labels: Pot=$${this.potAmount}, Outstanding=$${this.outstandingAmount}, Total=$${total}`);
+        // Logging
+        console.log(`💰 [POT UPDATE] Street: ${gameState.street.toUpperCase()}, EnginePot=$${enginePot}`);
+        console.log(`   Player bets:`, gameState.players.map((p: any) => `${p.id}=$${p.bet}`).join(', '));
     }
 
     /**
-     * Move outstanding bets into pot (called when betting round completes)
+     * Called when betting round completes (street changes)
+     * Just update labels - engine handles pot collection
      */
     private finalizeBettingRound() {
-        // Move outstanding bets into pot
-        this.potAmount += this.outstandingAmount;
-        this.outstandingAmount = 0;
+        console.log(`💰 Round finalized - engine collected bets into pot`);
 
-        console.log(`💰 Round finalized: All bets moved to pot. New pot=$${this.potAmount}`);
-
-        // Update labels
+        // Update labels to show new pot state
         this.updateAllPotLabels();
     }
 
@@ -915,8 +920,7 @@ export class GameTable extends Component {
             this.updatePlayerBetLabel(playerId, player.bet, blindLabel);
         }
 
-        // Update outstanding bets and labels
-        this.outstandingAmount = this.calculateOutstanding();
+        // Update pot and total labels
         this.updateAllPotLabels();
     }
 
@@ -1160,8 +1164,7 @@ export class GameTable extends Component {
         // Update all chip labels (chips decrease when betting)
         this.updateAllChipLabels();
 
-        // Recalculate outstanding bets and update pot/total labels
-        this.outstandingAmount = this.calculateOutstanding();
+        // Update pot/total labels
         this.updateAllPotLabels();
     }
 
@@ -1169,15 +1172,10 @@ export class GameTable extends Component {
      * Called when pot is updated (from engine)
      */
     private onPotUpdated(amount: number) {
-        // Sync pot from engine (in case engine moved bets to pot)
-        if (this.engine) {
-            const gameState = this.engine.getGameState();
-            this.potAmount = gameState.pot;
+        console.log(`💰 Pot updated by engine: $${amount}`);
 
-            // Recalculate outstanding and update labels
-            this.outstandingAmount = this.calculateOutstanding();
-            this.updateAllPotLabels();
-        }
+        // Just update the labels - engine already updated the pot
+        this.updateAllPotLabels();
     }
 
     /**

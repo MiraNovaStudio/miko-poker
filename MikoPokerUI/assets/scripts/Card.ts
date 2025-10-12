@@ -240,7 +240,7 @@ export class Card extends Component {
 
         console.log(`      Card path: rank=${data.rank} (${rankName}), suit=${data.suit} (${suitName})`);
 
-        return `cards/${rankName}_of_${suitName}`;
+        return `cards2/${rankName}_of_${suitName}`;
     }
 
     /**

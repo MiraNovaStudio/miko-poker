@@ -194,6 +194,7 @@ export class PokerGameEngine {
     // Reset for new hand
     this.deck.reset();
     this.pot.reset();
+    debugLog('HAND_START', `🔵 Pot reset to $${this.pot.getTotalPot()} for new hand`);
     this.communityCards = [];
     this.street = 'preflop';
     this.handInProgress = true;
@@ -378,15 +379,24 @@ export class PokerGameEngine {
 
     // Collect all current bets into the pot
     const potBefore = this.pot.getTotalPot();
+    debugLog('END_ROUND', `🔵 BEFORE collectBets: pot=$${potBefore}`);
+    this.players.forEach(p => {
+      if (p.bet > 0) debugLog('END_ROUND', `   ${p.id}: bet=$${p.bet}`);
+    });
+
     this.pot.collectBetsSimple(this.players);
+
     const potAfter = this.pot.getTotalPot();
-    debugLog('END_ROUND', `Pot: $${potBefore} → $${potAfter}`);
+    debugLog('END_ROUND', `🔵 AFTER collectBets: pot=$${potAfter}`);
+    this.players.forEach(p => {
+      debugLog('END_ROUND', `   ${p.id}: bet=$${p.bet} (should be 0)`);
+    });
 
     // Reset betting round state
     this.bettingRound.reset();
     debugLog('END_ROUND', `BettingRound reset()`);
 
-    // Reset all player bets to 0
+    // Reset all player bets to 0 (redundant safety check)
     this.players.forEach(p => p.bet = 0);
     debugLog('END_ROUND', `All player bets reset to $0`);
 
@@ -566,6 +576,51 @@ export class PokerGameEngine {
 
     this.emitEvent({ type: 'hand_complete', result });
     this.handInProgress = false;
+  }
+
+  /**
+   * Force hand to complete when all remaining players are all-in
+   * Deals remaining community cards and goes to showdown
+   */
+  public forceHandComplete(): void {
+    debugLog('FORCE_COMPLETE', `⚡ Forcing hand completion - all players all-in or folded`);
+
+    // Collect any outstanding bets
+    this.pot.collectBetsSimple(this.players);
+    this.emitEvent({ type: 'pot_updated', amount: this.pot.getTotalPot() });
+
+    // Deal all remaining community cards
+    if (this.street === 'preflop') {
+      // Deal flop
+      this.street = 'flop';
+      this.deck.burn();
+      this.communityCards = this.deck.dealMultiple(3);
+      debugLog('FORCE_COMPLETE', `  Dealt flop: ${this.communityCards.map(c => c.rank + c.suit).join(', ')}`);
+      this.emitEvent({ type: 'street_changed', street: this.street, communityCards: [...this.communityCards] });
+    }
+
+    if (this.street === 'flop') {
+      // Deal turn
+      this.street = 'turn';
+      this.deck.burn();
+      this.communityCards.push(this.deck.deal());
+      debugLog('FORCE_COMPLETE', `  Dealt turn: ${this.communityCards[this.communityCards.length - 1].rank}${this.communityCards[this.communityCards.length - 1].suit}`);
+      this.emitEvent({ type: 'street_changed', street: this.street, communityCards: [...this.communityCards] });
+    }
+
+    if (this.street === 'turn') {
+      // Deal river
+      this.street = 'river';
+      this.deck.burn();
+      this.communityCards.push(this.deck.deal());
+      debugLog('FORCE_COMPLETE', `  Dealt river: ${this.communityCards[this.communityCards.length - 1].rank}${this.communityCards[this.communityCards.length - 1].suit}`);
+      this.emitEvent({ type: 'street_changed', street: this.street, communityCards: [...this.communityCards] });
+    }
+
+    // Now go to showdown
+    this.street = 'showdown';
+    debugLog('FORCE_COMPLETE', `⚡ All cards dealt, going to showdown`);
+    this.doShowdown();
   }
 
   /**
