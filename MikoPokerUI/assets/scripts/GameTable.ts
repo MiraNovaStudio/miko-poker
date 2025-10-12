@@ -86,6 +86,10 @@ export class GameTable extends Component {
     private potAmount: number = 0;        // Accumulated pot from completed rounds
     private outstandingAmount: number = 0; // Current bets in progress (not yet in pot)
 
+    // DEBUG: Hand tracking and phase management
+    private handCounter: number = 0;
+    private handPhase: 'idle' | 'starting' | 'dealing' | 'betting' | 'showdown' = 'idle';
+
     start() {
         console.log('=== GameTable.start() ===');
         console.log('SlotLayoutManager:', this.slotLayoutManager ? '✅ Assigned' : '❌ Missing');
@@ -219,19 +223,25 @@ export class GameTable extends Component {
      */
     private advanceGame() {
         if (!this.engine || !this.engine.isHandInProgress()) {
-            console.log('⏸️ No hand in progress, stopping auto-advance');
+            console.log(`[HAND #${this.handCounter}] ⏸️ No hand in progress, stopping auto-advance`);
             return;
+        }
+
+        // Set to betting phase on first advance after dealing
+        if (this.handPhase === 'dealing') {
+            this.handPhase = 'betting';
+            console.log(`[HAND #${this.handCounter}] 📢 Phase → BETTING`);
         }
 
         const gameState = this.engine.getGameState();
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
 
         if (!currentPlayer) {
-            console.error('❌ No current player found!');
+            console.error(`[HAND #${this.handCounter}] ❌ No current player found!`);
             return;
         }
 
-        console.log(`\n⏳ Current turn: ${currentPlayer.id} (index ${gameState.currentPlayerIndex})`);
+        console.log(`\n[HAND #${this.handCounter}] ⏳ Current turn: ${currentPlayer.id} (index ${gameState.currentPlayerIndex})`);
 
         // Check if current player has already folded or is all-in
         if (currentPlayer.folded || currentPlayer.allIn) {
@@ -324,7 +334,15 @@ export class GameTable extends Component {
      * Called when a new hand starts
      */
     private onHandStarted() {
-        console.log('=== 🎴 HAND STARTED ===');
+        // ═══════════════════════════════════════════════════════
+        // DEBUG: Hand boundary tracking
+        this.handCounter++;
+        this.handPhase = 'starting';
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════');
+        console.log(`🎴 HAND #${this.handCounter} STARTED - Phase: ${this.handPhase}`);
+        console.log('═══════════════════════════════════════════════════════');
+        // ═══════════════════════════════════════════════════════
 
         if (!this.engine) {
             console.error('❌ Engine is null!');
@@ -339,7 +357,7 @@ export class GameTable extends Component {
         // Clear community cards from previous hand
         if (this.communityCardsNode) {
             this.communityCardsNode.removeAllChildren();
-            console.log('🧹 Cleared community cards for new hand');
+            console.log(`[HAND #${this.handCounter}] 🧹 Cleared community cards for new hand`);
         }
 
         const gameState = this.engine.getGameState();
@@ -362,11 +380,20 @@ export class GameTable extends Component {
         // Initialize pot and total labels
         this.initializeLabels();
 
-        // Update all player slots
+        console.log(`[HAND #${this.handCounter}] 🔄 Updating all player slots...`);
+
+        // Update all player slots BEFORE dealing cards
         gameState.players.forEach((player, index) => {
-            console.log(`Updating slot ${index} for player ${player.id}`);
+            console.log(`[HAND #${this.handCounter}] 📍 UPDATE_SLOT seat=${index} pid=${player.id}`);
             this.updatePlayerSlot(player, index);
         });
+
+        // Verify all slots are mapped
+        console.log(`[HAND #${this.handCounter}] ✅ SLOTS_READY:`, Array.from(this.playerSlots.keys()));
+
+        // NOW ready to deal cards
+        this.handPhase = 'dealing';
+        console.log(`[HAND #${this.handCounter}] 📢 Phase → DEALING (ready for cards_dealt events)`);
 
         // Position dealer button
         this.positionDealerButton(gameState.dealerIndex);
@@ -376,7 +403,7 @@ export class GameTable extends Component {
             this.statusLabel.string = 'New Hand - Dealing Cards...';
         }
 
-        console.log('=== Hand Started Complete ===');
+        console.log(`[HAND #${this.handCounter}] === Hand Started Complete ===`);
     }
 
     /**
@@ -588,21 +615,42 @@ export class GameTable extends Component {
             return;
         }
 
-        console.log(`  ⚙️ Updating slot ${seatIndex} for ${player.id}`);
+        console.log(`[HAND #${this.handCounter}] ⚙️ UPDATE_SLOT seat=${seatIndex} pid=${player.id}`);
         const slotPos = slotNode.getPosition();
-        console.log(`    Slot position: (${slotPos.x.toFixed(0)}, ${slotPos.y.toFixed(0)})`);
+        console.log(`[HAND #${this.handCounter}]   Slot position: (${slotPos.x.toFixed(0)}, ${slotPos.y.toFixed(0)})`);
 
         // Store mapping
         this.playerSlots.set(player.id, slotNode);
 
-        // Clear existing content (except debug label and Overlay)
+        // CRITICAL FIX: Preserve Cards, Overlay, and Label nodes
+        // Only destroy nodes that need refreshing (PlayerName, PlayerChips)
         const children = slotNode.children;
+        console.log(`[HAND #${this.handCounter}]   🧹 SLOT_CLEANUP before: ${children.length} children:`, children.map(c => c.name).join(', '));
+
         for (let i = children.length - 1; i >= 0; i--) {
             const child = children[i];
-            if (child.name !== 'Label' && child.name !== 'Overlay') { // Keep debug label and Overlay
+            const keep = (child.name === 'Label' || child.name === 'Overlay' || child.name === 'Cards');
+
+            if (keep) {
+                console.log(`[HAND #${this.handCounter}]     ✅ KEEP: ${child.name}`);
+
+                // If Cards container exists, clear its children but keep the container
+                if (child.name === 'Cards') {
+                    const cardsChildCount = child.children.length;
+                    if (cardsChildCount > 0) {
+                        console.log(`[HAND #${this.handCounter}]       🔄 Clearing ${cardsChildCount} cards from Cards container`);
+                        child.removeAllChildren();
+                    }
+                    // Ensure it's active for next hand
+                    child.active = true;
+                }
+            } else {
+                console.log(`[HAND #${this.handCounter}]     ❌ DESTROY: ${child.name}`);
                 child.destroy();
             }
         }
+
+        console.log(`[HAND #${this.handCounter}]   🧹 SLOT_CLEANUP after: ${slotNode.children.length} children:`, slotNode.children.map(c => c.name).join(', '));
 
         // Create player name label
         const nameNode = new Node('PlayerName');
@@ -701,26 +749,41 @@ export class GameTable extends Component {
     private positionDealerButton(dealerIndex: number) {
         if (!this.dealerButtonNode || !this.slotLayoutManager) return;
 
-        const dealerSlot = this.slotLayoutManager.getSlot(dealerIndex);
-        if (dealerSlot) {
-            // Re-parent dealer button to the dealer's slot for consistent positioning
-            this.dealerButtonNode.setParent(dealerSlot);
-            this.dealerButtonNode.setPosition(50, 50, 0); // Relative to slot
-
-            // CRITICAL: Set sprite to CUSTOM mode and enforce size
-            const sprite = this.dealerButtonNode.getComponent(Sprite);
-            if (sprite) {
-                sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-            }
-
-            const transform = this.dealerButtonNode.getComponent(UITransform);
-            if (transform) {
-                transform.setContentSize(30, 30);
-            }
-
-            this.dealerButtonNode.active = true;
-            console.log(`🔘 Dealer button at seat ${dealerIndex}, size 30x30 (CUSTOM mode enforced)`);
+        // Validate dealer button node is still valid
+        if (!this.dealerButtonNode.isValid) {
+            console.error(`[HAND #${this.handCounter}] ❌ Dealer button node is invalid, recreating...`);
+            this.createDealerButton();
+            if (!this.dealerButtonNode) return;
         }
+
+        const dealerSlot = this.slotLayoutManager.getSlot(dealerIndex);
+        if (!dealerSlot || !dealerSlot.isValid) {
+            console.error(`[HAND #${this.handCounter}] ❌ Dealer slot ${dealerIndex} is invalid!`);
+            return;
+        }
+
+        // Remove from current parent first to avoid corruption
+        if (this.dealerButtonNode.parent) {
+            this.dealerButtonNode.removeFromParent();
+        }
+
+        // Now safely set new parent
+        this.dealerButtonNode.setParent(dealerSlot);
+        this.dealerButtonNode.setPosition(50, 50, 0); // Relative to slot
+
+        // CRITICAL: Set sprite to CUSTOM mode and enforce size
+        const sprite = this.dealerButtonNode.getComponent(Sprite);
+        if (sprite) {
+            sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+        }
+
+        const transform = this.dealerButtonNode.getComponent(UITransform);
+        if (transform) {
+            transform.setContentSize(30, 30);
+        }
+
+        this.dealerButtonNode.active = true;
+        console.log(`[HAND #${this.handCounter}] 🔘 Dealer button at seat ${dealerIndex}, size 30x30`);
     }
 
     /**
@@ -757,13 +820,22 @@ export class GameTable extends Component {
      * Called when cards are dealt to a player
      */
     private onCardsDealt(playerId: string, cards: EngineCard[]) {
-        console.log(`=== 🎴 CARDS DEALT to ${playerId} ===`);
+        console.log(`[HAND #${this.handCounter}] 🎴 CARDS_DEALT pid=${playerId} phase=${this.handPhase}`);
         console.log(`  Cards:`, cards.map(c => `${c.rank}${c.suit}`).join(', '));
+
+        // DEFENSIVE: Ensure we're in dealing phase and slot exists
+        if (this.handPhase !== 'dealing') {
+            console.warn(`  ⚠️ cards_dealt arrived in wrong phase (${this.handPhase}), rescheduling...`);
+            this.scheduleOnce(() => this.onCardsDealt(playerId, cards), 0);
+            return;
+        }
 
         const slotNode = this.playerSlots.get(playerId);
         if (!slotNode) {
             console.error(`  ❌ No slot node found for ${playerId}`);
             console.log(`  Available slots:`, Array.from(this.playerSlots.keys()));
+            console.warn(`  ⚠️ Slot mapping not ready, rescheduling...`);
+            this.scheduleOnce(() => this.onCardsDealt(playerId, cards), 0);
             return;
         }
 
@@ -777,40 +849,52 @@ export class GameTable extends Component {
             cardsNode.setParent(slotNode);
             cardsNode.setPosition(0, 20, 0);
             cardsNode.active = true; // Ensure active
-            console.log(`  ✅ Created Cards container at (0, 20) relative to slot`);
+            console.log(`[HAND #${this.handCounter}] ✅ CREATED Cards container for ${playerId}`);
         } else {
-            // Clear existing cards
+            // Clear existing cards (but PRESERVE the container)
+            console.log(`[HAND #${this.handCounter}] 🔄 REUSING Cards container for ${playerId} (active=${cardsNode.active}, children=${cardsNode.children.length})`);
             cardsNode.removeAllChildren();
-            console.log(`  ♻️ Cleared existing cards`);
 
             // CRITICAL: Re-enable Cards container (may have been hidden when player folded)
             const wasActive = cardsNode.active;
             cardsNode.active = true;
-            console.log(`  👁️ Cards container visibility: ${wasActive ? 'was active' : 'WAS HIDDEN'} → now ACTIVE`);
+            console.log(`[HAND #${this.handCounter}]   👁️ Cards visibility: ${wasActive ? 'was active' : 'WAS HIDDEN'} → now ACTIVE`);
         }
 
         // Display both cards
         const isFaceUp = playerId === 'player'; // Only show player's cards face-up
-        console.log(`  Cards will be ${isFaceUp ? 'FACE-UP' : 'FACE-DOWN'}`);
-        console.log(`  📊 BEFORE creating cards - Cards container: active=${cardsNode.active}, children=${cardsNode.children.length}`);
+        console.log(`[HAND #${this.handCounter}]   Cards will be ${isFaceUp ? 'FACE-UP' : 'FACE-DOWN'}`);
+        console.log(`[HAND #${this.handCounter}]   📊 BEFORE creating - active=${cardsNode.active}, children=${cardsNode.children.length}`);
 
         cards.forEach((card, index) => {
             const xOffset = index * 35 - 17.5;
-            console.log(`  Creating card ${index + 1}: ${card.rank}${card.suit} at x=${xOffset}`);
+            console.log(`[HAND #${this.handCounter}]   Creating card ${index + 1}: ${card.rank}${card.suit} at x=${xOffset}`);
             this.createCard(cardsNode!, card, xOffset, isFaceUp);
         });
 
-        console.log(`  📊 AFTER creating cards - Cards container: active=${cardsNode.active}, children=${cardsNode.children.length}`);
-        console.log(`  📊 Slot node children: ${slotNode.children.map(c => c.name).join(', ')}`);
+        console.log(`[HAND #${this.handCounter}]   📊 AFTER creating - active=${cardsNode.active}, children=${cardsNode.children.length}`);
+        console.log(`[HAND #${this.handCounter}]   📊 Slot children: ${slotNode.children.map(c => c.name).join(', ')}`);
 
         // Ensure Overlay stays as last child (for bet labels to render on top)
         const overlayNode = slotNode.getChildByName('Overlay');
         if (overlayNode) {
             overlayNode.setSiblingIndex(slotNode.children.length - 1);
-            console.log(`  🔼 Overlay moved to last position (renders on top)`);
         }
 
-        console.log(`=== Cards dealt complete for ${playerId} ===`);
+        // WATCHDOG: Check if cards survive after a delay
+        this.scheduleOnce(() => {
+            if (cardsNode && cardsNode.isValid) {
+                const childCount = cardsNode.children.length;
+                console.log(`[HAND #${this.handCounter}] 🔍 WATCHDOG ${playerId}: Cards still has ${childCount} children (expected 2)`);
+                if (childCount < 2) {
+                    console.error(`[HAND #${this.handCounter}] ❌ CRITICAL: Cards disappeared! ${playerId} cards lost after creation`);
+                }
+            } else {
+                console.error(`[HAND #${this.handCounter}] ❌ CRITICAL: Cards container destroyed! ${playerId}`);
+            }
+        }, 0.1);
+
+        console.log(`[HAND #${this.handCounter}] === CARDS_DEALT complete for ${playerId} ===`);
     }
 
     /**
@@ -821,15 +905,15 @@ export class GameTable extends Component {
      * @param faceUp Whether to show face up or back
      */
     private createCard(parent: Node, cardData: EngineCard, xOffset: number, faceUp: boolean) {
-        console.log(`    🎴 createCard called: ${cardData.rank}${cardData.suit}, x=${xOffset}, faceUp=${faceUp}`);
+        console.log(`[HAND #${this.handCounter}] 🎴 CREATE_CARD: ${cardData.rank}${cardData.suit}, x=${xOffset}, faceUp=${faceUp}`);
 
         if (!this.cardPrefab) {
-            console.error('    ❌ Card prefab not assigned! Using fallback.');
+            console.error(`[HAND #${this.handCounter}]   ❌ Card prefab not assigned! Using fallback.`);
             this.createFallbackCard(parent, cardData, xOffset, faceUp);
             return;
         }
 
-        console.log('    ⚙️ Instantiating card from prefab...');
+        console.log(`[HAND #${this.handCounter}]   ⚙️ Instantiating card from prefab...`);
 
         // Instantiate card from prefab
         const cardNode = instantiate(this.cardPrefab);
@@ -838,17 +922,11 @@ export class GameTable extends Component {
         const cardTransform = cardNode.getComponent(UITransform);
         if (cardTransform) {
             cardTransform.setContentSize(60, 84);
-            console.log('    📏 Card size set to 60x84');
         }
-
-        // Don't scale the card node - let the Card component handle sprite sizing
 
         cardNode.setParent(parent);
         cardNode.setPosition(xOffset, 0, 0);
         cardNode.active = true; // Make sure it's active
-
-        const worldPos = cardNode.getWorldPosition();
-        console.log(`    Card world position: (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}, ${worldPos.z.toFixed(0)})`);
 
         // Get Card component and set data
         const cardComponent = cardNode.getComponent(CardComponent);
@@ -857,20 +935,20 @@ export class GameTable extends Component {
                 rank: cardData.rank,
                 suit: cardData.suit
             };
-            console.log('    ⚙️ Setting card data...');
-            console.log(`    🔍 Card component state - cardSprite: ${cardComponent.cardSprite ? 'EXISTS' : 'NULL'}`);
+
+            console.log(`[HAND #${this.handCounter}]     🔍 CardComponent found, cardSprite: ${cardComponent.cardSprite ? 'EXISTS' : 'NULL'}`);
 
             // Delay setCard slightly to ensure component is fully initialized
             this.scheduleOnce(() => {
                 if (cardNode.isValid && cardComponent) {
                     cardComponent.setCard(data, faceUp);
-                    console.log(`    ✅ Card data set: ${cardData.rank}${cardData.suit} (${faceUp ? 'face-up' : 'face-down'})`);
+                    console.log(`[HAND #${this.handCounter}]     ✅ Card data set: ${cardData.rank}${cardData.suit}`);
                 }
             }, 0);
 
-            console.log(`    ✅ Card created (data will be set next frame)`);
+            console.log(`[HAND #${this.handCounter}]   ✅ Card node created (data will be set next frame)`);
         } else {
-            console.error('    ❌ Card component not found on prefab!');
+            console.error(`[HAND #${this.handCounter}]   ❌ Card component not found on prefab!`);
             this.createFallbackCard(parent, cardData, xOffset, faceUp);
         }
     }
@@ -927,8 +1005,13 @@ export class GameTable extends Component {
         console.log(`🎴 Community Cards (${cards.length}):`, cards);
 
         // Display each community card (all face-up)
+        // Cards are 60px wide, so use 70px spacing for 10px gap between cards
+        const cardSpacing = 70;
+        const startOffset = -((cards.length - 1) * cardSpacing) / 2; // Center the cards
+
         cards.forEach((card, index) => {
-            this.createCard(this.communityCardsNode!, card, index * 40 - 80, true);
+            const xPos = startOffset + (index * cardSpacing);
+            this.createCard(this.communityCardsNode!, card, xPos, true);
         });
     }
 
@@ -1192,7 +1275,11 @@ export class GameTable extends Component {
      * Called when hand ends
      */
     private onHandEnded(result: any) {
-        console.log('🏁 Hand Ended:', result);
+        console.log('');
+        console.log(`[HAND #${this.handCounter}] 🏁 HAND_ENDED - Phase: ${this.handPhase}`);
+        console.log(`[HAND #${this.handCounter}] Result:`, result);
+
+        this.handPhase = 'showdown';
 
         this.hideActionButtons(); // Make sure buttons are hidden
 
