@@ -3,7 +3,7 @@
  * Manages an 8-max cash game with card dealing, chip display, and player actions
  */
 
-import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Vec3, UITransform, Color, resources, Prefab, instantiate, Button, EditBox } from 'cc';
+import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Vec3, UITransform, Color, resources, Prefab, instantiate, Button, EditBox, AudioClip, AudioSource, game, director, profiler } from 'cc';
 import { SlotLayoutManager } from './SlotLayoutManager';
 import { Card as CardComponent, type CardData } from './Card';
 
@@ -83,6 +83,10 @@ export class GameTable extends Component {
     private dealerButtonNode: Node | null = null;
     private currentActivePlayer: string | null = null; // Track whose turn it is
     private eliminatedPlayers: Set<string> = new Set(); // Track eliminated players
+    private checkSoundClip: AudioClip | null = null; // Audio clip for check sound
+    private betChipsSoundClip: AudioClip | null = null; // Audio clip for bet/call/raise sound
+    private foldSoundClip: AudioClip | null = null; // Audio clip for fold sound
+    private audioSource: AudioSource | null = null; // Audio source for playing sounds
 
     // Pot tracking (proper poker logic)
     private potAmount: number = 0;        // Accumulated pot from completed rounds
@@ -93,21 +97,30 @@ export class GameTable extends Component {
     private handPhase: 'idle' | 'starting' | 'dealing' | 'betting' | 'showdown' = 'idle';
 
     start() {
+        // Disable FPS and debug stats display
+        try {
+            profiler.hideStats();
+            console.log('Debug stats disabled');
+        } catch (err) {
+            console.warn('Could not disable stats:', err);
+        }
+
         console.log('=== GameTable.start() ===');
-        console.log('SlotLayoutManager:', this.slotLayoutManager ? '✅ Assigned' : '❌ Missing');
-        console.log('Card Prefab:', this.cardPrefab ? '✅ Assigned' : '❌ Missing');
-        console.log('Pot Label:', this.potLabel ? '✅ Assigned' : '❌ Missing');
-        console.log('Status Label:', this.statusLabel ? '✅ Assigned' : '❌ Missing');
-        console.log('Community Cards Node:', this.communityCardsNode ? '✅ Assigned' : '❌ Missing');
-        console.log('Left Button:', this.leftButton ? '✅ Assigned' : '❌ Missing');
-        console.log('Middle Button:', this.middleButton ? '✅ Assigned' : '❌ Missing');
-        console.log('Right Button:', this.rightButton ? '✅ Assigned' : '❌ Missing');
-        console.log('Bet Input:', this.betInput ? '✅ Assigned' : '❌ Missing');
-        console.log('New Game Button:', this.newGameButton ? '✅ Assigned' : '❌ Missing');
+        console.log('SlotLayoutManager:', this.slotLayoutManager ? 'Assigned' : 'Missing');
+        console.log('Card Prefab:', this.cardPrefab ? 'Assigned' : 'Missing');
+        console.log('Pot Label:', this.potLabel ? 'Assigned' : 'Missing');
+        console.log('Status Label:', this.statusLabel ? 'Assigned' : 'Missing');
+        console.log('Community Cards Node:', this.communityCardsNode ? 'Assigned' : 'Missing');
+        console.log('Left Button:', this.leftButton ? 'Assigned' : 'Missing');
+        console.log('Middle Button:', this.middleButton ? 'Assigned' : 'Missing');
+        console.log('Right Button:', this.rightButton ? 'Assigned' : 'Missing');
+        console.log('Bet Input:', this.betInput ? 'Assigned' : 'Missing');
+        console.log('New Game Button:', this.newGameButton ? 'Assigned' : 'Missing');
 
         this.initializeEngine();
         this.createDealerButton();
         this.setupButtonHandlers();
+        this.initializeAudio();
         this.hideActionButtons(); // Hide until player's turn
         this.hideNewGameButton(); // Hide until game over
 
@@ -124,12 +137,12 @@ export class GameTable extends Component {
      */
     private debugSlots() {
         if (!this.slotLayoutManager) {
-            console.error('❌ SlotLayoutManager is null!');
+            console.error(' SlotLayoutManager is null!');
             return;
         }
 
         const slots = this.slotLayoutManager.getAllSlots();
-        console.log(`📍 Total slots created: ${slots.length}`);
+        console.log(` Total slots created: ${slots.length}`);
         slots.forEach((slot, index) => {
             const pos = slot.getPosition();
             console.log(`  Slot ${index}: position (${pos.x.toFixed(0)}, ${pos.y.toFixed(0)}), active: ${slot.active}`);
@@ -169,7 +182,7 @@ export class GameTable extends Component {
         // Subscribe to engine events
         this.engine.on((event: GameEvent) => this.handleGameEvent(event));
 
-        console.log('✅ Engine initialized with 8 players');
+        console.log(' Engine initialized with 8 players');
     }
 
     /**
@@ -200,10 +213,107 @@ export class GameTable extends Component {
             }
             sprite.spriteFrame = spriteFrame;
             // Size mode already set above, UITransform already set to 30x30
-            console.log('✅ Dealer button loaded and sized to 30x30 (CUSTOM mode)');
+            console.log(' Dealer button loaded and sized to 30x30 (CUSTOM mode)');
         });
 
         this.dealerButtonNode.active = false; // Hide until we position it
+    }
+
+    /**
+     * Initialize audio system and load sound effects
+     */
+    private initializeAudio() {
+        // Add AudioSource component to the node
+        this.audioSource = this.node.addComponent(AudioSource);
+
+        // Load check sound from resources
+        resources.load('sounds/check_one_knock', AudioClip, (err, clip) => {
+            if (err) {
+                console.error(' Failed to load check sound:', err);
+                return;
+            }
+            this.checkSoundClip = clip;
+            console.log(' Check sound loaded successfully');
+        });
+
+        // Load bet chips sound from resources
+        resources.load('sounds/bet_chips_2', AudioClip, (err, clip) => {
+            if (err) {
+                console.error(' Failed to load bet chips sound:', err);
+                return;
+            }
+            this.betChipsSoundClip = clip;
+            console.log(' Bet chips sound loaded successfully');
+        });
+
+        // Load fold sound from resources
+        resources.load('sounds/fold', AudioClip, (err, clip) => {
+            if (err) {
+                console.error(' Failed to load fold sound:', err);
+                return;
+            }
+            this.foldSoundClip = clip;
+            console.log(' Fold sound loaded successfully');
+        });
+    }
+
+    /**
+     * Ensure AudioContext is resumed (required by browsers after user gesture)
+     */
+    private ensureAudioContextResumed() {
+        if (this.audioSource) {
+            // Get the audio context and resume it if suspended
+            const audioEngine = (this.audioSource as any)._audioEngine;
+            if (audioEngine && audioEngine._audioContext) {
+                const context = audioEngine._audioContext;
+                if (context.state === 'suspended') {
+                    context.resume().then(() => {
+                        console.log(' AudioContext resumed');
+                    }).catch((err: any) => {
+                        console.error(' Failed to resume AudioContext:', err);
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Play the check sound effect
+     */
+    private playCheckSound() {
+        this.ensureAudioContextResumed();
+        if (this.audioSource && this.checkSoundClip) {
+            this.audioSource.playOneShot(this.checkSoundClip, 1.0);
+            console.log(' Playing check sound');
+        } else {
+            console.warn(' Check sound not available');
+        }
+    }
+
+    /**
+     * Play the bet chips sound effect
+     */
+    private playBetSound() {
+        this.ensureAudioContextResumed();
+        if (this.audioSource && this.betChipsSoundClip) {
+            this.audioSource.playOneShot(this.betChipsSoundClip, 1.0);
+            console.log(' Playing bet chips sound');
+        } else {
+            console.warn(' Bet chips sound not available');
+        }
+    }
+
+    /**
+     * Play the fold sound effect
+     */
+    private playFoldSound() {
+        this.ensureAudioContextResumed();
+        if (this.audioSource && this.foldSoundClip) {
+            this.audioSource.playOneShot(this.foldSoundClip, 1.0);
+            console.log(' Playing fold sound');
+        } else {
+            console.warn(' Fold sound not available');
+        }
     }
 
     /**
@@ -211,7 +321,7 @@ export class GameTable extends Component {
      */
     private startFirstHand() {
         if (this.engine) {
-            console.log('🎴 Starting first hand...');
+            console.log(' Starting first hand...');
             this.engine.startNewHand();
 
             // After starting hand, begin the auto-advance loop
@@ -227,19 +337,19 @@ export class GameTable extends Component {
     private advanceGame() {
         // Stop if human player is eliminated
         if (this.eliminatedPlayers.has('player')) {
-            console.log(`[HAND #${this.handCounter}] ⏸️ Player eliminated, stopping game`);
+            console.log(`[HAND #${this.handCounter}]  Player eliminated, stopping game`);
             return;
         }
 
         if (!this.engine || !this.engine.isHandInProgress()) {
-            console.log(`[HAND #${this.handCounter}] ⏸️ No hand in progress, stopping auto-advance`);
+            console.log(`[HAND #${this.handCounter}]  No hand in progress, stopping auto-advance`);
             return;
         }
 
         // Set to betting phase on first advance after dealing
         if (this.handPhase === 'dealing') {
             this.handPhase = 'betting';
-            console.log(`[HAND #${this.handCounter}] 📢 Phase → BETTING`);
+            console.log(`[HAND #${this.handCounter}]  Phase → BETTING`);
         }
 
         const gameState = this.engine.getGameState();
@@ -259,7 +369,7 @@ export class GameTable extends Component {
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
 
         if (!currentPlayer) {
-            console.error(`[HAND #${this.handCounter}] ❌ No current player found!`);
+            console.error(`[HAND #${this.handCounter}]  No current player found!`);
             return;
         }
 
@@ -267,13 +377,13 @@ export class GameTable extends Component {
 
         // Check if current player has already folded or is all-in
         if (currentPlayer.folded) {
-            console.log(`  ⏭️ Player ${currentPlayer.id} folded - skipping`);
+            console.log(`   Player ${currentPlayer.id} folded - skipping`);
             this.scheduleOnce(() => this.advanceGame(), 0.1);
             return;
         }
 
         if (currentPlayer.allIn) {
-            console.log(`  ⏭️ Player ${currentPlayer.id} is ALL-IN - skipping`);
+            console.log(`   Player ${currentPlayer.id} is ALL-IN - skipping`);
             this.updatePlayerStatus(currentPlayer.id, 'ALL-IN', true);
             this.scheduleOnce(() => this.advanceGame(), 0.5);
             return;
@@ -295,7 +405,7 @@ export class GameTable extends Component {
             // Don't schedule another advanceGame - wait for player to click a button
         } else {
             // AI player's turn - automatically process action
-            console.log(`  🤖 AI player ${currentPlayer.id} is deciding...`);
+            console.log(`   AI player ${currentPlayer.id} is deciding...`);
 
             if (this.statusLabel) {
                 this.statusLabel.string = `${currentPlayer.id} is thinking...`;
@@ -305,13 +415,13 @@ export class GameTable extends Component {
             this.scheduleOnce(() => {
                 try {
                     const action = this.engine!.getAIAction(currentPlayer.id);
-                    console.log(`  🎯 AI ${currentPlayer.id} chose:`, action);
+                    console.log(`   AI ${currentPlayer.id} chose:`, action);
                     this.engine!.processAction(currentPlayer.id, action);
 
                     // Continue to next player
                     this.scheduleOnce(() => this.advanceGame(), 0.5);
                 } catch (error) {
-                    console.error(`❌ Error processing AI action:`, error);
+                    console.error(` Error processing AI action:`, error);
                 }
             }, 2.0); // 2 second delay to simulate thinking
         }
@@ -321,7 +431,7 @@ export class GameTable extends Component {
      * Handle all game events from the engine
      */
     private handleGameEvent(event: GameEvent) {
-        console.log('📢 Game Event:', event.type);
+        console.log(' Game Event:', event.type);
 
         switch (event.type) {
             case 'hand_started':
@@ -368,24 +478,24 @@ export class GameTable extends Component {
         this.handPhase = 'starting';
         console.log('');
         console.log('═══════════════════════════════════════════════════════');
-        console.log(`🎴 HAND #${this.handCounter} STARTED - Phase: ${this.handPhase}`);
+        console.log(` HAND #${this.handCounter} STARTED - Phase: ${this.handPhase}`);
         console.log('═══════════════════════════════════════════════════════');
         // ═══════════════════════════════════════════════════════
 
         if (!this.engine) {
-            console.error('❌ Engine is null!');
+            console.error(' Engine is null!');
             return;
         }
 
         if (!this.slotLayoutManager) {
-            console.error('❌ SlotLayoutManager is null!');
+            console.error(' SlotLayoutManager is null!');
             return;
         }
 
         // Clear community cards from previous hand
         if (this.communityCardsNode) {
             this.communityCardsNode.removeAllChildren();
-            console.log(`[HAND #${this.handCounter}] 🧹 Cleared community cards for new hand`);
+            console.log(`[HAND #${this.handCounter}]  Cleared community cards for new hand`);
         }
 
         const gameState = this.engine.getGameState();
@@ -411,26 +521,26 @@ export class GameTable extends Component {
         // Clear all player status labels for new hand
         this.clearAllPlayerStatuses();
 
-        console.log(`[HAND #${this.handCounter}] 🔄 Updating all player slots...`);
+        console.log(`[HAND #${this.handCounter}]  Updating all player slots...`);
 
         // Update all player slots BEFORE dealing cards (skip eliminated players)
         gameState.players.forEach((player, index) => {
             // Skip eliminated players (they're already hidden)
             if (this.eliminatedPlayers.has(player.id)) {
-                console.log(`[HAND #${this.handCounter}] ⏭️ SKIP_SLOT seat=${index} pid=${player.id} (eliminated)`);
+                console.log(`[HAND #${this.handCounter}]  SKIP_SLOT seat=${index} pid=${player.id} (eliminated)`);
                 return;
             }
 
-            console.log(`[HAND #${this.handCounter}] 📍 UPDATE_SLOT seat=${index} pid=${player.id}`);
+            console.log(`[HAND #${this.handCounter}]  UPDATE_SLOT seat=${index} pid=${player.id}`);
             this.updatePlayerSlot(player, index);
         });
 
         // Verify all slots are mapped
-        console.log(`[HAND #${this.handCounter}] ✅ SLOTS_READY:`, Array.from(this.playerSlots.keys()));
+        console.log(`[HAND #${this.handCounter}]  SLOTS_READY:`, Array.from(this.playerSlots.keys()));
 
         // NOW ready to deal cards
         this.handPhase = 'dealing';
-        console.log(`[HAND #${this.handCounter}] 📢 Phase → DEALING (ready for cards_dealt events)`);
+        console.log(`[HAND #${this.handCounter}]  Phase → DEALING (ready for cards_dealt events)`);
 
         // Position dealer button
         this.positionDealerButton(gameState.dealerIndex);
@@ -456,7 +566,7 @@ export class GameTable extends Component {
             label.node.active = false;
         });
 
-        console.log('💰 Labels initialized from engine');
+        console.log(' Labels initialized from engine');
     }
 
     /**
@@ -487,7 +597,7 @@ export class GameTable extends Component {
         }
 
         // Logging
-        console.log(`💰 [POT UPDATE] Street: ${gameState.street.toUpperCase()}, EnginePot=$${enginePot}`);
+        console.log(` [POT UPDATE] Street: ${gameState.street.toUpperCase()}, EnginePot=$${enginePot}`);
         console.log(`   Player bets:`, gameState.players.map((p: any) => `${p.id}=$${p.bet}`).join(', '));
     }
 
@@ -496,7 +606,7 @@ export class GameTable extends Component {
      * Just update labels - engine handles pot collection
      */
     private finalizeBettingRound() {
-        console.log(`💰 Round finalized - engine collected bets into pot`);
+        console.log(` Round finalized - engine collected bets into pot`);
 
         // Update labels to show new pot state
         this.updateAllPotLabels();
@@ -508,7 +618,7 @@ export class GameTable extends Component {
     private updatePlayerBetLabel(playerId: string, amount: number, actionText?: string) {
         const betLabel = this.playerBetLabels.get(playerId);
         if (!betLabel) {
-            console.error(`  ❌ No bet label found for ${playerId}`);
+            console.error(`   No bet label found for ${playerId}`);
             console.log(`  Available bet labels:`, Array.from(this.playerBetLabels.keys()));
             return;
         }
@@ -519,7 +629,7 @@ export class GameTable extends Component {
             betLabel.node.active = true;
             const nodePos = betLabel.node.getPosition();
             const worldPos = betLabel.node.getWorldPosition();
-            console.log(`  💵 ${playerId} bet label SET: "${actionText}"`);
+            console.log(`   ${playerId} bet label SET: "${actionText}"`);
             console.log(`      Node active: ${betLabel.node.active}, parent: ${betLabel.node.parent?.name}`);
             console.log(`      Position: (${nodePos.x.toFixed(0)}, ${nodePos.y.toFixed(0)}), World: (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
             console.log(`      Font size: ${betLabel.fontSize}, Color: (${betLabel.color.r}, ${betLabel.color.g}, ${betLabel.color.b}, ${betLabel.color.a})`);
@@ -529,14 +639,14 @@ export class GameTable extends Component {
             betLabel.node.active = true;
             const nodePos = betLabel.node.getPosition();
             const worldPos = betLabel.node.getWorldPosition();
-            console.log(`  💵 ${playerId} bet label SET: "$${amount}"`);
+            console.log(`   ${playerId} bet label SET: "$${amount}"`);
             console.log(`      Node active: ${betLabel.node.active}, parent: ${betLabel.node.parent?.name}`);
             console.log(`      Position: (${nodePos.x.toFixed(0)}, ${nodePos.y.toFixed(0)}), World: (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
         } else {
             // Hide label
             betLabel.string = '';
             betLabel.node.active = false;
-            console.log(`  💵 ${playerId} bet label HIDDEN`);
+            console.log(`   ${playerId} bet label HIDDEN`);
         }
     }
 
@@ -544,7 +654,7 @@ export class GameTable extends Component {
      * Clear all player bet labels (called at end of betting round)
      */
     private clearAllBetLabels() {
-        console.log('🧹 Clearing all bet labels');
+        console.log(' Clearing all bet labels');
         this.playerBetLabels.forEach((label, playerId) => {
             label.string = '';
             label.node.active = false;
@@ -557,14 +667,14 @@ export class GameTable extends Component {
     private hidePlayerCards(playerId: string) {
         const slotNode = this.playerSlots.get(playerId);
         if (!slotNode) {
-            console.error(`❌ No slot found for ${playerId} to hide cards`);
+            console.error(` No slot found for ${playerId} to hide cards`);
             return;
         }
 
         const cardsContainer = slotNode.getChildByName('Cards');
         if (cardsContainer) {
             cardsContainer.active = false;
-            console.log(`🙈 ${playerId} cards hidden (folded)`);
+            console.log(` ${playerId} cards hidden (folded)`);
         }
     }
 
@@ -577,7 +687,7 @@ export class GameTable extends Component {
             statusLabel.string = status;
             statusLabel.node.active = show;
             if (show) {
-                console.log(`🏷️ ${playerId} status: ${status}`);
+                console.log(` ${playerId} status: ${status}`);
             }
         }
     }
@@ -596,7 +706,7 @@ export class GameTable extends Component {
      * Eliminate a player from the table
      */
     private eliminatePlayer(playerId: string) {
-        console.log(`[HAND #${this.handCounter}] 💀 ELIMINATING ${playerId} (out of chips)`);
+        console.log(`[HAND #${this.handCounter}]  ELIMINATING ${playerId} (out of chips)`);
 
         this.eliminatedPlayers.add(playerId);
         this.updatePlayerStatus(playerId, 'ELIMINATED', true);
@@ -609,7 +719,7 @@ export class GameTable extends Component {
 
         // Check if the human player was eliminated
         if (playerId === 'player') {
-            console.log('💀 GAME OVER - Human player eliminated!');
+            console.log(' GAME OVER - Human player eliminated!');
             this.onGameOver();
         }
     }
@@ -618,11 +728,11 @@ export class GameTable extends Component {
      * Handle game over when human player is eliminated
      */
     private onGameOver() {
-        console.log('🏁 GAME OVER');
+        console.log(' GAME OVER');
 
         // Update status message
         if (this.statusLabel) {
-            this.statusLabel.string = '💀 GAME OVER\n\nYou ran out of chips!';
+            this.statusLabel.string = ' GAME OVER\n\nYou ran out of chips!';
         }
 
         // Hide action buttons
@@ -687,7 +797,7 @@ export class GameTable extends Component {
         }
 
         this.currentActivePlayer = playerId;
-        console.log(`👤 Highlighted ${playerId}`);
+        console.log(` Highlighted ${playerId}`);
     }
 
     /**
@@ -713,13 +823,13 @@ export class GameTable extends Component {
      */
     private updatePlayerSlot(player: PlayerState, seatIndex: number) {
         if (!this.slotLayoutManager) {
-            console.error(`❌ SlotLayoutManager is null when updating seat ${seatIndex}`);
+            console.error(` SlotLayoutManager is null when updating seat ${seatIndex}`);
             return;
         }
 
         const slotNode = this.slotLayoutManager.getSlot(seatIndex);
         if (!slotNode) {
-            console.error(`❌ Could not get slot node for seat ${seatIndex}`);
+            console.error(` Could not get slot node for seat ${seatIndex}`);
             return;
         }
 
@@ -733,32 +843,32 @@ export class GameTable extends Component {
         // CRITICAL FIX: Preserve Cards, Overlay, PlayerStatus, and Label nodes
         // Only destroy nodes that need refreshing (PlayerName, PlayerChips)
         const children = slotNode.children;
-        console.log(`[HAND #${this.handCounter}]   🧹 SLOT_CLEANUP before: ${children.length} children:`, children.map(c => c.name).join(', '));
+        console.log(`[HAND #${this.handCounter}]    SLOT_CLEANUP before: ${children.length} children:`, children.map(c => c.name).join(', '));
 
         for (let i = children.length - 1; i >= 0; i--) {
             const child = children[i];
             const keep = (child.name === 'Label' || child.name === 'Overlay' || child.name === 'Cards' || child.name === 'PlayerStatus');
 
             if (keep) {
-                console.log(`[HAND #${this.handCounter}]     ✅ KEEP: ${child.name}`);
+                console.log(`[HAND #${this.handCounter}]      KEEP: ${child.name}`);
 
                 // If Cards container exists, clear its children but keep the container
                 if (child.name === 'Cards') {
                     const cardsChildCount = child.children.length;
                     if (cardsChildCount > 0) {
-                        console.log(`[HAND #${this.handCounter}]       🔄 Clearing ${cardsChildCount} cards from Cards container`);
+                        console.log(`[HAND #${this.handCounter}]        Clearing ${cardsChildCount} cards from Cards container`);
                         child.removeAllChildren();
                     }
                     // Ensure it's active for next hand
                     child.active = true;
                 }
             } else {
-                console.log(`[HAND #${this.handCounter}]     ❌ DESTROY: ${child.name}`);
+                console.log(`[HAND #${this.handCounter}]      DESTROY: ${child.name}`);
                 child.destroy();
             }
         }
 
-        console.log(`[HAND #${this.handCounter}]   🧹 SLOT_CLEANUP after: ${slotNode.children.length} children:`, slotNode.children.map(c => c.name).join(', '));
+        console.log(`[HAND #${this.handCounter}]    SLOT_CLEANUP after: ${slotNode.children.length} children:`, slotNode.children.map(c => c.name).join(', '));
 
         // Create player name label
         const nameNode = new Node('PlayerName');
@@ -865,8 +975,8 @@ export class GameTable extends Component {
         // Store bet label reference
         this.playerBetLabels.set(player.id, betLabel);
 
-        console.log(`    📝 Bet label created in Overlay for ${player.id} at position (${betLabelX}, ${betLabelY})`);
-        console.log(`    ✅ Slot ${seatIndex} updated: ${player.id} - $${player.chips}`);
+        console.log(`     Bet label created in Overlay for ${player.id} at position (${betLabelX}, ${betLabelY})`);
+        console.log(`     Slot ${seatIndex} updated: ${player.id} - $${player.chips}`);
     }
 
     /**
@@ -877,14 +987,14 @@ export class GameTable extends Component {
 
         // Validate dealer button node is still valid
         if (!this.dealerButtonNode.isValid) {
-            console.error(`[HAND #${this.handCounter}] ❌ Dealer button node is invalid, recreating...`);
+            console.error(`[HAND #${this.handCounter}]  Dealer button node is invalid, recreating...`);
             this.createDealerButton();
             if (!this.dealerButtonNode) return;
         }
 
         const dealerSlot = this.slotLayoutManager.getSlot(dealerIndex);
         if (!dealerSlot || !dealerSlot.isValid) {
-            console.error(`[HAND #${this.handCounter}] ❌ Dealer slot ${dealerIndex} is invalid!`);
+            console.error(`[HAND #${this.handCounter}]  Dealer slot ${dealerIndex} is invalid!`);
             return;
         }
 
@@ -917,7 +1027,7 @@ export class GameTable extends Component {
      */
     private onBlindPosted(playerId: string, amount: number, isAnte?: boolean) {
         const type = isAnte ? 'ante' : 'blind';
-        console.log(`💰 ${playerId} posted ${type}: $${amount}`);
+        console.log(` ${playerId} posted ${type}: $${amount}`);
 
         // Update player's bet label to show SB/BB label
         if (!this.engine) return;
@@ -945,21 +1055,21 @@ export class GameTable extends Component {
      * Called when cards are dealt to a player
      */
     private onCardsDealt(playerId: string, cards: EngineCard[]) {
-        console.log(`[HAND #${this.handCounter}] 🎴 CARDS_DEALT pid=${playerId} phase=${this.handPhase}`);
+        console.log(`[HAND #${this.handCounter}]  CARDS_DEALT pid=${playerId} phase=${this.handPhase}`);
         console.log(`  Cards:`, cards.map(c => `${c.rank}${c.suit}`).join(', '));
 
         // DEFENSIVE: Ensure we're in dealing phase and slot exists
         if (this.handPhase !== 'dealing') {
-            console.warn(`  ⚠️ cards_dealt arrived in wrong phase (${this.handPhase}), rescheduling...`);
+            console.warn(`   cards_dealt arrived in wrong phase (${this.handPhase}), rescheduling...`);
             this.scheduleOnce(() => this.onCardsDealt(playerId, cards), 0);
             return;
         }
 
         const slotNode = this.playerSlots.get(playerId);
         if (!slotNode) {
-            console.error(`  ❌ No slot node found for ${playerId}`);
+            console.error(`   No slot node found for ${playerId}`);
             console.log(`  Available slots:`, Array.from(this.playerSlots.keys()));
-            console.warn(`  ⚠️ Slot mapping not ready, rescheduling...`);
+            console.warn(`   Slot mapping not ready, rescheduling...`);
             this.scheduleOnce(() => this.onCardsDealt(playerId, cards), 0);
             return;
         }
@@ -974,10 +1084,10 @@ export class GameTable extends Component {
         cardsNode.setParent(slotNode);
         cardsNode.setPosition(0, 20, 0);
             cardsNode.active = true; // Ensure active
-            console.log(`[HAND #${this.handCounter}] ✅ CREATED Cards container for ${playerId}`);
+            console.log(`[HAND #${this.handCounter}]  CREATED Cards container for ${playerId}`);
         } else {
             // Clear existing cards (but PRESERVE the container)
-            console.log(`[HAND #${this.handCounter}] 🔄 REUSING Cards container for ${playerId} (active=${cardsNode.active}, children=${cardsNode.children.length})`);
+            console.log(`[HAND #${this.handCounter}]  REUSING Cards container for ${playerId} (active=${cardsNode.active}, children=${cardsNode.children.length})`);
             cardsNode.removeAllChildren();
 
             // CRITICAL: Re-enable Cards container (may have been hidden when player folded)
@@ -1012,10 +1122,10 @@ export class GameTable extends Component {
                 const childCount = cardsNode.children.length;
                 console.log(`[HAND #${this.handCounter}] 🔍 WATCHDOG ${playerId}: Cards still has ${childCount} children (expected 2)`);
                 if (childCount < 2) {
-                    console.error(`[HAND #${this.handCounter}] ❌ CRITICAL: Cards disappeared! ${playerId} cards lost after creation`);
+                    console.error(`[HAND #${this.handCounter}]  CRITICAL: Cards disappeared! ${playerId} cards lost after creation`);
                 }
             } else {
-                console.error(`[HAND #${this.handCounter}] ❌ CRITICAL: Cards container destroyed! ${playerId}`);
+                console.error(`[HAND #${this.handCounter}]  CRITICAL: Cards container destroyed! ${playerId}`);
             }
         }, 0.1);
 
@@ -1030,10 +1140,10 @@ export class GameTable extends Component {
      * @param faceUp Whether to show face up or back
      */
     private createCard(parent: Node, cardData: EngineCard, xOffset: number, faceUp: boolean) {
-        console.log(`[HAND #${this.handCounter}] 🎴 CREATE_CARD: ${cardData.rank}${cardData.suit}, x=${xOffset}, faceUp=${faceUp}`);
+        console.log(`[HAND #${this.handCounter}]  CREATE_CARD: ${cardData.rank}${cardData.suit}, x=${xOffset}, faceUp=${faceUp}`);
 
         if (!this.cardPrefab) {
-            console.error(`[HAND #${this.handCounter}]   ❌ Card prefab not assigned! Using fallback.`);
+            console.error(`[HAND #${this.handCounter}]    Card prefab not assigned! Using fallback.`);
             this.createFallbackCard(parent, cardData, xOffset, faceUp);
             return;
         }
@@ -1067,13 +1177,13 @@ export class GameTable extends Component {
             this.scheduleOnce(() => {
                 if (cardNode.isValid && cardComponent) {
                     cardComponent.setCard(data, faceUp);
-                    console.log(`[HAND #${this.handCounter}]     ✅ Card data set: ${cardData.rank}${cardData.suit}`);
+                    console.log(`[HAND #${this.handCounter}]      Card data set: ${cardData.rank}${cardData.suit}`);
                 }
             }, 0);
 
-            console.log(`[HAND #${this.handCounter}]   ✅ Card node created (data will be set next frame)`);
+            console.log(`[HAND #${this.handCounter}]    Card node created (data will be set next frame)`);
         } else {
-            console.error(`[HAND #${this.handCounter}]   ❌ Card component not found on prefab!`);
+            console.error(`[HAND #${this.handCounter}]    Card component not found on prefab!`);
             this.createFallbackCard(parent, cardData, xOffset, faceUp);
         }
     }
@@ -1103,7 +1213,7 @@ export class GameTable extends Component {
      * Called when street changes (flop, turn, river)
      */
     private onStreetChanged(street: string, communityCards: EngineCard[]) {
-        console.log(`🎴 Street: ${street.toUpperCase()} - Betting round ended, moving bets to pot`);
+        console.log(` Street: ${street.toUpperCase()} - Betting round ended, moving bets to pot`);
 
         // Finalize betting round: move outstanding bets to pot
         this.finalizeBettingRound();
@@ -1127,7 +1237,7 @@ export class GameTable extends Component {
         // Clear existing cards
         this.communityCardsNode.removeAllChildren();
 
-        console.log(`🎴 Community Cards (${cards.length}):`, cards);
+        console.log(` Community Cards (${cards.length}):`, cards);
 
         // Display each community card (all face-up)
         // Cards are 60px wide, so use 70px spacing for 10px gap between cards
@@ -1145,7 +1255,7 @@ export class GameTable extends Component {
      */
     private onPlayerAction(playerId: string, action: any) {
         const actionText = `${playerId} ${action.type}${action.amount ? ` $${action.amount}` : ''}`;
-        console.log(`🎯 ${actionText}`);
+        console.log(` ${actionText}`);
 
         if (this.statusLabel) {
             this.statusLabel.string = actionText;
@@ -1169,11 +1279,25 @@ export class GameTable extends Component {
 
                 // Hide player's cards
                 this.hidePlayerCards(playerId);
+
+                // Play fold sound
+                this.playFoldSound();
             } else if (action.type === 'check') {
                 // Show "Check" text
                 this.updatePlayerBetLabel(playerId, 0, 'Check');
+
+                // Play check sound
+                this.playCheckSound();
+            } else if (action.type === 'bet' || action.type === 'call' || action.type === 'raise' || action.type === 'allin') {
+                // Update bet label to show current bet amount (bet, call, raise, all-in)
+                this.updatePlayerBetLabel(playerId, player.bet);
+
+                // Play bet chips sound for betting actions
+                console.log(`🎲 Action type: ${action.type} - attempting to play bet sound`);
+                this.playBetSound();
             } else {
-                // Update bet label to show current bet amount (bet, call, raise)
+                // Unknown action type - log it
+                console.warn(` Unknown action type: ${action.type}`);
                 this.updatePlayerBetLabel(playerId, player.bet);
             }
         }
@@ -1189,7 +1313,7 @@ export class GameTable extends Component {
      * Called when pot is updated (from engine)
      */
     private onPotUpdated(amount: number) {
-        console.log(`💰 Pot updated by engine: $${amount}`);
+        console.log(` Pot updated by engine: $${amount}`);
 
         // Just update the labels - engine already updated the pot
         this.updateAllPotLabels();
@@ -1227,14 +1351,14 @@ export class GameTable extends Component {
             }
         }
 
-        console.log('✅ Button handlers set up');
+        console.log(' Button handlers set up');
     }
 
     /**
      * Hide all action buttons
      */
     private hideActionButtons() {
-        console.log('🙈 Hiding action buttons');
+        console.log(' Hiding action buttons');
         if (this.leftButton) this.leftButton.active = false;
         if (this.middleButton) this.middleButton.active = false;
         if (this.rightButton) this.rightButton.active = false;
@@ -1248,15 +1372,15 @@ export class GameTable extends Component {
         console.log('👀 Showing action buttons');
         if (this.leftButton) {
             this.leftButton.active = true;
-            console.log('  ✅ Left button visible');
+            console.log('   Left button visible');
         }
         if (this.middleButton) {
             this.middleButton.active = true;
-            console.log('  ✅ Middle button visible');
+            console.log('   Middle button visible');
         }
         if (this.rightButton) {
             this.rightButton.active = true;
-            console.log('  ✅ Right button visible');
+            console.log('   Right button visible');
         }
     }
 
@@ -1273,7 +1397,7 @@ export class GameTable extends Component {
      * Show New Game button
      */
     private showNewGameButton() {
-        console.log('🔄 Showing New Game button');
+        console.log(' Showing New Game button');
         if (this.newGameButton) {
             this.newGameButton.active = true;
         }
@@ -1342,7 +1466,7 @@ export class GameTable extends Component {
         if (!label) return;
 
         const action = label.string.toLowerCase(); // 'check' or 'call'
-        console.log(`🎯 Player clicked: ${action}`);
+        console.log(` Player clicked: ${action}`);
 
         this.engine.processAction('player', { type: action as any });
         this.hideActionButtons();
@@ -1363,7 +1487,7 @@ export class GameTable extends Component {
         const action = label.string.toLowerCase(); // 'bet' or 'raise'
         const amount = this.getBetAmount();
 
-        console.log(`🎯 Player clicked: ${action} $${amount}`);
+        console.log(` Player clicked: ${action} $${amount}`);
 
         this.engine.processAction('player', { type: action as any, amount });
         this.hideActionButtons();
@@ -1378,7 +1502,7 @@ export class GameTable extends Component {
     private onRightButtonClick() {
         if (!this.engine) return;
 
-        console.log('🎯 Player clicked: fold');
+        console.log(' Player clicked: fold');
 
         this.engine.processAction('player', { type: 'fold' });
         this.hideActionButtons();
@@ -1391,7 +1515,7 @@ export class GameTable extends Component {
      * New Game button click handler
      */
     private onNewGameButtonClick() {
-        console.log('🔄 Player clicked: New Game');
+        console.log(' Player clicked: New Game');
 
         // Hide the new game button
         this.hideNewGameButton();
@@ -1460,7 +1584,7 @@ export class GameTable extends Component {
             }
         } else {
             // AI player's turn - hide buttons and let AI decide
-            console.log(`  🤖 This is an AI player - hiding buttons`);
+            console.log(`   This is an AI player - hiding buttons`);
             this.hideActionButtons();
 
             if (this.statusLabel) {
@@ -1479,7 +1603,7 @@ export class GameTable extends Component {
      */
     private onHandEnded(result: any) {
         console.log('');
-        console.log(`[HAND #${this.handCounter}] 🏁 HAND_ENDED - Phase: ${this.handPhase}`);
+        console.log(`[HAND #${this.handCounter}]  HAND_ENDED - Phase: ${this.handPhase}`);
         console.log(`[HAND #${this.handCounter}] Result:`, result);
 
         this.handPhase = 'showdown';
@@ -1527,12 +1651,12 @@ export class GameTable extends Component {
         this.scheduleOnce(() => {
             // Don't start next hand if human player is eliminated
             if (this.eliminatedPlayers.has('player')) {
-                console.log('⏸️ Player eliminated - not starting next hand');
+                console.log(' Player eliminated - not starting next hand');
                 return;
             }
 
             if (this.engine && !this.engine.isHandInProgress()) {
-                console.log('🎴 Starting next hand...');
+                console.log(' Starting next hand...');
                 this.engine.startNewHand();
 
                 // Restart the auto-advance loop for new hand
