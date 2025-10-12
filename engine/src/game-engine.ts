@@ -79,6 +79,8 @@ export class PokerGameEngine {
   private currentPlayerIndex: number;
   private handInProgress: boolean;
   private eventListeners: ((event: GameEvent) => void)[];
+  private bettingRoundStartPlayer: number; // First player to act in current betting round
+  private playersActedThisRound: Set<number>; // Track who has acted this betting round
 
   /**
    * Create a new poker game engine
@@ -122,6 +124,8 @@ export class PokerGameEngine {
     this.currentPlayerIndex = 0;
     this.handInProgress = false;
     this.eventListeners = [];
+    this.bettingRoundStartPlayer = 0;
+    this.playersActedThisRound = new Set();
   }
 
   /**
@@ -218,6 +222,10 @@ export class PokerGameEngine {
     
     // Set first player to act (UTG in multiplayer, dealer in heads-up)
     this.currentPlayerIndex = this.getFirstToActPreflop();
+    this.bettingRoundStartPlayer = this.currentPlayerIndex;
+    this.playersActedThisRound = new Set();
+    
+    debugLog('START_ROUND', `Betting round started - First to act: ${this.currentPlayerIndex} (${this.players[this.currentPlayerIndex].id})`);
 
     this.emitEvent({ type: 'pot_updated', amount: this.pot.getTotalPot() });
   }
@@ -259,6 +267,8 @@ export class PokerGameEngine {
     const success = this.bettingRound.processAction(player, action, this.currentPlayerIndex);
     
     if (success) {
+      // Mark this player as having acted this round
+      this.playersActedThisRound.add(this.currentPlayerIndex);
       debugLog('ACTION', `✅ Action processed successfully`);
       debugLog('ACTION', `Player ${playerId} bet is now: $${player.bet}`);
       
@@ -297,10 +307,12 @@ export class PokerGameEngine {
 
   /**
    * Check if the current betting round is complete
-   * A round is complete when all active players have matched the highest bet
+   * Round is complete when all active players have matched AND we've completed one full orbit
    */
   private isBettingRoundComplete(): boolean {
     debugLog('ROUND_CHECK', `▶ isBettingRoundComplete() called`);
+    debugLog('ROUND_CHECK', `  Starting player for this round: ${this.bettingRoundStartPlayer} (${this.players[this.bettingRoundStartPlayer]?.id})`);
+    debugLog('ROUND_CHECK', `  Players who have acted: ${Array.from(this.playersActedThisRound).join(', ')}`);
     
     const activePlayers = this.players.filter(p => p.canAct());
     debugLog('ROUND_CHECK', `  Active players (can act): ${activePlayers.length}`);
@@ -329,14 +341,21 @@ export class PokerGameEngine {
       return false;
     }
 
-    // If no one has bet yet (all checks), need at least one full orbit
-    if (highestBet === 0) {
-      debugLog('ROUND_CHECK', `  ℹ️  Highest bet is 0 (all checks) → assuming one orbit complete`);
-      debugLog('ROUND_CHECK', `  ✅ Round complete (all checks)`);
-      return true;
+    // All bets match, but have all active players had a chance to act?
+    // Check if all active players have acted in this round
+    const allActivePlayersActed = activePlayers.every((p, idx) => {
+      const playerIndex = this.players.indexOf(p);
+      return this.playersActedThisRound.has(playerIndex);
+    });
+    
+    debugLog('ROUND_CHECK', `  Have all active players acted? ${allActivePlayersActed}`);
+    
+    if (!allActivePlayersActed) {
+      debugLog('ROUND_CHECK', `  ❌ Not all active players have acted yet → round NOT complete`);
+      return false;
     }
 
-    debugLog('ROUND_CHECK', `  ✅ All matched and bet > 0 → round complete`);
+    debugLog('ROUND_CHECK', `  ✅ All matched AND all acted → round complete`);
     return true;
   }
 
@@ -474,6 +493,10 @@ export class PokerGameEngine {
   private startNewBettingRound(): void {
     // First to act postflop is first active player after dealer
     this.currentPlayerIndex = this.getFirstToActPostflop();
+    this.bettingRoundStartPlayer = this.currentPlayerIndex;
+    this.playersActedThisRound = new Set();
+    
+    debugLog('START_ROUND', `New betting round (${this.street}) - First to act: ${this.currentPlayerIndex} (${this.players[this.currentPlayerIndex].id})`);
   }
 
   /**

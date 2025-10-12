@@ -13,6 +13,16 @@ import type { GameEvent, Card as EngineCard, PlayerState } from '../../../engine
 
 const { ccclass, property } = _decorator;
 
+// UI Debug flag - Set to false to disable UI logging
+const DEBUG_UI = true;
+
+// UI debug logging helper
+function uiLog(...args: any[]): void {
+    if (DEBUG_UI) {
+        console.log(...args);
+    }
+}
+
 @ccclass('GameTable')
 export class GameTable extends Component {
     // === Scene References ===
