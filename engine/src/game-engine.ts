@@ -194,7 +194,7 @@ export class PokerGameEngine {
     // Reset for new hand
     this.deck.reset();
     this.pot.reset();
-    debugLog('HAND_START', `🔵 Pot reset to $${this.pot.getTotalPot()} for new hand`);
+    debugLog('HAND_START', ` Pot reset to $${this.pot.getTotalPot()} for new hand`);
     this.communityCards = [];
     this.street = 'preflop';
     this.handInProgress = true;
@@ -270,7 +270,7 @@ export class PokerGameEngine {
     if (success) {
       // Mark this player as having acted this round
       this.playersActedThisRound.add(this.currentPlayerIndex);
-      debugLog('ACTION', `✅ Action processed successfully`);
+      debugLog('ACTION', ` Action processed successfully`);
       debugLog('ACTION', `Player ${playerId} bet is now: $${player.bet}`);
 
       this.emitEvent({ type: 'player_action', playerId, action });
@@ -281,7 +281,7 @@ export class PokerGameEngine {
       debugLog('ACTION', `Active players remaining: ${activePlayers.length}`);
 
       if (activePlayers.length === 1) {
-        debugLog('ACTION', `🏆 Only one player left! Hand ends by fold.`);
+        debugLog('ACTION', ` Only one player left! Hand ends by fold.`);
         this.endHandByFold(activePlayers[0]);
         return true;
       }
@@ -289,7 +289,7 @@ export class PokerGameEngine {
       // Check if all remaining players are all-in (no one can act)
       const canActPlayers = activePlayers.filter(p => !p.allIn);
       if (canActPlayers.length === 0 && activePlayers.length > 1) {
-        debugLog('ACTION', `🚀 All players are all-in! Auto-completing hand...`);
+        debugLog('ACTION', ` All players are all-in! Auto-completing hand...`);
         this.forceHandComplete();
         return true;
       }
@@ -300,14 +300,14 @@ export class PokerGameEngine {
       debugLog('ACTION', `Betting round complete? ${isComplete}`);
 
       if (isComplete) {
-        debugLog('ACTION', `✅ Betting round COMPLETE → calling endBettingRound()`);
+        debugLog('ACTION', ` Betting round COMPLETE → calling endBettingRound()`);
         this.endBettingRound();
       } else {
-        debugLog('ACTION', `➡️  Betting round NOT complete → advancing to next player`);
+        debugLog('ACTION', `  Betting round NOT complete → advancing to next player`);
         this.advanceToNextPlayer();
       }
     } else {
-      debugLog('ACTION', `❌ Action processing FAILED`);
+      debugLog('ACTION', ` Action processing FAILED`);
     }
 
     debugLog('ACTION', `───────── PROCESS ACTION END ─────────\n`);
@@ -319,7 +319,7 @@ export class PokerGameEngine {
    * Round is complete when all active players have matched AND we've completed one full orbit
    */
   private isBettingRoundComplete(): boolean {
-    debugLog('ROUND_CHECK', `▶ isBettingRoundComplete() called`);
+    debugLog('ROUND_CHECK', ` isBettingRoundComplete() called`);
     debugLog('ROUND_CHECK', `  Starting player for this round: ${this.bettingRoundStartPlayer} (${this.players[this.bettingRoundStartPlayer]?.id})`);
     debugLog('ROUND_CHECK', `  Players who have acted: ${Array.from(this.playersActedThisRound).join(', ')}`);
 
@@ -328,7 +328,7 @@ export class PokerGameEngine {
     debugLog('ROUND_CHECK', `  Active player IDs: ${activePlayers.map(p => p.id).join(', ')}`);
 
     if (activePlayers.length === 0) {
-      debugLog('ROUND_CHECK', `  ✅ No active players → round complete`);
+      debugLog('ROUND_CHECK', `   No active players → round complete`);
       return true;
     }
 
@@ -346,7 +346,7 @@ export class PokerGameEngine {
     debugLog('ROUND_CHECK', `  All active players matched highest bet? ${allMatched}`);
 
     if (!allMatched) {
-      debugLog('ROUND_CHECK', `  ❌ Not all matched → round NOT complete`);
+      debugLog('ROUND_CHECK', `   Not all matched → round NOT complete`);
       return false;
     }
 
@@ -360,11 +360,11 @@ export class PokerGameEngine {
     debugLog('ROUND_CHECK', `  Have all active players acted? ${allActivePlayersActed}`);
 
     if (!allActivePlayersActed) {
-      debugLog('ROUND_CHECK', `  ❌ Not all active players have acted yet → round NOT complete`);
+      debugLog('ROUND_CHECK', `   Not all active players have acted yet → round NOT complete`);
       return false;
     }
 
-    debugLog('ROUND_CHECK', `  ✅ All matched AND all acted → round complete`);
+    debugLog('ROUND_CHECK', `   All matched AND all acted → round complete`);
     return true;
   }
 
@@ -387,7 +387,7 @@ export class PokerGameEngine {
 
     // Collect all current bets into the pot
     const potBefore = this.pot.getTotalPot();
-    debugLog('END_ROUND', `🔵 BEFORE collectBets: pot=$${potBefore}`);
+    debugLog('END_ROUND', ` BEFORE collectBets: pot=$${potBefore}`);
     this.players.forEach(p => {
       if (p.bet > 0) debugLog('END_ROUND', `   ${p.id}: bet=$${p.bet}`);
     });
@@ -395,7 +395,7 @@ export class PokerGameEngine {
     this.pot.collectBetsSimple(this.players);
 
     const potAfter = this.pot.getTotalPot();
-    debugLog('END_ROUND', `🔵 AFTER collectBets: pot=$${potAfter}`);
+    debugLog('END_ROUND', ` AFTER collectBets: pot=$${potAfter}`);
     this.players.forEach(p => {
       debugLog('END_ROUND', `   ${p.id}: bet=$${p.bet} (should be 0)`);
     });

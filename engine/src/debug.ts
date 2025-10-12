@@ -10,10 +10,10 @@ export const DEBUG_ENABLED = true; // Set to false to disable all debug logging
  */
 export function debugLog(category: string, message: string, data?: any): void {
   if (!DEBUG_ENABLED) return;
-  
+
   const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
-  const prefix = `🐛 [${timestamp}] [${category}]`;
-  
+  const prefix = `[${timestamp}] [${category}]`;
+
   if (data !== undefined) {
     console.log(`${prefix} ${message}`, data);
   } else {
@@ -30,14 +30,14 @@ export function debugBettingState(
   currentPlayerIndex: number
 ): void {
   if (!DEBUG_ENABLED) return;
-  
+
   console.log('═══════════════════════════════════════════════════════');
-  console.log('🐛 BETTING STATE:');
-  console.log(`   Current Bet: $${currentBet}`);
-  console.log(`   Current Player Index: ${currentPlayerIndex}`);
-  console.log('   Players:');
+  console.log(' BETTING STATE:');
+  console.log(` Current Bet: $${currentBet}`);
+  console.log(` Current Player Index: ${currentPlayerIndex}`);
+  console.log(' Players:');
   players.forEach((p, idx) => {
-    const marker = idx === currentPlayerIndex ? '👉' : '  ';
+    const marker = idx === currentPlayerIndex ? '(current)' : '         ';
     const status = p.folded ? '[FOLDED]' : p.allIn ? '[ALL-IN]' : '[ACTIVE]';
     console.log(`   ${marker} ${idx}. ${p.id.padEnd(10)} ${status.padEnd(10)} Bet: $${p.bet.toString().padStart(4)} Chips: $${p.chips.toString().padStart(4)}`);
   });
