@@ -32,6 +32,16 @@ export class Card extends Component {
     private isFaceUp: boolean = false;
     private cardData: CardData | null = null;
 
+    onLoad() {
+        // Ensure sprite reference is set (find it if not assigned in editor)
+        if (!this.cardSprite) {
+            this.cardSprite = this.node.getComponent(Sprite);
+            if (!this.cardSprite) {
+                console.error('❌ No Sprite component found on Card prefab!');
+            }
+        }
+    }
+
     start() {
         // Initialize card size
         const transform = this.node.getComponent(UITransform);
@@ -52,6 +62,16 @@ export class Card extends Component {
      */
     setCard(data: CardData, faceUp: boolean = true) {
         console.log(`      💳 Card.setCard called: ${data.rank}${data.suit}, faceUp: ${faceUp}`);
+
+        // Ensure sprite reference exists (in case onLoad hasn't run yet)
+        if (!this.cardSprite) {
+            this.cardSprite = this.node.getComponent(Sprite);
+            if (!this.cardSprite) {
+                console.error('      ❌ CRITICAL: No Sprite component on card node!');
+                return;
+            }
+        }
+
         this.cardData = data;
         this.isFaceUp = faceUp;
         this.updateDisplay();
@@ -86,12 +106,12 @@ export class Card extends Component {
      */
     private updateDisplay() {
         console.log(`      ⚙️ Card.updateDisplay called`);
-        
+
         if (!this.cardSprite) {
             console.error('      ❌ cardSprite is null!');
             return;
         }
-        
+
         if (!this.cardData) {
             console.error('      ❌ cardData is null!');
             return;
@@ -109,11 +129,9 @@ export class Card extends Component {
             this.loadCardBack();
         }
 
-        // Update debug label if enabled
+        // Keep debug label hidden (we don't want to reveal card info)
         if (this.debugLabel) {
-            this.debugLabel.string = `${this.cardData.rank}${this.cardData.suit}`;
-            this.debugLabel.node.active = true;
-            console.log(`      Debug label set: ${this.debugLabel.string}`);
+            this.debugLabel.node.active = false;
         }
     }
 
@@ -125,19 +143,24 @@ export class Card extends Component {
 
         const path = this.getCardResourcePath(this.cardData) + '/spriteFrame';
         console.log(`      📂 Loading card face from: ${path}`);
-        
+
         resources.load(path, SpriteFrame, (err, spriteFrame) => {
+            // Check if component still exists (not destroyed)
+            if (!this.node || !this.node.isValid) {
+                return; // Silently return if node was destroyed
+            }
+
             if (err) {
                 console.error(`      ❌ Failed to load card: ${path}`, err);
                 this.showDebugLabel();
                 return;
             }
-            
+
             console.log(`      ✅ Card face loaded successfully: ${path}`);
-            
-            if (this.cardSprite) {
+
+            if (this.cardSprite && this.cardSprite.isValid) {
                 this.cardSprite.spriteFrame = spriteFrame;
-                
+
                 // Set sprite to CUSTOM size mode and force it to 60x84
                 this.cardSprite.sizeMode = Sprite.SizeMode.CUSTOM;
                 const spriteTransform = this.cardSprite.node.getComponent(UITransform);
@@ -145,8 +168,6 @@ export class Card extends Component {
                     spriteTransform.setContentSize(this.cardWidth, this.cardHeight);
                     console.log(`      ✅ Sprite sized to ${this.cardWidth}x${this.cardHeight}`);
                 }
-            } else {
-                console.error('      ❌ cardSprite is null when trying to assign spriteFrame');
             }
         });
     }
@@ -156,19 +177,24 @@ export class Card extends Component {
      */
     private loadCardBack() {
         console.log('      📂 Loading card back from: card_back/spriteFrame');
-        
+
         resources.load('card_back/spriteFrame', SpriteFrame, (err, spriteFrame) => {
+            // Check if component still exists (not destroyed)
+            if (!this.node || !this.node.isValid) {
+                return; // Silently return if node was destroyed
+            }
+
             if (err) {
                 console.error('      ❌ Failed to load card back', err);
                 this.showDebugLabel();
                 return;
             }
-            
+
             console.log('      ✅ Card back loaded successfully');
-            
-            if (this.cardSprite) {
+
+            if (this.cardSprite && this.cardSprite.isValid) {
                 this.cardSprite.spriteFrame = spriteFrame;
-                
+
                 // Set sprite to CUSTOM size mode and force it to 60x84
                 this.cardSprite.sizeMode = Sprite.SizeMode.CUSTOM;
                 const spriteTransform = this.cardSprite.node.getComponent(UITransform);
@@ -176,8 +202,6 @@ export class Card extends Component {
                     spriteTransform.setContentSize(this.cardWidth, this.cardHeight);
                     console.log(`      ✅ Card back sprite sized to ${this.cardWidth}x${this.cardHeight}`);
                 }
-            } else {
-                console.error('      ❌ cardSprite is null when trying to assign card back');
             }
         });
     }
@@ -220,15 +244,15 @@ export class Card extends Component {
     }
 
     /**
-     * Show debug label as fallback
+     * Show debug label as fallback (disabled - we don't reveal card info)
      */
     private showDebugLabel() {
-        if (this.debugLabel && this.cardData) {
-            this.debugLabel.node.active = true;
-            this.debugLabel.string = `${this.cardData.rank}${this.cardData.suit}`;
-            this.debugLabel.color = new Color(255, 255, 255, 255);
-            this.debugLabel.fontSize = 14;
-        }
+        // Debug labels disabled to prevent revealing card information
+        // If needed for debugging, temporarily enable this:
+        // if (this.debugLabel && this.cardData) {
+        //     this.debugLabel.node.active = true;
+        //     this.debugLabel.string = `${this.cardData.rank}${this.cardData.suit}`;
+        // }
     }
 
     /**
