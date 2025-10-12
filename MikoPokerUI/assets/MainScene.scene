@@ -535,8 +535,8 @@
     "_prefab": null,
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -276.037,
-      "y": 317.548,
+      "x": -405.708,
+      "y": 317.165,
       "z": 0
     },
     "_lrot": {
@@ -2540,6 +2540,7 @@
     "radiusX": 400,
     "radiusY": 250,
     "heroSeatIndex": 0,
+    "useRectangularLayout": true,
     "_id": "fb9yh3M3tNmLnhtHPj/Wlz"
   },
   {

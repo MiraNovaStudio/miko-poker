@@ -336,6 +336,12 @@ export class GameTable extends Component {
             return;
         }
 
+        // Clear community cards from previous hand
+        if (this.communityCardsNode) {
+            this.communityCardsNode.removeAllChildren();
+            console.log('🧹 Cleared community cards for new hand');
+        }
+
         const gameState = this.engine.getGameState();
         const sbIndex = (gameState.dealerIndex + 1) % gameState.players.length;
         const bbIndex = (gameState.dealerIndex + 2) % gameState.players.length;
@@ -489,6 +495,23 @@ export class GameTable extends Component {
             label.string = '';
             label.node.active = false;
         });
+    }
+
+    /**
+     * Hide a player's cards when they fold
+     */
+    private hidePlayerCards(playerId: string) {
+        const slotNode = this.playerSlots.get(playerId);
+        if (!slotNode) {
+            console.error(`❌ No slot found for ${playerId} to hide cards`);
+            return;
+        }
+
+        const cardsContainer = slotNode.getChildByName('Cards');
+        if (cardsContainer) {
+            cardsContainer.active = false;
+            console.log(`🙈 ${playerId} cards hidden (folded)`);
+        }
     }
 
     /**
@@ -903,6 +926,9 @@ export class GameTable extends Component {
             if (action.type === 'fold') {
                 // Show "Fold" text
                 this.updatePlayerBetLabel(playerId, 0, 'Fold');
+                
+                // Hide player's cards
+                this.hidePlayerCards(playerId);
             } else if (action.type === 'check') {
                 // Show "Check" text
                 this.updatePlayerBetLabel(playerId, 0, 'Check');
@@ -1150,12 +1176,29 @@ export class GameTable extends Component {
         // Update all chip labels to show final chip counts
         this.updateAllChipLabels();
 
+        // Flip all AI cards face-up for showdown
+        this.revealAllCardsAtShowdown();
+
+        // Display showdown results with detailed information
         if (this.statusLabel) {
             const winners = result.winners.join(', ');
-            this.statusLabel.string = `${winners} wins $${result.potAmount}!`;
+            const winningHand = result.winningHand || 'Unknown Hand';
+            const potAmount = result.potAmount || 0;
+            
+            // Build a detailed status message
+            let statusMsg = `🏆 ${winners} wins $${potAmount}!\n`;
+            statusMsg += `Winning Hand: ${winningHand}`;
+            
+            // If there's player hand info, show it
+            if (result.playerHand) {
+                statusMsg += `\nYour Hand: ${result.playerHand}`;
+            }
+            
+            this.statusLabel.string = statusMsg;
+            console.log('📊 Showdown:', statusMsg);
         }
 
-        // Schedule next hand
+        // Schedule next hand with 5-second delay for user to see results
         this.scheduleOnce(() => {
             if (this.engine && !this.engine.isHandInProgress()) {
                 console.log('🎴 Starting next hand...');
@@ -1166,6 +1209,44 @@ export class GameTable extends Component {
                     this.advanceGame();
                 }, 0.5);
             }
-        }, 3);
+        }, 5); // 5 second delay for showdown review
+    }
+
+    /**
+     * Reveal all players' cards at showdown
+     */
+    private revealAllCardsAtShowdown() {
+        if (!this.engine || !this.slotLayoutManager) return;
+
+        const gameState = this.engine.getGameState();
+        const players = gameState.players;
+
+        players.forEach((player: any, index: number) => {
+            // Skip folded players
+            if (!player.cards || player.cards.length === 0 || player.folded) {
+                return;
+            }
+
+            const slot = this.slotLayoutManager!.getSlot(index);
+            if (!slot) return;
+
+            // Find the Cards container
+            const cardsContainer = slot.getChildByName('Cards');
+            if (!cardsContainer) return;
+
+            console.log(`🃏 Revealing cards for ${player.id} at showdown`);
+
+            // Flip each card face-up
+            player.cards.forEach((cardData: any, cardIndex: number) => {
+                const cardNode = cardsContainer.children[cardIndex];
+                if (cardNode) {
+                    const cardComponent = cardNode.getComponent(CardComponent);
+                    if (cardComponent) {
+                        // Re-set the card with faceUp = true
+                        cardComponent.setCard(cardData, true);
+                    }
+                }
+            });
+        });
     }
 }

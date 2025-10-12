@@ -2,13 +2,25 @@
 
 All notable changes to the MikoPoker project will be documented in this file.
 
+## [UI] - 2025-10-11 23:30
+
+### GameTable UI
+- Added `DEBUG_UI` flag to control UI logging independently from engine
+- Cards now hide when player folds (visual indicator)
+
 ## [Engine 0.3.0] - 2025-10-11 23:15
 
 ### Debug Logging System
 - Added `debug.ts` with `DEBUG_ENABLED` flag (set to true/false directly)
 - Comprehensive logging in `processAction()`, `isBettingRoundComplete()`, `endBettingRound()`, `advanceToNextPlayer()`
 - Debug shows: betting state, player bets/chips, round completion checks, pot collection
-- Categorized logs: ACTION, ROUND_CHECK, END_ROUND, ADVANCE
+- Categorized logs: ACTION, ROUND_CHECK, END_ROUND, ADVANCE, START_ROUND
+
+### Betting Round Orbit Tracking
+- Added `bettingRoundStartPlayer` to track first player each round
+- Added `playersActedThisRound` Set to track who has acted
+- `isBettingRoundComplete()` now requires all active players to have matched bet AND acted
+- Prevents rounds from ending before everyone has had a chance to act
 
 ### Major Refactor - Betting Round Logic
 - Complete rewrite of betting round completion logic
