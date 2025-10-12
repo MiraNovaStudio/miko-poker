@@ -49,3 +49,6 @@ export type {
   BlindStructure, 
   GameModeConfig 
 } from './game-mode.js';
+
+// Debug utilities
+export { DEBUG_ENABLED } from './debug.js';

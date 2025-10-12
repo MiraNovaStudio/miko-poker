@@ -10,6 +10,7 @@ import { BettingRound } from './betting.js';
 import { evaluateHand, compareHands, getHandName } from './hand-evaluator.js';
 import { PokerAI } from './ai/PokerAI.js';
 import { GameModeManager, STANDARD_STRUCTURES, type BlindStructure } from './game-mode.js';
+import { debugLog, debugBettingState } from './debug.js';
 import type { Card, Street, PlayerAction, GameConfig, PlayerState } from './types.js';
 
 /**
@@ -228,6 +229,12 @@ export class PokerGameEngine {
    * @returns True if action was processed successfully
    */
   processAction(playerId: string, action: PlayerAction): boolean {
+    debugLog('ACTION', `───────── PROCESS ACTION START ─────────`);
+    const actionStr = action.type === 'fold' || action.type === 'check' 
+      ? action.type 
+      : `${action.type} $${action.amount}`;
+    debugLog('ACTION', `Player: ${playerId}, Action: ${actionStr}`);
+    
     if (!this.handInProgress) {
       throw new Error('No hand in progress');
     }
@@ -241,25 +248,153 @@ export class PokerGameEngine {
       throw new Error('Not this player\'s turn');
     }
 
+    debugBettingState(
+      this.bettingRound.getCurrentBet(),
+      this.players.map(p => ({ id: p.id, bet: p.bet, chips: p.chips, folded: p.folded, allIn: p.allIn })),
+      this.currentPlayerIndex
+    );
+
     // Process the action
+    debugLog('ACTION', `Processing action with BettingRound...`);
     const success = this.bettingRound.processAction(player, action, this.currentPlayerIndex);
     
     if (success) {
+      debugLog('ACTION', `✅ Action processed successfully`);
+      debugLog('ACTION', `Player ${playerId} bet is now: $${player.bet}`);
+      
       this.emitEvent({ type: 'player_action', playerId, action });
       this.emitEvent({ type: 'pot_updated', amount: this.getCurrentPot() });
 
       // Check if hand is over (everyone folded except one)
       const activePlayers = this.players.filter(p => !p.folded);
+      debugLog('ACTION', `Active players remaining: ${activePlayers.length}`);
+      
       if (activePlayers.length === 1) {
+        debugLog('ACTION', `🏆 Only one player left! Hand ends by fold.`);
         this.endHandByFold(activePlayers[0]);
         return true;
       }
 
-      // Move to next player or next street
-      this.advanceAction();
+      // Check if betting round is complete
+      debugLog('ACTION', `Checking if betting round is complete...`);
+      const isComplete = this.isBettingRoundComplete();
+      debugLog('ACTION', `Betting round complete? ${isComplete}`);
+      
+      if (isComplete) {
+        debugLog('ACTION', `✅ Betting round COMPLETE → calling endBettingRound()`);
+        this.endBettingRound();
+      } else {
+        debugLog('ACTION', `➡️  Betting round NOT complete → advancing to next player`);
+        this.advanceToNextPlayer();
+      }
+    } else {
+      debugLog('ACTION', `❌ Action processing FAILED`);
     }
 
+    debugLog('ACTION', `───────── PROCESS ACTION END ─────────\n`);
     return success;
+  }
+
+  /**
+   * Check if the current betting round is complete
+   * A round is complete when all active players have matched the highest bet
+   */
+  private isBettingRoundComplete(): boolean {
+    debugLog('ROUND_CHECK', `▶ isBettingRoundComplete() called`);
+    
+    const activePlayers = this.players.filter(p => p.canAct());
+    debugLog('ROUND_CHECK', `  Active players (can act): ${activePlayers.length}`);
+    debugLog('ROUND_CHECK', `  Active player IDs: ${activePlayers.map(p => p.id).join(', ')}`);
+    
+    if (activePlayers.length === 0) {
+      debugLog('ROUND_CHECK', `  ✅ No active players → round complete`);
+      return true;
+    }
+
+    // Get the highest bet among active players
+    const highestBet = this.bettingRound.getCurrentBet();
+    debugLog('ROUND_CHECK', `  Highest bet (currentBet): $${highestBet}`);
+    
+    // Log each active player's bet
+    activePlayers.forEach(p => {
+      debugLog('ROUND_CHECK', `    ${p.id}: bet=$${p.bet}, chips=$${p.chips}`);
+    });
+    
+    // All active players must have matched the highest bet
+    const allMatched = activePlayers.every(p => p.bet === highestBet);
+    debugLog('ROUND_CHECK', `  All active players matched highest bet? ${allMatched}`);
+    
+    if (!allMatched) {
+      debugLog('ROUND_CHECK', `  ❌ Not all matched → round NOT complete`);
+      return false;
+    }
+
+    // If no one has bet yet (all checks), need at least one full orbit
+    if (highestBet === 0) {
+      debugLog('ROUND_CHECK', `  ℹ️  Highest bet is 0 (all checks) → assuming one orbit complete`);
+      debugLog('ROUND_CHECK', `  ✅ Round complete (all checks)`);
+      return true;
+    }
+
+    debugLog('ROUND_CHECK', `  ✅ All matched and bet > 0 → round complete`);
+    return true;
+  }
+
+  /**
+   * End the current betting round
+   * Collects all bets into the pot and advances to the next street
+   */
+  private endBettingRound(): void {
+    debugLog('END_ROUND', `═══════ END BETTING ROUND ═══════`);
+    debugLog('END_ROUND', `Street: ${this.street}`);
+    
+    // Log bets before collection
+    const totalBets = this.players.reduce((sum, p) => sum + p.bet, 0);
+    debugLog('END_ROUND', `Total bets to collect: $${totalBets}`);
+    this.players.forEach(p => {
+      if (p.bet > 0) {
+        debugLog('END_ROUND', `  ${p.id}: $${p.bet}`);
+      }
+    });
+    
+    // Collect all current bets into the pot
+    const potBefore = this.pot.getTotalPot();
+    this.pot.collectBetsSimple(this.players);
+    const potAfter = this.pot.getTotalPot();
+    debugLog('END_ROUND', `Pot: $${potBefore} → $${potAfter}`);
+    
+    // Reset betting round state
+    this.bettingRound.reset();
+    debugLog('END_ROUND', `BettingRound reset()`);
+    
+    // Reset all player bets to 0
+    this.players.forEach(p => p.bet = 0);
+    debugLog('END_ROUND', `All player bets reset to $0`);
+    
+    debugLog('END_ROUND', `Advancing to next street...`);
+    // Advance to next phase
+    this.advanceStreet();
+  }
+
+  /**
+   * Advance to the next player who can act
+   */
+  private advanceToNextPlayer(): void {
+    const oldIndex = this.currentPlayerIndex;
+    
+    let nextIndex = (this.currentPlayerIndex + 1) % this.players.length;
+    let attempts = 0;
+    
+    debugLog('ADVANCE', `Finding next player from index ${oldIndex}...`);
+    
+    while (!this.players[nextIndex].canAct() && attempts < this.players.length) {
+      debugLog('ADVANCE', `  Skipping ${nextIndex} (${this.players[nextIndex].id}) - can't act`);
+      nextIndex = (nextIndex + 1) % this.players.length;
+      attempts++;
+    }
+
+    this.currentPlayerIndex = nextIndex;
+    debugLog('ADVANCE', `Advanced: ${oldIndex} (${this.players[oldIndex].id}) → ${nextIndex} (${this.players[nextIndex].id})`);
   }
 
   /**
@@ -305,35 +440,9 @@ export class PokerGameEngine {
   }
 
   /**
-   * Advance to next player or next street
-   */
-  private advanceAction(): void {
-    // Find next player who can act
-    let nextIndex = (this.currentPlayerIndex + 1) % this.players.length;
-    let attempts = 0;
-    
-    while (!this.players[nextIndex].canAct() && attempts < this.players.length) {
-      nextIndex = (nextIndex + 1) % this.players.length;
-      attempts++;
-    }
-
-    // Check if betting round is complete
-    const startIndex = (this.dealerIndex + 1) % this.players.length;
-    if (this.bettingRound.isRoundComplete(this.players, startIndex, nextIndex)) {
-      this.advanceStreet();
-    } else {
-      this.currentPlayerIndex = nextIndex;
-    }
-  }
-
-  /**
-   * Advance to next street
+   * Advance to next street (called after betting round ends)
    */
   private advanceStreet(): void {
-    // Collect bets into pot
-    this.pot.collectBetsSimple(this.players);
-    this.bettingRound.reset();
-
     // Deal community cards based on street
     if (this.street === 'preflop') {
       this.street = 'flop';

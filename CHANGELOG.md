@@ -2,14 +2,23 @@
 
 All notable changes to the MikoPoker project will be documented in this file.
 
-## [Engine 0.2.2] - 2025-10-11 22:30
+## [Engine 0.3.0] - 2025-10-11 23:15
 
-### Critical Bug Fix - Betting Round Completion
-- Fixed `isRoundComplete()` logic that caused infinite betting loops
-- Round now correctly ends when next player to act would be the aggressor
-- Was checking `currentIndex === nextAfterAggressor` (wrong)
-- Now checks `(currentIndex + 1) % players.length === lastAggressorIndex` (correct)
-- Prevents UTG from acting again after BB completes the betting round
+### Debug Logging System
+- Added `debug.ts` with `DEBUG_ENABLED` flag (set to true/false directly)
+- Comprehensive logging in `processAction()`, `isBettingRoundComplete()`, `endBettingRound()`, `advanceToNextPlayer()`
+- Debug shows: betting state, player bets/chips, round completion checks, pot collection
+- Categorized logs: ACTION, ROUND_CHECK, END_ROUND, ADVANCE
+
+### Major Refactor - Betting Round Logic
+- Complete rewrite of betting round completion logic
+- Added `isBettingRoundComplete()`: checks if all active players matched highest bet
+- Added `endBettingRound()`: collects bets to pot, resets player bets, advances street
+- Added `advanceToNextPlayer()`: simple next player advancement
+- Removed old `advanceAction()` and `isRoundComplete()` complex logic
+- Betting round now ends immediately after all players match (no extra orbit needed)
+- Bet collection and player bet reset now explicit in `endBettingRound()`
+- Simpler, more predictable betting flow
 
 ## [UI] - 2025-10-11 22:20
 

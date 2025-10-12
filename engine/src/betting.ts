@@ -125,15 +125,13 @@ export class BettingRound {
       return false;
     }
 
-    // If there was no aggressor (all checks), round is complete after one full orbit
+    // If there was no aggressor (all checks/calls, no raises)
+    // Round completes when we've gone full circle back to starting player
     if (this.lastAggressorIndex === -1) {
-      // For preflop with blinds, wait until we're back past the big blind
-      if (this.currentBet > 0) {
-        // There's a bet (blinds) but no aggressor yet - need to go around once
-        return currentIndex === startingIndex;
-      }
-      // All checked, one orbit complete
-      return currentIndex === startingIndex;
+      // Check if next player to act would be the starting player
+      // This means we've completed one full orbit
+      const nextToAct = (currentIndex + 1) % players.length;
+      return nextToAct === startingIndex;
     }
 
     // Round is complete when we're back to the aggressor
