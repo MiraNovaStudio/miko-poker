@@ -136,11 +136,11 @@ export class BettingRound {
       return currentIndex === startingIndex;
     }
 
-    // Round is complete if we're PAST the last aggressor 
-    // (everyone after the raise has had a chance to act)
-    // The next player to act would be the one after the last aggressor
-    const nextAfterAggressor = (this.lastAggressorIndex + 1) % players.length;
-    return currentIndex === nextAfterAggressor;
+    // Round is complete when we're back to the aggressor
+    // (everyone after the aggressor has had a chance to respond)
+    // This means the next player to act would be the aggressor themselves
+    const nextToAct = (currentIndex + 1) % players.length;
+    return nextToAct === this.lastAggressorIndex;
   }
 
   /**

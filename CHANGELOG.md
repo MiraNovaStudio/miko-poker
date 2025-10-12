@@ -2,6 +2,15 @@
 
 All notable changes to the MikoPoker project will be documented in this file.
 
+## [Engine 0.2.2] - 2025-10-11 22:30
+
+### Critical Bug Fix - Betting Round Completion
+- Fixed `isRoundComplete()` logic that caused infinite betting loops
+- Round now correctly ends when next player to act would be the aggressor
+- Was checking `currentIndex === nextAfterAggressor` (wrong)
+- Now checks `(currentIndex + 1) % players.length === lastAggressorIndex` (correct)
+- Prevents UTG from acting again after BB completes the betting round
+
 ## [UI] - 2025-10-11 22:20
 
 ### SlotLayoutManager - Rectangular Layout
