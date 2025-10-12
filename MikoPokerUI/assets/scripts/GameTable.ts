@@ -7,9 +7,9 @@ import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Vec3, UITransf
 import { SlotLayoutManager } from './SlotLayoutManager';
 import { Card as CardComponent, type CardData } from './Card';
 
-// Import poker engine (directly from compiled files to avoid module resolution issues)
-import { PokerGameEngine } from '../../../engine/dist/game-engine.js';
-import type { GameEvent, Card as EngineCard, PlayerState } from '../../../engine/dist/game-engine.js';
+// Import poker engine (from main index to get all exports)
+import { PokerGameEngine } from '../../../engine/dist/index.js';
+import type { GameEvent, Card as EngineCard, PlayerState } from '../../../engine/dist/index.js';
 
 const { ccclass, property } = _decorator;
 
@@ -224,8 +224,8 @@ export class GameTable extends Component {
         console.log(`\n⏳ Current turn: ${currentPlayer.id} (index ${gameState.currentPlayerIndex})`);
 
         // Check if current player has already folded or is all-in
-        if (currentPlayer.folded || currentPlayer.isAllIn) {
-            console.log(`  ⏭️ Player ${currentPlayer.id} can't act (folded: ${currentPlayer.folded}, all-in: ${currentPlayer.isAllIn})`);
+        if (currentPlayer.folded || currentPlayer.allIn) {
+            console.log(`  ⏭️ Player ${currentPlayer.id} can't act (folded: ${currentPlayer.folded}, all-in: ${currentPlayer.allIn})`);
             // This shouldn't happen as the engine should skip them, but just in case
             this.scheduleOnce(() => this.advanceGame(), 0.1);
             return;
@@ -286,10 +286,6 @@ export class GameTable extends Component {
 
             case 'cards_dealt':
                 this.onCardsDealt(event.playerId, event.cards);
-                break;
-
-            case 'action_required':
-                this.onActionRequired(event.playerId, event.validActions);
                 break;
 
             case 'street_changed':
@@ -991,10 +987,10 @@ export class GameTable extends Component {
      * Update button labels based on valid actions
      */
     private updateButtonLabels(validActions: string[]) {
-        const hasCheck = validActions.includes('check');
-        const hasCall = validActions.includes('call');
-        const hasBet = validActions.includes('bet');
-        const hasRaise = validActions.includes('raise');
+        const hasCheck = validActions.indexOf('check') !== -1;
+        const hasCall = validActions.indexOf('call') !== -1;
+        const hasBet = validActions.indexOf('bet') !== -1;
+        const hasRaise = validActions.indexOf('raise') !== -1;
 
         // Left Button: Check or Call
         if (this.leftButton) {

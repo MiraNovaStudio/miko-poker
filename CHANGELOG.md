@@ -2,6 +2,15 @@
 
 All notable changes to the MikoPoker project will be documented in this file.
 
+## [UI] - 2025-10-11 22:20
+
+### SlotLayoutManager - Rectangular Layout
+- Added rectangular poker table layout (traditional poker table arrangement)
+- Layout: 3 top (ai3, ai4, ai5), 2 sides (ai2, ai6), 3 bottom (ai1, human, ai7)
+- Added `useRectangularLayout` property (default true)
+- Kept elliptical layout code for future use
+- Rectangular layout supports 2-max and 8-max
+
 ## [UI] - 2025-10-11 22:10
 
 ### GameTable UI - Check/Fold Labels

@@ -30,6 +30,9 @@ export class SlotLayoutManager extends Component {
     @property
     heroSeatIndex: number = 0;  // Which seat is the player (usually seat 0 at bottom)
 
+    @property
+    useRectangularLayout: boolean = true;  // Use rectangular layout (true) or elliptical (false)
+
     private slots: Node[] = [];
     private slotConfigs: SlotConfig[] = [];
 
@@ -61,9 +64,60 @@ export class SlotLayoutManager extends Component {
     }
 
     /**
-     * Calculate slot positions around an elliptical table
+     * Calculate slot positions - delegates to rectangular or elliptical layout
      */
     private calculateSlotPositions(playerCount: number): SlotConfig[] {
+        if (this.useRectangularLayout) {
+            return this.calculateRectangularPositions(playerCount);
+        } else {
+            return this.calculateEllipticalPositions(playerCount);
+        }
+    }
+
+    /**
+     * Calculate slot positions in rectangular layout (traditional poker table)
+     * Layout for 8-max:
+     *        ai3      ai4     ai5
+     * ai2                           ai6
+     *        ai1     human   ai7
+     */
+    private calculateRectangularPositions(playerCount: number): SlotConfig[] {
+        const configs: SlotConfig[] = [];
+
+        switch (playerCount) {
+            case 2:
+                // Heads-up: Player at bottom, opponent at top
+                configs.push(
+                    { position: new Vec3(0, -250, 0), rotation: 0, seatIndex: 0 },      // Human bottom center
+                    { position: new Vec3(0, 250, 0), rotation: 180, seatIndex: 1 }      // AI top center
+                );
+                break;
+
+            case 8:
+                // 8-max rectangular layout
+                configs.push(
+                    { position: new Vec3(0, -250, 0), rotation: 0, seatIndex: 0 },      // Seat 0: Human (bottom center)
+                    { position: new Vec3(-200, -250, 0), rotation: 0, seatIndex: 1 },   // Seat 1: ai1 (bottom left)
+                    { position: new Vec3(-400, 0, 0), rotation: 90, seatIndex: 2 },     // Seat 2: ai2 (left side)
+                    { position: new Vec3(-200, 250, 0), rotation: 180, seatIndex: 3 },  // Seat 3: ai3 (top left)
+                    { position: new Vec3(0, 250, 0), rotation: 180, seatIndex: 4 },     // Seat 4: ai4 (top center)
+                    { position: new Vec3(200, 250, 0), rotation: 180, seatIndex: 5 },   // Seat 5: ai5 (top right)
+                    { position: new Vec3(400, 0, 0), rotation: 270, seatIndex: 6 },     // Seat 6: ai6 (right side)
+                    { position: new Vec3(200, -250, 0), rotation: 0, seatIndex: 7 }     // Seat 7: ai7 (bottom right)
+                );
+                break;
+
+            default:
+                throw new Error(`Unsupported player count for rectangular layout: ${playerCount}. Use 2 or 8.`);
+        }
+
+        return configs;
+    }
+
+    /**
+     * Calculate slot positions around an elliptical table (original method)
+     */
+    private calculateEllipticalPositions(playerCount: number): SlotConfig[] {
         const configs: SlotConfig[] = [];
 
         switch (playerCount) {
