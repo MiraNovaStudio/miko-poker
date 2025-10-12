@@ -3,9 +3,10 @@
  * Manages an 8-max cash game with card dealing, chip display, and player actions
  */
 
-import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Vec3, UITransform, Color, resources, Prefab, instantiate, Button, EditBox, AudioClip, AudioSource, game, director, profiler } from 'cc';
+import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Vec3, UITransform, Color, resources, Prefab, instantiate, Button, EditBox, game, director, profiler } from 'cc';
 import { SlotLayoutManager } from './SlotLayoutManager';
 import { Card as CardComponent, type CardData } from './Card';
+import { AudioManager } from './AudioManager';
 
 // Import poker engine (from main index to get all exports)
 import { PokerGameEngine } from '../../../engine/dist/index.js';
@@ -83,10 +84,7 @@ export class GameTable extends Component {
     private dealerButtonNode: Node | null = null;
     private currentActivePlayer: string | null = null; // Track whose turn it is
     private eliminatedPlayers: Set<string> = new Set(); // Track eliminated players
-    private checkSoundClip: AudioClip | null = null; // Audio clip for check sound
-    private betChipsSoundClip: AudioClip | null = null; // Audio clip for bet/call/raise sound
-    private foldSoundClip: AudioClip | null = null; // Audio clip for fold sound
-    private audioSource: AudioSource | null = null; // Audio source for playing sounds
+    private audioManager: AudioManager | null = null; // Audio manager for sound playback
 
     // Pot tracking (proper poker logic)
     private potAmount: number = 0;        // Accumulated pot from completed rounds
@@ -120,7 +118,7 @@ export class GameTable extends Component {
         this.initializeEngine();
         this.createDealerButton();
         this.setupButtonHandlers();
-        this.initializeAudio();
+        this.initializeAudioManager();
         this.hideActionButtons(); // Hide until player's turn
         this.hideNewGameButton(); // Hide until game over
 
@@ -220,100 +218,14 @@ export class GameTable extends Component {
     }
 
     /**
-     * Initialize audio system and load sound effects
+     * Initialize audio manager
      */
-    private initializeAudio() {
-        // Add AudioSource component to the node
-        this.audioSource = this.node.addComponent(AudioSource);
-
-        // Load check sound from resources
-        resources.load('sounds/check_one_knock', AudioClip, (err, clip) => {
-            if (err) {
-                console.error(' Failed to load check sound:', err);
-                return;
-            }
-            this.checkSoundClip = clip;
-            console.log(' Check sound loaded successfully');
-        });
-
-        // Load bet chips sound from resources
-        resources.load('sounds/bet_chips_2', AudioClip, (err, clip) => {
-            if (err) {
-                console.error(' Failed to load bet chips sound:', err);
-                return;
-            }
-            this.betChipsSoundClip = clip;
-            console.log(' Bet chips sound loaded successfully');
-        });
-
-        // Load fold sound from resources
-        resources.load('sounds/fold', AudioClip, (err, clip) => {
-            if (err) {
-                console.error(' Failed to load fold sound:', err);
-                return;
-            }
-            this.foldSoundClip = clip;
-            console.log(' Fold sound loaded successfully');
-        });
-    }
-
-    /**
-     * Ensure AudioContext is resumed (required by browsers after user gesture)
-     */
-    private ensureAudioContextResumed() {
-        if (this.audioSource) {
-            // Get the audio context and resume it if suspended
-            const audioEngine = (this.audioSource as any)._audioEngine;
-            if (audioEngine && audioEngine._audioContext) {
-                const context = audioEngine._audioContext;
-                if (context.state === 'suspended') {
-                    context.resume().then(() => {
-                        console.log(' AudioContext resumed');
-                    }).catch((err: any) => {
-                        console.error(' Failed to resume AudioContext:', err);
-                    });
-                }
-            }
-        }
-    }
-
-    /**
-     * Play the check sound effect
-     */
-    private playCheckSound() {
-        this.ensureAudioContextResumed();
-        if (this.audioSource && this.checkSoundClip) {
-            this.audioSource.playOneShot(this.checkSoundClip, 1.0);
-            console.log(' Playing check sound');
-        } else {
-            console.warn(' Check sound not available');
-        }
-    }
-
-    /**
-     * Play the bet chips sound effect
-     */
-    private playBetSound() {
-        this.ensureAudioContextResumed();
-        if (this.audioSource && this.betChipsSoundClip) {
-            this.audioSource.playOneShot(this.betChipsSoundClip, 1.0);
-            console.log(' Playing bet chips sound');
-        } else {
-            console.warn(' Bet chips sound not available');
-        }
-    }
-
-    /**
-     * Play the fold sound effect
-     */
-    private playFoldSound() {
-        this.ensureAudioContextResumed();
-        if (this.audioSource && this.foldSoundClip) {
-            this.audioSource.playOneShot(this.foldSoundClip, 1.0);
-            console.log(' Playing fold sound');
-        } else {
-            console.warn(' Fold sound not available');
-        }
+    private initializeAudioManager() {
+        // Create AudioManager as a child node
+        const audioNode = new Node('AudioManager');
+        audioNode.setParent(this.node);
+        this.audioManager = audioNode.addComponent(AudioManager);
+        this.audioManager.initialize();
     }
 
     /**
@@ -1281,20 +1193,20 @@ export class GameTable extends Component {
                 this.hidePlayerCards(playerId);
 
                 // Play fold sound
-                this.playFoldSound();
+                if (this.audioManager) this.audioManager.playFoldSound();
             } else if (action.type === 'check') {
                 // Show "Check" text
                 this.updatePlayerBetLabel(playerId, 0, 'Check');
 
                 // Play check sound
-                this.playCheckSound();
+                if (this.audioManager) this.audioManager.playCheckSound();
             } else if (action.type === 'bet' || action.type === 'call' || action.type === 'raise' || action.type === 'allin') {
                 // Update bet label to show current bet amount (bet, call, raise, all-in)
                 this.updatePlayerBetLabel(playerId, player.bet);
 
                 // Play bet chips sound for betting actions
                 console.log(`🎲 Action type: ${action.type} - attempting to play bet sound`);
-                this.playBetSound();
+                if (this.audioManager) this.audioManager.playBetSound();
             } else {
                 // Unknown action type - log it
                 console.warn(` Unknown action type: ${action.type}`);
