@@ -60,7 +60,9 @@ export class BettingRound {
 
       case 'call': {
         const toCall = this.currentBet - player.bet;
-        const amount = player.placeBet(toCall);
+        // If amount specified, use it; otherwise calculate what's needed to call
+        const callAmount = action.amount !== undefined ? action.amount : toCall;
+        const amount = player.placeBet(callAmount);
         return true;
       }
 
@@ -79,7 +81,7 @@ export class BettingRound {
         const toCall = this.currentBet - player.bet;
         const minRaiseTotal = this.currentBet + this.getMinRaise();
         const raiseAmount = Math.max(action.amount, minRaiseTotal);
-        
+
         const amount = player.placeBet(raiseAmount - player.bet);
         const newBet = player.bet;
         this.lastRaiseAmount = newBet - this.currentBet;
@@ -89,7 +91,9 @@ export class BettingRound {
       }
 
       case 'allin': {
-        const amount = player.placeBet(action.amount);
+        // If no amount specified, bet all remaining chips
+        const allinAmount = action.amount !== undefined ? action.amount : player.chips;
+        const amount = player.placeBet(allinAmount);
         if (player.bet > this.currentBet) {
           this.lastRaiseAmount = player.bet - this.currentBet;
           this.currentBet = player.bet;
@@ -112,7 +116,7 @@ export class BettingRound {
    */
   isRoundComplete(players: Player[], startingIndex: number, currentIndex: number): boolean {
     const activePlayers = players.filter(p => p.canAct());
-    
+
     // If only one player can act, round is complete
     if (activePlayers.length <= 1) {
       return true;
@@ -120,7 +124,7 @@ export class BettingRound {
 
     // Check if all active players have matched the current bet
     const allMatched = activePlayers.every(p => p.bet === this.currentBet);
-    
+
     if (!allMatched) {
       return false;
     }

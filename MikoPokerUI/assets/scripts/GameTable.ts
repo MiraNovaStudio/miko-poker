@@ -34,9 +34,6 @@ export class GameTable extends Component {
     potLabel: Label | null = null;
 
     @property(Label)
-    totalLabel: Label | null = null;
-
-    @property(Label)
     statusLabel: Label | null = null;
 
     @property(Node)
@@ -55,6 +52,9 @@ export class GameTable extends Component {
 
     @property(EditBox)
     betInput: EditBox | null = null; // For entering bet/raise amount
+
+    @property(Node)
+    newGameButton: Node | null = null; // New Game button (shown when player is eliminated)
 
     // === Card Prefab ===
 
@@ -103,11 +103,13 @@ export class GameTable extends Component {
         console.log('Middle Button:', this.middleButton ? '✅ Assigned' : '❌ Missing');
         console.log('Right Button:', this.rightButton ? '✅ Assigned' : '❌ Missing');
         console.log('Bet Input:', this.betInput ? '✅ Assigned' : '❌ Missing');
+        console.log('New Game Button:', this.newGameButton ? '✅ Assigned' : '❌ Missing');
 
         this.initializeEngine();
         this.createDealerButton();
         this.setupButtonHandlers();
         this.hideActionButtons(); // Hide until player's turn
+        this.hideNewGameButton(); // Hide until game over
 
         // Wait a frame for SlotLayoutManager to create slots
         this.scheduleOnce(() => {
@@ -223,6 +225,12 @@ export class GameTable extends Component {
      * Auto-advance the game - checks whose turn it is and either shows buttons or processes AI action
      */
     private advanceGame() {
+        // Stop if human player is eliminated
+        if (this.eliminatedPlayers.has('player')) {
+            console.log(`[HAND #${this.handCounter}] ⏸️ Player eliminated, stopping game`);
+            return;
+        }
+
         if (!this.engine || !this.engine.isHandInProgress()) {
             console.log(`[HAND #${this.handCounter}] ⏸️ No hand in progress, stopping auto-advance`);
             return;
@@ -397,7 +405,7 @@ export class GameTable extends Component {
             this.currentActivePlayer = null;
         }
 
-        // Initialize pot and total labels
+        // Initialize pot labels
         this.initializeLabels();
 
         // Clear all player status labels for new hand
@@ -436,7 +444,7 @@ export class GameTable extends Component {
     }
 
     /**
-     * Initialize pot and total labels at start of hand
+     * Initialize pot labels at start of hand
      */
     private initializeLabels() {
         // Update labels from engine state
@@ -452,25 +460,7 @@ export class GameTable extends Component {
     }
 
     /**
-     * Calculate outstanding bets from current player bets
-     */
-    private calculateOutstanding(): number {
-        if (!this.engine) return 0;
-
-        const gameState = this.engine.getGameState();
-        let outstanding = 0;
-
-        gameState.players.forEach(player => {
-            if (!player.folded && player.bet > 0) {
-                outstanding += player.bet;
-            }
-        });
-
-        return outstanding;
-    }
-
-    /**
-     * Update all pot-related labels
+     * Update pot label
      * Uses engine's pot directly for accurate display
      */
     private updateAllPotLabels() {
@@ -616,6 +606,33 @@ export class GameTable extends Component {
         if (slotNode) {
             slotNode.active = false; // Hide eliminated player's seat
         }
+
+        // Check if the human player was eliminated
+        if (playerId === 'player') {
+            console.log('💀 GAME OVER - Human player eliminated!');
+            this.onGameOver();
+        }
+    }
+
+    /**
+     * Handle game over when human player is eliminated
+     */
+    private onGameOver() {
+        console.log('🏁 GAME OVER');
+
+        // Update status message
+        if (this.statusLabel) {
+            this.statusLabel.string = '💀 GAME OVER\n\nYou ran out of chips!';
+        }
+
+        // Hide action buttons
+        this.hideActionButtons();
+
+        // Show New Game button
+        this.showNewGameButton();
+
+        // Stop the auto-advance loop
+        this.handPhase = 'idle';
     }
 
     /**
@@ -920,7 +937,7 @@ export class GameTable extends Component {
             this.updatePlayerBetLabel(playerId, player.bet, blindLabel);
         }
 
-        // Update pot and total labels
+        // Update pot label
         this.updateAllPotLabels();
     }
 
@@ -1164,7 +1181,7 @@ export class GameTable extends Component {
         // Update all chip labels (chips decrease when betting)
         this.updateAllChipLabels();
 
-        // Update pot/total labels
+        // Update pot label
         this.updateAllPotLabels();
     }
 
@@ -1203,6 +1220,13 @@ export class GameTable extends Component {
             }
         }
 
+        if (this.newGameButton) {
+            const button = this.newGameButton.getComponent(Button);
+            if (button) {
+                button.node.on(Button.EventType.CLICK, this.onNewGameButtonClick, this);
+            }
+        }
+
         console.log('✅ Button handlers set up');
     }
 
@@ -1233,6 +1257,25 @@ export class GameTable extends Component {
         if (this.rightButton) {
             this.rightButton.active = true;
             console.log('  ✅ Right button visible');
+        }
+    }
+
+    /**
+     * Hide New Game button
+     */
+    private hideNewGameButton() {
+        if (this.newGameButton) {
+            this.newGameButton.active = false;
+        }
+    }
+
+    /**
+     * Show New Game button
+     */
+    private showNewGameButton() {
+        console.log('🔄 Showing New Game button');
+        if (this.newGameButton) {
+            this.newGameButton.active = true;
         }
     }
 
@@ -1345,6 +1388,58 @@ export class GameTable extends Component {
     }
 
     /**
+     * New Game button click handler
+     */
+    private onNewGameButtonClick() {
+        console.log('🔄 Player clicked: New Game');
+
+        // Hide the new game button
+        this.hideNewGameButton();
+
+        // Reset eliminated players
+        this.eliminatedPlayers.clear();
+
+        // Reinitialize the engine with fresh chip stacks
+        this.initializeEngine();
+
+        // Clear all player slots
+        this.playerSlots.clear();
+        this.playerBetLabels.clear();
+        this.playerNameLabels.clear();
+        this.playerChipLabels.clear();
+        this.playerStatusLabels.clear();
+
+        // Reset hand counter
+        this.handCounter = 0;
+        this.handPhase = 'idle';
+
+        // Clear community cards
+        if (this.communityCardsNode) {
+            this.communityCardsNode.removeAllChildren();
+        }
+
+        // Clear all player slots from UI
+        if (this.slotLayoutManager) {
+            const slots = this.slotLayoutManager.getAllSlots();
+            slots.forEach(slot => {
+                // Clear all children except the slot marker itself
+                const children = slot.children.slice(); // Copy array
+                children.forEach(child => child.destroy());
+            });
+        }
+
+        // Update status
+        if (this.statusLabel) {
+            this.statusLabel.string = 'New Game Starting...';
+        }
+
+        // Start first hand after a brief delay
+        this.scheduleOnce(() => {
+            this.startFirstHand();
+        }, 0.5);
+    }
+
+    /**
      * Called when action is required from a player
      */
     private onActionRequired(playerId: string, validActions: string[]) {
@@ -1430,6 +1525,12 @@ export class GameTable extends Component {
 
         // Schedule next hand with 5-second delay for user to see results
         this.scheduleOnce(() => {
+            // Don't start next hand if human player is eliminated
+            if (this.eliminatedPlayers.has('player')) {
+                console.log('⏸️ Player eliminated - not starting next hand');
+                return;
+            }
+
             if (this.engine && !this.engine.isHandInProgress()) {
                 console.log('🎴 Starting next hand...');
                 this.engine.startNewHand();

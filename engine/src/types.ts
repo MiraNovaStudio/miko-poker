@@ -12,13 +12,13 @@ export interface Card {
 
 export type Street = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
 
-export type PlayerAction = 
+export type PlayerAction =
   | { type: 'fold' }
   | { type: 'check' }
-  | { type: 'call'; amount: number }
+  | { type: 'call'; amount?: number }
   | { type: 'bet'; amount: number }
   | { type: 'raise'; amount: number }
-  | { type: 'allin'; amount: number };
+  | { type: 'allin'; amount?: number };
 
 export interface HandStrength {
   category: number;      // 0=high card, 1=pair, ..., 8=straight flush

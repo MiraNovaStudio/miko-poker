@@ -286,6 +286,14 @@ export class PokerGameEngine {
         return true;
       }
 
+      // Check if all remaining players are all-in (no one can act)
+      const canActPlayers = activePlayers.filter(p => !p.allIn);
+      if (canActPlayers.length === 0 && activePlayers.length > 1) {
+        debugLog('ACTION', `🚀 All players are all-in! Auto-completing hand...`);
+        this.forceHandComplete();
+        return true;
+      }
+
       // Check if betting round is complete
       debugLog('ACTION', `Checking if betting round is complete...`);
       const isComplete = this.isBettingRoundComplete();
