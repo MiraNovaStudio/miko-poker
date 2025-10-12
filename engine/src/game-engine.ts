@@ -49,7 +49,7 @@ export interface GameResult {
 /**
  * Game events for UI integration
  */
-export type GameEvent = 
+export type GameEvent =
   | { type: 'hand_started' }
   | { type: 'cards_dealt'; playerId: string; cards: Card[] }
   | { type: 'street_changed'; street: Street; communityCards: Card[] }
@@ -72,7 +72,7 @@ export class PokerGameEngine {
   private bettingRound: BettingRound;
   private aiInstances: Map<string, PokerAI>;
   private gameMode: GameModeManager;
-  
+
   private street: Street;
   private communityCards: Card[];
   private dealerIndex: number;
@@ -101,7 +101,7 @@ export class PokerGameEngine {
     this.pot = new PotManager();
     this.bettingRound = new BettingRound(this.config.minRaise ?? 10);
     this.aiInstances = new Map();
-    
+
     // Initialize game mode manager
     const gameType = this.config.gameType ?? 'cash';
     if (gameType === 'tournament' || gameType === 'sng') {
@@ -116,7 +116,7 @@ export class PokerGameEngine {
     } else {
       this.gameMode = new GameModeManager({ type: 'cash' });
     }
-    
+
     this.players = [];
     this.communityCards = [];
     this.street = 'preflop';
@@ -142,7 +142,7 @@ export class PokerGameEngine {
     }
 
     // Get starting chips from game mode for tournaments
-    const startingChips = this.gameMode.isTournament() 
+    const startingChips = this.gameMode.isTournament()
       ? (this.gameMode.getConfig().blindStructure?.startingChips ?? this.config.startingChips)
       : this.config.startingChips;
 
@@ -219,12 +219,12 @@ export class PokerGameEngine {
 
     // Post blinds
     this.postBlinds();
-    
+
     // Set first player to act (UTG in multiplayer, dealer in heads-up)
     this.currentPlayerIndex = this.getFirstToActPreflop();
     this.bettingRoundStartPlayer = this.currentPlayerIndex;
     this.playersActedThisRound = new Set();
-    
+
     debugLog('START_ROUND', `Betting round started - First to act: ${this.currentPlayerIndex} (${this.players[this.currentPlayerIndex].id})`);
 
     this.emitEvent({ type: 'pot_updated', amount: this.pot.getTotalPot() });
@@ -238,11 +238,11 @@ export class PokerGameEngine {
    */
   processAction(playerId: string, action: PlayerAction): boolean {
     debugLog('ACTION', `───────── PROCESS ACTION START ─────────`);
-    const actionStr = action.type === 'fold' || action.type === 'check' 
-      ? action.type 
+    const actionStr = action.type === 'fold' || action.type === 'check'
+      ? action.type
       : `${action.type} $${action.amount}`;
     debugLog('ACTION', `Player: ${playerId}, Action: ${actionStr}`);
-    
+
     if (!this.handInProgress) {
       throw new Error('No hand in progress');
     }
@@ -265,20 +265,20 @@ export class PokerGameEngine {
     // Process the action
     debugLog('ACTION', `Processing action with BettingRound...`);
     const success = this.bettingRound.processAction(player, action, this.currentPlayerIndex);
-    
+
     if (success) {
       // Mark this player as having acted this round
       this.playersActedThisRound.add(this.currentPlayerIndex);
       debugLog('ACTION', `✅ Action processed successfully`);
       debugLog('ACTION', `Player ${playerId} bet is now: $${player.bet}`);
-      
+
       this.emitEvent({ type: 'player_action', playerId, action });
       this.emitEvent({ type: 'pot_updated', amount: this.getCurrentPot() });
 
       // Check if hand is over (everyone folded except one)
       const activePlayers = this.players.filter(p => !p.folded);
       debugLog('ACTION', `Active players remaining: ${activePlayers.length}`);
-      
+
       if (activePlayers.length === 1) {
         debugLog('ACTION', `🏆 Only one player left! Hand ends by fold.`);
         this.endHandByFold(activePlayers[0]);
@@ -289,7 +289,7 @@ export class PokerGameEngine {
       debugLog('ACTION', `Checking if betting round is complete...`);
       const isComplete = this.isBettingRoundComplete();
       debugLog('ACTION', `Betting round complete? ${isComplete}`);
-      
+
       if (isComplete) {
         debugLog('ACTION', `✅ Betting round COMPLETE → calling endBettingRound()`);
         this.endBettingRound();
@@ -313,11 +313,11 @@ export class PokerGameEngine {
     debugLog('ROUND_CHECK', `▶ isBettingRoundComplete() called`);
     debugLog('ROUND_CHECK', `  Starting player for this round: ${this.bettingRoundStartPlayer} (${this.players[this.bettingRoundStartPlayer]?.id})`);
     debugLog('ROUND_CHECK', `  Players who have acted: ${Array.from(this.playersActedThisRound).join(', ')}`);
-    
+
     const activePlayers = this.players.filter(p => p.canAct());
     debugLog('ROUND_CHECK', `  Active players (can act): ${activePlayers.length}`);
     debugLog('ROUND_CHECK', `  Active player IDs: ${activePlayers.map(p => p.id).join(', ')}`);
-    
+
     if (activePlayers.length === 0) {
       debugLog('ROUND_CHECK', `  ✅ No active players → round complete`);
       return true;
@@ -326,16 +326,16 @@ export class PokerGameEngine {
     // Get the highest bet among active players
     const highestBet = this.bettingRound.getCurrentBet();
     debugLog('ROUND_CHECK', `  Highest bet (currentBet): $${highestBet}`);
-    
+
     // Log each active player's bet
     activePlayers.forEach(p => {
       debugLog('ROUND_CHECK', `    ${p.id}: bet=$${p.bet}, chips=$${p.chips}`);
     });
-    
+
     // All active players must have matched the highest bet
     const allMatched = activePlayers.every(p => p.bet === highestBet);
     debugLog('ROUND_CHECK', `  All active players matched highest bet? ${allMatched}`);
-    
+
     if (!allMatched) {
       debugLog('ROUND_CHECK', `  ❌ Not all matched → round NOT complete`);
       return false;
@@ -347,9 +347,9 @@ export class PokerGameEngine {
       const playerIndex = this.players.indexOf(p);
       return this.playersActedThisRound.has(playerIndex);
     });
-    
+
     debugLog('ROUND_CHECK', `  Have all active players acted? ${allActivePlayersActed}`);
-    
+
     if (!allActivePlayersActed) {
       debugLog('ROUND_CHECK', `  ❌ Not all active players have acted yet → round NOT complete`);
       return false;
@@ -366,7 +366,7 @@ export class PokerGameEngine {
   private endBettingRound(): void {
     debugLog('END_ROUND', `═══════ END BETTING ROUND ═══════`);
     debugLog('END_ROUND', `Street: ${this.street}`);
-    
+
     // Log bets before collection
     const totalBets = this.players.reduce((sum, p) => sum + p.bet, 0);
     debugLog('END_ROUND', `Total bets to collect: $${totalBets}`);
@@ -375,21 +375,21 @@ export class PokerGameEngine {
         debugLog('END_ROUND', `  ${p.id}: $${p.bet}`);
       }
     });
-    
+
     // Collect all current bets into the pot
     const potBefore = this.pot.getTotalPot();
     this.pot.collectBetsSimple(this.players);
     const potAfter = this.pot.getTotalPot();
     debugLog('END_ROUND', `Pot: $${potBefore} → $${potAfter}`);
-    
+
     // Reset betting round state
     this.bettingRound.reset();
     debugLog('END_ROUND', `BettingRound reset()`);
-    
+
     // Reset all player bets to 0
     this.players.forEach(p => p.bet = 0);
     debugLog('END_ROUND', `All player bets reset to $0`);
-    
+
     debugLog('END_ROUND', `Advancing to next street...`);
     // Advance to next phase
     this.advanceStreet();
@@ -400,12 +400,12 @@ export class PokerGameEngine {
    */
   private advanceToNextPlayer(): void {
     const oldIndex = this.currentPlayerIndex;
-    
+
     let nextIndex = (this.currentPlayerIndex + 1) % this.players.length;
     let attempts = 0;
-    
+
     debugLog('ADVANCE', `Finding next player from index ${oldIndex}...`);
-    
+
     while (!this.players[nextIndex].canAct() && attempts < this.players.length) {
       debugLog('ADVANCE', `  Skipping ${nextIndex} (${this.players[nextIndex].id}) - can't act`);
       nextIndex = (nextIndex + 1) % this.players.length;
@@ -495,7 +495,7 @@ export class PokerGameEngine {
     this.currentPlayerIndex = this.getFirstToActPostflop();
     this.bettingRoundStartPlayer = this.currentPlayerIndex;
     this.playersActedThisRound = new Set();
-    
+
     debugLog('START_ROUND', `New betting round (${this.street}) - First to act: ${this.currentPlayerIndex} (${this.players[this.currentPlayerIndex].id})`);
   }
 
@@ -504,7 +504,7 @@ export class PokerGameEngine {
    */
   private doShowdown(): void {
     const activePlayers = this.players.filter(p => !p.folded);
-    
+
     if (activePlayers.length === 0) {
       this.handInProgress = false;
       return;
@@ -531,7 +531,7 @@ export class PokerGameEngine {
       }
     }
 
-    const winners = handsWithPlayers.filter(h => 
+    const winners = handsWithPlayers.filter(h =>
       compareHands(h.handStrength, bestHand.handStrength) === 0
     );
 
@@ -573,11 +573,11 @@ export class PokerGameEngine {
    */
   private postBlinds(): void {
     // Get blind amounts from game mode
-    const smallBlind = this.gameMode.isTournament() 
-      ? this.gameMode.getSmallBlind() 
+    const smallBlind = this.gameMode.isTournament()
+      ? this.gameMode.getSmallBlind()
       : this.config.smallBlind;
-    const bigBlind = this.gameMode.isTournament() 
-      ? this.gameMode.getBigBlind() 
+    const bigBlind = this.gameMode.isTournament()
+      ? this.gameMode.getBigBlind()
       : this.config.bigBlind;
     const ante = this.gameMode.getAnte();
 
@@ -585,42 +585,42 @@ export class PokerGameEngine {
       // Heads-up: Dealer is small blind, other is big blind
       const sbPlayer = this.players[this.dealerIndex];
       const bbPlayer = this.players[(this.dealerIndex + 1) % 2];
-      
+
       const sbAmount = sbPlayer.placeBet(smallBlind);
       this.emitEvent({ type: 'blind_posted', playerId: sbPlayer.id, amount: sbAmount });
-      
+
       // Big blind + ante if tournament
       let bbAmount = bbPlayer.placeBet(bigBlind);
       this.emitEvent({ type: 'blind_posted', playerId: bbPlayer.id, amount: bbAmount });
-      
+
       if (this.gameMode.hasBigBlindAnte()) {
         const anteAmount = bbPlayer.placeBet(ante);
         this.emitEvent({ type: 'blind_posted', playerId: bbPlayer.id, amount: anteAmount, isAnte: true });
         bbAmount += anteAmount;
       }
-      
+
       this.bettingRound.setInitialBet(bigBlind);
     } else {
       // Multiplayer: Player after dealer is small blind, next is big blind
       const sbIndex = (this.dealerIndex + 1) % this.players.length;
       const bbIndex = (this.dealerIndex + 2) % this.players.length;
-      
+
       const sbPlayer = this.players[sbIndex];
       const bbPlayer = this.players[bbIndex];
-      
+
       const sbAmount = sbPlayer.placeBet(smallBlind);
       this.emitEvent({ type: 'blind_posted', playerId: sbPlayer.id, amount: sbAmount });
-      
+
       // Big blind + ante if tournament
       let bbAmount = bbPlayer.placeBet(bigBlind);
       this.emitEvent({ type: 'blind_posted', playerId: bbPlayer.id, amount: bbAmount });
-      
+
       if (this.gameMode.hasBigBlindAnte()) {
         const anteAmount = bbPlayer.placeBet(ante);
         this.emitEvent({ type: 'blind_posted', playerId: bbPlayer.id, amount: anteAmount, isAnte: true });
         bbAmount += anteAmount;
       }
-      
+
       this.bettingRound.setInitialBet(bigBlind);
     }
   }
@@ -636,14 +636,14 @@ export class PokerGameEngine {
     } else {
       // Multiplayer: UTG (player after big blind) acts first
       let firstIndex = (this.dealerIndex + 3) % this.players.length;
-      
+
       // Find first active player
       let attempts = 0;
       while (!this.players[firstIndex].canAct() && attempts < this.players.length) {
         firstIndex = (firstIndex + 1) % this.players.length;
         attempts++;
       }
-      
+
       return firstIndex;
     }
   }
@@ -655,13 +655,13 @@ export class PokerGameEngine {
   private getFirstToActPostflop(): number {
     // First active player after dealer (small blind position in multiplayer)
     let firstIndex = (this.dealerIndex + 1) % this.players.length;
-    
+
     let attempts = 0;
     while (!this.players[firstIndex].canAct() && attempts < this.players.length) {
       firstIndex = (firstIndex + 1) % this.players.length;
       attempts++;
     }
-    
+
     return firstIndex;
   }
 
@@ -718,6 +718,14 @@ export class PokerGameEngine {
   getCurrentPot(): number {
     const currentBets = this.players.reduce((sum, p) => sum + p.bet, 0);
     return this.pot.getTotalPot() + currentBets;
+  }
+
+  /**
+   * Get side pots information (for all-in scenarios)
+   * @returns Array of side pots with amounts and eligible players
+   */
+  getSidePots(): { amount: number; eligiblePlayers: string[] }[] {
+    return this.pot.getSidePots();
   }
 
   /**

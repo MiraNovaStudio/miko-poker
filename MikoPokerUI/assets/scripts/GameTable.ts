@@ -79,8 +79,10 @@ export class GameTable extends Component {
     private playerBetLabels: Map<string, Label> = new Map(); // playerId -> bet label
     private playerNameLabels: Map<string, Label> = new Map(); // playerId -> name label
     private playerChipLabels: Map<string, Label> = new Map(); // playerId -> chip label
+    private playerStatusLabels: Map<string, Label> = new Map(); // playerId -> status label (ALL-IN, etc.)
     private dealerButtonNode: Node | null = null;
     private currentActivePlayer: string | null = null; // Track whose turn it is
+    private eliminatedPlayers: Set<string> = new Set(); // Track eliminated players
 
     // Pot tracking (proper poker logic)
     private potAmount: number = 0;        // Accumulated pot from completed rounds
@@ -112,7 +114,7 @@ export class GameTable extends Component {
         this.scheduleOnce(() => {
             console.log('=== Starting First Hand (delayed) ===');
             this.debugSlots();
-            this.startFirstHand();
+        this.startFirstHand();
         }, 0.1);
     }
 
@@ -190,7 +192,7 @@ export class GameTable extends Component {
                 console.error('Failed to load dealer button sprite', err);
                 // Fallback to text label
                 const label = this.dealerButtonNode!.addComponent(Label);
-                label.string = 'D';
+        label.string = 'D';
                 label.fontSize = 16;
                 label.color = new Color(255, 255, 255, 255);
                 return;
@@ -244,10 +246,16 @@ export class GameTable extends Component {
         console.log(`\n[HAND #${this.handCounter}] ⏳ Current turn: ${currentPlayer.id} (index ${gameState.currentPlayerIndex})`);
 
         // Check if current player has already folded or is all-in
-        if (currentPlayer.folded || currentPlayer.allIn) {
-            console.log(`  ⏭️ Player ${currentPlayer.id} can't act (folded: ${currentPlayer.folded}, all-in: ${currentPlayer.allIn})`);
-            // This shouldn't happen as the engine should skip them, but just in case
+        if (currentPlayer.folded) {
+            console.log(`  ⏭️ Player ${currentPlayer.id} folded - skipping`);
             this.scheduleOnce(() => this.advanceGame(), 0.1);
+            return;
+        }
+
+        if (currentPlayer.allIn) {
+            console.log(`  ⏭️ Player ${currentPlayer.id} is ALL-IN - skipping`);
+            this.updatePlayerStatus(currentPlayer.id, 'ALL-IN', true);
+            this.scheduleOnce(() => this.advanceGame(), 0.5);
             return;
         }
 
@@ -380,10 +388,19 @@ export class GameTable extends Component {
         // Initialize pot and total labels
         this.initializeLabels();
 
+        // Clear all player status labels for new hand
+        this.clearAllPlayerStatuses();
+
         console.log(`[HAND #${this.handCounter}] 🔄 Updating all player slots...`);
 
-        // Update all player slots BEFORE dealing cards
+        // Update all player slots BEFORE dealing cards (skip eliminated players)
         gameState.players.forEach((player, index) => {
+            // Skip eliminated players (they're already hidden)
+            if (this.eliminatedPlayers.has(player.id)) {
+                console.log(`[HAND #${this.handCounter}] ⏭️ SKIP_SLOT seat=${index} pid=${player.id} (eliminated)`);
+                return;
+            }
+
             console.log(`[HAND #${this.handCounter}] 📍 UPDATE_SLOT seat=${index} pid=${player.id}`);
             this.updatePlayerSlot(player, index);
         });
@@ -451,7 +468,22 @@ export class GameTable extends Component {
         const total = this.potAmount + this.outstandingAmount;
 
         if (this.potLabel) {
-            this.potLabel.string = `Pot: $${this.potAmount}`;
+            // Check if there are side pots
+            if (this.engine) {
+                const sidePots = this.engine.getSidePots();
+                if (sidePots && sidePots.length > 0) {
+                    // Display main pot + side pots
+                    let potText = `Main: $${this.potAmount}`;
+                    sidePots.forEach((pot: any, index: number) => {
+                        potText += ` | Side ${index + 1}: $${pot.amount}`;
+                    });
+                    this.potLabel.string = potText;
+                } else {
+                    this.potLabel.string = `Pot: $${this.potAmount}`;
+                }
+            } else {
+                this.potLabel.string = `Pot: $${this.potAmount}`;
+            }
         }
 
         if (this.totalLabel) {
@@ -542,6 +574,60 @@ export class GameTable extends Component {
     }
 
     /**
+     * Update player status label (ALL-IN, ELIMINATED, etc.)
+     */
+    private updatePlayerStatus(playerId: string, status: string, show: boolean = true) {
+        const statusLabel = this.playerStatusLabels.get(playerId);
+        if (statusLabel) {
+            statusLabel.string = status;
+            statusLabel.node.active = show;
+            if (show) {
+                console.log(`🏷️ ${playerId} status: ${status}`);
+            }
+        }
+    }
+
+    /**
+     * Clear all player status labels
+     */
+    private clearAllPlayerStatuses() {
+        this.playerStatusLabels.forEach((label, playerId) => {
+            label.string = '';
+            label.node.active = false;
+        });
+    }
+
+    /**
+     * Eliminate a player from the table
+     */
+    private eliminatePlayer(playerId: string) {
+        console.log(`[HAND #${this.handCounter}] 💀 ELIMINATING ${playerId} (out of chips)`);
+
+        this.eliminatedPlayers.add(playerId);
+        this.updatePlayerStatus(playerId, 'ELIMINATED', true);
+
+        // Optionally hide their slot completely
+        const slotNode = this.playerSlots.get(playerId);
+        if (slotNode) {
+            slotNode.active = false; // Hide eliminated player's seat
+        }
+    }
+
+    /**
+     * Check for eliminated players and remove them
+     */
+    private checkForEliminatedPlayers() {
+        if (!this.engine) return;
+
+        const gameState = this.engine.getGameState();
+        gameState.players.forEach((player: any) => {
+            if (player.chips <= 0 && !this.eliminatedPlayers.has(player.id)) {
+                this.eliminatePlayer(player.id);
+            }
+        });
+    }
+
+    /**
      * Update all player chip labels from current game state
      */
     private updateAllChipLabels() {
@@ -622,14 +708,14 @@ export class GameTable extends Component {
         // Store mapping
         this.playerSlots.set(player.id, slotNode);
 
-        // CRITICAL FIX: Preserve Cards, Overlay, and Label nodes
+        // CRITICAL FIX: Preserve Cards, Overlay, PlayerStatus, and Label nodes
         // Only destroy nodes that need refreshing (PlayerName, PlayerChips)
         const children = slotNode.children;
         console.log(`[HAND #${this.handCounter}]   🧹 SLOT_CLEANUP before: ${children.length} children:`, children.map(c => c.name).join(', '));
 
         for (let i = children.length - 1; i >= 0; i--) {
             const child = children[i];
-            const keep = (child.name === 'Label' || child.name === 'Overlay' || child.name === 'Cards');
+            const keep = (child.name === 'Label' || child.name === 'Overlay' || child.name === 'Cards' || child.name === 'PlayerStatus');
 
             if (keep) {
                 console.log(`[HAND #${this.handCounter}]     ✅ KEEP: ${child.name}`);
@@ -677,6 +763,24 @@ export class GameTable extends Component {
 
         // Store chip label reference
         this.playerChipLabels.set(player.id, chipsLabel);
+
+        // Create status label (for ALL-IN, ELIMINATED, etc.)
+        const statusNode = new Node('PlayerStatus');
+        statusNode.setParent(slotNode);
+        statusNode.setPosition(0, -90, 0); // Below chips
+
+        const statusLabel = statusNode.addComponent(Label);
+        statusLabel.string = '';
+        statusLabel.fontSize = 14;
+        statusLabel.color = new Color(255, 100, 100, 255); // Reddish for status
+        statusLabel.horizontalAlign = Label.HorizontalAlign.CENTER;
+        statusLabel.enableOutline = true;
+        statusLabel.outlineColor = new Color(0, 0, 0, 255);
+        statusLabel.outlineWidth = 1;
+        statusNode.active = false; // Hidden initially
+
+        // Store status label reference
+        this.playerStatusLabels.set(player.id, statusLabel);
 
         // Create or get Overlay container (always rendered on top)
         let overlayNode = slotNode.getChildByName('Overlay');
@@ -846,8 +950,8 @@ export class GameTable extends Component {
         let cardsNode = slotNode.getChildByName('Cards');
         if (!cardsNode) {
             cardsNode = new Node('Cards');
-            cardsNode.setParent(slotNode);
-            cardsNode.setPosition(0, 20, 0);
+        cardsNode.setParent(slotNode);
+        cardsNode.setPosition(0, 20, 0);
             cardsNode.active = true; // Ensure active
             console.log(`[HAND #${this.handCounter}] ✅ CREATED Cards container for ${playerId}`);
         } else {
@@ -1032,6 +1136,12 @@ export class GameTable extends Component {
         const player = gameState.players.find(p => p.id === playerId);
 
         if (player) {
+            // Check if player went all-in
+            if (player.allIn) {
+                this.updatePlayerStatus(playerId, 'ALL-IN', true);
+                console.log(`🔴 ${playerId} is ALL-IN!`);
+            }
+
             if (action.type === 'fold') {
                 // Show "Fold" text
                 this.updatePlayerBetLabel(playerId, 0, 'Fold');
@@ -1288,6 +1398,9 @@ export class GameTable extends Component {
 
         // Update all chip labels to show final chip counts
         this.updateAllChipLabels();
+
+        // Check for eliminated players (0 chips)
+        this.checkForEliminatedPlayers();
 
         // Flip all AI cards face-up for showdown
         this.revealAllCardsAtShowdown();
