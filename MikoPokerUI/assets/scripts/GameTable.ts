@@ -1249,18 +1249,15 @@ export class GameTable extends Component {
     private onStreetChanged(street: string, communityCards: EngineCard[]) {
         console.log(` Street: ${street.toUpperCase()} - Betting round ended, moving bets to pot`);
 
-        // Pause 2s so final bet labels remain visible, then advance UI to next street
+        // Immediately finalize and clear labels, then pause 2s before showing next street
+        // This avoids clearing new bets placed early in the next street
+        this.finalizeBettingRound();
+        this.clearAllBetLabels();
+
         this.scheduleOnce(() => {
-            // Finalize betting round: move outstanding bets to pot
-            this.finalizeBettingRound();
-
-            // Clear bet labels for new round
-            this.clearAllBetLabels();
-
             if (this.statusLabel) {
                 this.statusLabel.string = street.toUpperCase();
             }
-
             this.displayCommunityCards(communityCards);
             // Update player's hand strength label after community cards are shown
             this.updateHumanHandLabel();
