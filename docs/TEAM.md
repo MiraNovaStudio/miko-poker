@@ -109,7 +109,7 @@ GPT‑5 serves as the **UI Development Lead** and **Senior Software Engineer** d
 2. **Architecture Review (ChatGPT)**
    The Architect reviews the request, designs system flow, and defines module interfaces.
 
-3. **Implementation (Claude)**
+3. **Implementation (Claude/GPT-5)**
    Claude implements the feature and performs unit testing locally.
 
 4. **Code Review (ChatGPT)**
