@@ -707,7 +707,7 @@ export class GameTable extends Component {
 
         if (chipLabel) {
             chipLabel.isBold = true;
-            chipLabel.fontSize = 16; // Slightly larger when active
+            chipLabel.fontSize = 26; // Slightly larger than base 24 when active
         }
 
         this.currentActivePlayer = playerId;
@@ -728,7 +728,7 @@ export class GameTable extends Component {
 
         if (chipLabel) {
             chipLabel.isBold = false;
-            chipLabel.fontSize = 14; // Back to normal size
+            chipLabel.fontSize = 24; // Back to base size
         }
     }
 
@@ -804,8 +804,27 @@ export class GameTable extends Component {
 
         const chipsLabel = chipsNode.addComponent(Label);
         chipsLabel.string = `$${player.chips}`;
-        chipsLabel.fontSize = 14;
+        chipsLabel.fontSize = 24; // default chip stack font size matches bet label
+        chipsLabel.lineHeight = 28;
         chipsLabel.color = new Color(255, 255, 0, 255);
+
+        // For top-row and side seats (indices 3, 4, 5, 2, 6), place name above cards and chips below cards
+        if (seatIndex === 3 || seatIndex === 4 || seatIndex === 5 || seatIndex === 2 || seatIndex === 6) {
+            // Cards container is centered at y=20; cards height ~112, so top ~+76, bottom ~-36
+            // Place name just above cards, chips just below
+            nameNode.setPosition(0, 90, 0);
+            chipsNode.setPosition(0, -50, 0);
+            // Increase chip stack font to match bet label size
+            chipsLabel.fontSize = 24; // ensure top-row keeps size
+            chipsLabel.lineHeight = 28;
+        }
+
+        // For bottom-row seats (indices 0, 1, 7), keep name at default and move chips above cards
+        if (seatIndex === 0 || seatIndex === 1 || seatIndex === 7) {
+            chipsNode.setPosition(0, 90, 0);
+            chipsLabel.fontSize = 24;
+            chipsLabel.lineHeight = 28;
+        }
 
         // Store chip label reference
         this.playerChipLabels.set(player.id, chipsLabel);
@@ -1016,7 +1035,7 @@ export class GameTable extends Component {
         console.log(`[HAND #${this.handCounter}]   📊 BEFORE creating - active=${cardsNode.active}, children=${cardsNode.children.length}`);
 
         cards.forEach((card, index) => {
-            const xOffset = index * 35 - 17.5;
+            const xOffset = index * 50 - 25; // adjusted spacing for 80px-wide hole cards
             console.log(`[HAND #${this.handCounter}]   Creating card ${index + 1}: ${card.rank}${card.suit} at x=${xOffset}`);
             this.createCard(cardsNode!, card, xOffset, isFaceUp);
         });
@@ -1053,12 +1072,12 @@ export class GameTable extends Component {
      * @param xOffset X position offset
      * @param faceUp Whether to show face up or back
      */
-    private createCard(parent: Node, cardData: EngineCard, xOffset: number, faceUp: boolean) {
+    private createCard(parent: Node, cardData: EngineCard, xOffset: number, faceUp: boolean, sizeOverride?: { width: number; height: number }) {
         console.log(`[HAND #${this.handCounter}]  CREATE_CARD: ${cardData.rank}${cardData.suit}, x=${xOffset}, faceUp=${faceUp}`);
 
         if (!this.cardPrefab) {
             console.error(`[HAND #${this.handCounter}]    Card prefab not assigned! Using fallback.`);
-            this.createFallbackCard(parent, cardData, xOffset, faceUp);
+            this.createFallbackCard(parent, cardData, xOffset, faceUp, sizeOverride);
             return;
         }
 
@@ -1067,10 +1086,17 @@ export class GameTable extends Component {
         // Instantiate card from prefab
         const cardNode = instantiate(this.cardPrefab);
 
-        // IMPORTANT: Set card size immediately after instantiation
-        const cardTransform = cardNode.getComponent(UITransform);
-        if (cardTransform) {
-            cardTransform.setContentSize(60, 84);
+        // IMPORTANT: Set card size via Card component (ensures sprite + root transform are sized)
+        const cardComponent = cardNode.getComponent(CardComponent);
+        const width = sizeOverride?.width ?? 80;
+        const height = sizeOverride?.height ?? 112;
+        if (cardComponent) {
+            cardComponent.setSize(width, height);
+        } else {
+            const cardTransform = cardNode.getComponent(UITransform);
+            if (cardTransform) {
+                cardTransform.setContentSize(width, height);
+            }
         }
 
         cardNode.setParent(parent);
@@ -1078,7 +1104,6 @@ export class GameTable extends Component {
         cardNode.active = true; // Make sure it's active
 
         // Get Card component and set data
-        const cardComponent = cardNode.getComponent(CardComponent);
         if (cardComponent) {
             const data: CardData = {
                 rank: cardData.rank,
@@ -1098,21 +1123,23 @@ export class GameTable extends Component {
             console.log(`[HAND #${this.handCounter}]    Card node created (data will be set next frame)`);
         } else {
             console.error(`[HAND #${this.handCounter}]    Card component not found on prefab!`);
-            this.createFallbackCard(parent, cardData, xOffset, faceUp);
+            this.createFallbackCard(parent, cardData, xOffset, faceUp, sizeOverride);
         }
     }
 
     /**
      * Create a fallback card if prefab is missing
      */
-    private createFallbackCard(parent: Node, cardData: EngineCard, xOffset: number, faceUp: boolean) {
+    private createFallbackCard(parent: Node, cardData: EngineCard, xOffset: number, faceUp: boolean, sizeOverride?: { width: number; height: number }) {
         const cardNode = new Node('CardFallback');
         cardNode.setParent(parent);
         cardNode.setPosition(xOffset, 0, 0);
 
         // Add transform
         const transform = cardNode.addComponent(UITransform);
-        transform.setContentSize(60, 84);
+        const width = sizeOverride?.width ?? 80;
+        const height = sizeOverride?.height ?? 112;
+        transform.setContentSize(width, height);
 
         // Add label showing card
         const label = cardNode.addComponent(Label);
@@ -1154,13 +1181,13 @@ export class GameTable extends Component {
         console.log(` Community Cards (${cards.length}):`, cards);
 
         // Display each community card (all face-up)
-        // Cards are 60px wide, so use 70px spacing for 10px gap between cards
-        const cardSpacing = 70;
+        // Cards are 100px wide, use 116px spacing for ~16px gap between cards
+        const cardSpacing = 116;
         const startOffset = -((cards.length - 1) * cardSpacing) / 2; // Center the cards
 
         cards.forEach((card, index) => {
             const xPos = startOffset + (index * cardSpacing);
-            this.createCard(this.communityCardsNode!, card, xPos, true);
+            this.createCard(this.communityCardsNode!, card, xPos, true, { width: 100, height: 140 });
         });
     }
 
