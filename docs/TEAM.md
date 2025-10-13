@@ -30,36 +30,7 @@ Michael serves as the **Product Owner** and primary **UI Integrator** for the Mi
 
 ---
 
-## 👩‍💻 Cursor Auto (Software Development Manager)
 
-### Cursor's Team
-
-- claude (claude4-sonnet) - Senior Software Engineer
-- gpt-5 - Senior Software Engineer
-- cheetah - Software Engineer
-- code-supernova - Software Engineer
-
-
-
-## 👩‍💻 Claude (Senior Software Engineer)
-
-### **Role Summary**
-Claude is the **Senior Software Engineer** responsible for building and maintaining the MikoPoker engine and underlying systems.
-
-### **Responsibilities**
-- Implement core gameplay mechanics and backend logic for poker rounds, betting, and player states.
-- Develop unit tests to ensure the reliability and integrity of the engine.
-- Reproduce and fix bugs reported by QA.
-- Collaborate with the Architect to maintain clean, modular, and reusable code.
-- Ensure consistent code quality and adherence to established patterns.
-
-### **Tools**
-- **TypeScript**, **C++** (for engine-side code)
-- **Visual Studio Code / Sublime**
-- **Jest / Mocha** (for testing)
-- **GitHub** for source control and pull requests
-
----
 
 ## 🤖 ChatGPT (Architect / Code Reviewer)
 
@@ -78,6 +49,36 @@ ChatGPT serves as the **Software Architect** and **Principal Engineer**, respons
 - **TypeScript / Cocos Creator**
 - **Markdown / UML Diagrams**
 - **Git Diff Review / Pull Requests**
+
+---
+## 👩‍💻 Cursor Auto (Software Development Manager)
+
+### Cursor's Team
+
+- claude (claude4-sonnet) - Senior Software Engineer
+- gpt-5 - Senior Software Engineer
+- cheetah - Software Engineer
+- code-supernova - Software Engineer
+
+---
+
+## 👩‍💻 Claude (Senior Software Engineer)
+
+### **Role Summary**
+Claude is the **Senior Software Engineer** responsible for building and maintaining the MikoPoker engine and underlying systems.
+
+### **Responsibilities**
+- Implement core gameplay mechanics and backend logic for poker rounds, betting, and player states.
+- Develop unit tests to ensure the reliability and integrity of the engine.
+- Reproduce and fix bugs reported by QA.
+- Collaborate with the Architect to maintain clean, modular, and reusable code.
+- Ensure consistent code quality and adherence to established patterns.
+
+### **Tools**
+- **TypeScript**, **C++** (for engine-side code)
+- **Visual Studio Code / Sublime**
+- **Jest / Mocha** (for testing)
+- **GitHub** for source control and pull requests
 
 ---
 
