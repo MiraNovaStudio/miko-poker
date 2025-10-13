@@ -1748,6 +1748,19 @@ export class GameTable extends Component {
             console.warn('Could not set winner name labels:', e);
         }
 
+        // Highlight community cards used in the winner's hand by nudging them up
+        if ((result as any).winningHand) {
+            try {
+                const gameState = this.engine ? this.engine.getGameState() : null;
+                const winners: string[] = Array.isArray(result.winners) ? result.winners : [];
+                if (gameState && this.communityCardsNode && this.currentCommunityCards.length >= 3) {
+                    winners.forEach((winnerId) => this.highlightWinningBoardCards(winnerId));
+                }
+            } catch (err) {
+                console.warn('Failed to highlight winning board cards:', err);
+            }
+        }
+
         // Clear tracking state so next hand starts fresh
         this.currentCommunityCards = [];
         this.playerHoleCards.clear();
@@ -1811,5 +1824,113 @@ export class GameTable extends Component {
                 }
             });
         });
+    }
+
+    /**
+     * Raise community cards that participate in the winner's best hand by ~25px
+     */
+    private highlightWinningBoardCards(winnerId: string) {
+        if (!this.engine || !this.communityCardsNode) return;
+        const gameState = this.engine.getGameState();
+        const winner = gameState.players.find((p: any) => p.id === winnerId);
+        if (!winner || !winner.cards || winner.cards.length === 0) return;
+
+        const board = this.currentCommunityCards;
+        if (!board || board.length === 0) return;
+
+        const combined = [...winner.cards, ...board] as EngineCard[];
+        let hand;
+        try {
+            hand = evaluateHand(combined as any);
+        } catch {
+            return;
+        }
+
+        const boardIndicesToRaise = this.computeBoardIndicesForHand(hand, winner.cards as EngineCard[], board);
+        const raiseBy = 25;
+        const children = this.communityCardsNode.children;
+        boardIndicesToRaise.forEach((idx) => {
+            const node = children[idx];
+            if (node && node.isValid) {
+                const pos = node.getPosition();
+                node.setPosition(pos.x, pos.y + raiseBy, pos.z);
+            }
+        });
+    }
+
+    /**
+     * Compute which board cards (by index) contribute to the evaluated hand
+     */
+    private computeBoardIndicesForHand(hand: { category: number; kickers: number[] }, hole: EngineCard[], board: EngineCard[]): number[] {
+        const indices: number[] = [];
+        const rankToVal: Record<string, number> = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 };
+        const val = (r: string) => rankToVal[r];
+
+        const all = [...hole, ...board];
+
+        // Helper: flush suit if any
+        const suitCounts = new Map<string, number>();
+        all.forEach(c => suitCounts.set(c.suit, (suitCounts.get(c.suit) || 0) + 1));
+        let flushSuit: string | null = null;
+        for (const [s, ct] of suitCounts) { if (ct >= 5) { flushSuit = s; break; } }
+
+        // Highlight logic per category
+        switch (hand.category) {
+            case 8: { // Straight Flush
+                const high = hand.kickers[0];
+                const needed = this.getStraightValues(high);
+                board.forEach((c, i) => { if (c.suit === flushSuit && needed.has(val(c.rank))) indices.push(i); });
+                break;
+            }
+            case 7: { // Four of a Kind
+                const quadVal = hand.kickers[0];
+                board.forEach((c, i) => { if (val(c.rank) === quadVal) indices.push(i); });
+                break;
+            }
+            case 6: { // Full House: [trips, pair]
+                const tripsV = hand.kickers[0];
+                const pairV = hand.kickers[1];
+                board.forEach((c, i) => { const v = val(c.rank); if (v === tripsV || v === pairV) indices.push(i); });
+                break;
+            }
+            case 5: { // Flush
+                board.forEach((c, i) => { if (c.suit === flushSuit) indices.push(i); });
+                break;
+            }
+            case 4: { // Straight
+                const high = hand.kickers[0];
+                const needed = this.getStraightValues(high);
+                board.forEach((c, i) => { if (needed.has(val(c.rank))) indices.push(i); });
+                break;
+            }
+            case 3: { // Trips
+                const tripsV = hand.kickers[0];
+                board.forEach((c, i) => { if (val(c.rank) === tripsV) indices.push(i); });
+                break;
+            }
+            case 2: { // Two Pair [p1,p2,kicker]
+                const p1 = hand.kickers[0];
+                const p2 = hand.kickers[1];
+                board.forEach((c, i) => { const v = val(c.rank); if (v === p1 || v === p2) indices.push(i); });
+                break;
+            }
+            case 1: { // One Pair [pair, ...]
+                const pv = hand.kickers[0];
+                board.forEach((c, i) => { if (val(c.rank) === pv) indices.push(i); });
+                break;
+            }
+            default: {
+                // High card: no clear board highlight
+                break;
+            }
+        }
+        // De-duplicate indices
+        return Array.from(new Set(indices));
+    }
+
+    private getStraightValues(high: number): Set<number> {
+        // handle wheel straight where evaluator uses high=5
+        const seq: number[] = high === 5 ? [5, 4, 3, 2, 14] : [high, high - 1, high - 2, high - 3, high - 4];
+        return new Set(seq);
     }
 }
