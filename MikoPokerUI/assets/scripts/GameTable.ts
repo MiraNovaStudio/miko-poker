@@ -9,7 +9,7 @@ import { Card as CardComponent, type CardData } from './Card';
 import { AudioManager } from './AudioManager';
 
 // Import poker engine (from main index to get all exports)
-import { PokerGameEngine } from '../../../engine/dist/index.js';
+import { PokerGameEngine, evaluateHand, getHandName } from '../../../engine/dist/index.js';
 import type { GameEvent, Card as EngineCard, PlayerState } from '../../../engine/dist/index.js';
 
 const { ccclass, property } = _decorator;
@@ -36,6 +36,10 @@ export class GameTable extends Component {
 
     @property(Label)
     statusLabel: Label | null = null;
+
+    // Optional: UI label to display the human player's current hand strength
+    @property(Label)
+    handLabel: Label | null = null;
 
     @property(Node)
     communityCardsNode: Node | null = null;
@@ -89,6 +93,10 @@ export class GameTable extends Component {
     // Pot tracking (proper poker logic)
     private potAmount: number = 0;        // Accumulated pot from completed rounds
     private outstandingAmount: number = 0; // Current bets in progress (not yet in pot)
+
+    // Track cards for computing human player's hand strength
+    private playerHoleCards: Map<string, EngineCard[]> = new Map();
+    private currentCommunityCards: EngineCard[] = [];
 
     // DEBUG: Hand tracking and phase management
     private handCounter: number = 0;
@@ -417,6 +425,15 @@ export class GameTable extends Component {
             this.communityCardsNode.removeAllChildren();
             console.log(`[HAND #${this.handCounter}]  Cleared community cards for new hand`);
         }
+
+        // Clear hand label at start of hand
+        if (this.handLabel) {
+            this.handLabel.string = '';
+        }
+
+        // Reset hand-tracking state to avoid leaking previous board/hole cards
+        this.currentCommunityCards = [];
+        this.playerHoleCards.clear();
 
         const gameState = this.engine.getGameState();
         const sbIndex = (gameState.dealerIndex + 1) % gameState.players.length;
@@ -815,6 +832,12 @@ export class GameTable extends Component {
         // Ensure Overlay is the last child (rendered on top)
         overlayNode.setSiblingIndex(slotNode.children.length - 1);
 
+        // Rectangular layout: move top-row player name labels (seats 3,4,5) above the hole cards
+        const isRectangular = this.slotLayoutManager && (this.slotLayoutManager as any).useRectangularLayout;
+        if (isRectangular && (seatIndex === 3 || seatIndex === 4 || seatIndex === 5)) {
+            nameNode.setPosition(0, 90, 0);
+        }
+
         // Create chip overlay bar
         let chipOverlay = overlayNode.getChildByName('ChipOverlay');
         if (!chipOverlay) {
@@ -1063,6 +1086,9 @@ export class GameTable extends Component {
         console.log(`[HAND #${this.handCounter}]   Cards will be ${isFaceUp ? 'FACE-UP' : 'FACE-DOWN'}`);
         console.log(`[HAND #${this.handCounter}]   📊 BEFORE creating - active=${cardsNode.active}, children=${cardsNode.children.length}`);
 
+        // Track player's hole cards for hand evaluation
+        this.playerHoleCards.set(playerId, cards.slice());
+
         cards.forEach((card, index) => {
             const xOffset = index * 50 - 25; // adjusted spacing for 80px-wide hole cards
             console.log(`[HAND #${this.handCounter}]   Creating card ${index + 1}: ${card.rank}${card.suit} at x=${xOffset}`);
@@ -1092,6 +1118,41 @@ export class GameTable extends Component {
         }, 0.1);
 
         console.log(`[HAND #${this.handCounter}] === CARDS_DEALT complete for ${playerId} ===`);
+
+        // Update hand label for the human player after cards are dealt
+        if (playerId === 'player') {
+            this.updateHumanHandLabel();
+        }
+    }
+
+    /**
+     * Compute and display the human player's current hand strength
+     */
+    private updateHumanHandLabel() {
+        if (!this.handLabel) return;
+        const hole = this.playerHoleCards.get('player');
+        if (!hole || hole.length === 0) {
+            this.handLabel.string = '';
+            return;
+        }
+        try {
+            const cardsForEval: EngineCard[] = [...hole, ...this.currentCommunityCards];
+            // Ensure label node is visible
+            if (!this.handLabel.node.active) this.handLabel.node.active = true;
+
+            let name = '';
+            if (cardsForEval.length >= 5) {
+                const strength = evaluateHand(cardsForEval as any);
+                name = getHandName(strength);
+            } else {
+                // Preflop/turnover before 5 cards: derive simple descriptor
+                const [c1, c2] = hole;
+                name = (c1 && c2 && c1.rank === c2.rank) ? 'One Pair' : 'High Card';
+            }
+            this.handLabel.string = name;
+        } catch (err) {
+            console.warn('Failed to evaluate hand:', err);
+        }
     }
 
     /**
@@ -1198,6 +1259,8 @@ export class GameTable extends Component {
             }
 
             this.displayCommunityCards(communityCards);
+            // Update player's hand strength label after community cards are shown
+            this.updateHumanHandLabel();
         }, 2);
     }
 
@@ -1211,6 +1274,9 @@ export class GameTable extends Component {
         this.communityCardsNode.removeAllChildren();
 
         console.log(` Community Cards (${cards.length}):`, cards);
+
+        // Track current community cards for hand evaluation
+        this.currentCommunityCards = cards.slice();
 
         // Display each community card (all face-up)
         // Cards are 100px wide, use 116px spacing for ~16px gap between cards
@@ -1622,6 +1688,10 @@ export class GameTable extends Component {
         } catch (e) {
             console.warn('Could not set winner labels:', e);
         }
+
+        // Clear tracking state so next hand starts fresh
+        this.currentCommunityCards = [];
+        this.playerHoleCards.clear();
 
         // Schedule next hand with 5-second delay for user to see results
         this.scheduleOnce(() => {
