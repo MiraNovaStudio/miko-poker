@@ -85,6 +85,7 @@ export class GameTable extends Component {
     private playerNameLabels: Map<string, Label> = new Map(); // playerId -> name label
     private playerChipLabels: Map<string, Label> = new Map(); // playerId -> chip label
     private playerStatusLabels: Map<string, Label> = new Map(); // playerId -> status label (ALL-IN, etc.)
+    private playerChipOverlays: Map<string, Sprite> = new Map(); // playerId -> chip overlay sprite (for turn highlighting)
     private dealerButtonNode: Node | null = null;
     private currentActivePlayer: string | null = null; // Track whose turn it is
     private eliminatedPlayers: Set<string> = new Set(); // Track eliminated players
@@ -97,6 +98,7 @@ export class GameTable extends Component {
     // Track cards for computing human player's hand strength
     private playerHoleCards: Map<string, EngineCard[]> = new Map();
     private currentCommunityCards: EngineCard[] = [];
+    private humanFolded: boolean = false;
 
     // DEBUG: Hand tracking and phase management
     private handCounter: number = 0;
@@ -434,6 +436,7 @@ export class GameTable extends Component {
         // Reset hand-tracking state to avoid leaking previous board/hole cards
         this.currentCommunityCards = [];
         this.playerHoleCards.clear();
+        this.humanFolded = false;
 
         const gameState = this.engine.getGameState();
         const sbIndex = (gameState.dealerIndex + 1) % gameState.players.length;
@@ -723,14 +726,10 @@ export class GameTable extends Component {
         const nameLabel = this.playerNameLabels.get(playerId);
         const chipLabel = this.playerChipLabels.get(playerId);
 
-        if (nameLabel) {
-            nameLabel.isBold = true;
-            nameLabel.fontSize = 18; // Slightly larger when active
-        }
-
-        if (chipLabel) {
-            chipLabel.isBold = true;
-            chipLabel.fontSize = 26; // Slightly larger than base 24 when active
+        // Don't change name/chip label styling on turn anymore; instead tint chip overlay
+        if (this.playerChipOverlays.has(playerId)) {
+            const overlaySprite = this.playerChipOverlays.get(playerId)!;
+            overlaySprite.color = new Color(60, 181, 143, 255); // very dark green when active
         }
 
         this.currentActivePlayer = playerId;
@@ -744,14 +743,10 @@ export class GameTable extends Component {
         const nameLabel = this.playerNameLabels.get(playerId);
         const chipLabel = this.playerChipLabels.get(playerId);
 
-        if (nameLabel) {
-            nameLabel.isBold = false;
-            nameLabel.fontSize = 16; // Back to normal size
-        }
-
-        if (chipLabel) {
-            chipLabel.isBold = false;
-            chipLabel.fontSize = 24; // Back to base size
+        // Reset chip overlay tint to black when not active
+        if (this.playerChipOverlays.has(playerId)) {
+            const overlaySprite = this.playerChipOverlays.get(playerId)!;
+            overlaySprite.color = new Color(0, 0, 0, 255);
         }
     }
 
@@ -880,10 +875,15 @@ export class GameTable extends Component {
         chipsLabel.lineHeight = 30;
         chipsLabel.horizontalAlign = Label.HorizontalAlign.CENTER;
         chipsLabel.verticalAlign = Label.VerticalAlign.CENTER;
-        chipsLabel.color = new Color(255, 255, 0, 255);
+        chipsLabel.isBold = true; // always bold
+        chipsLabel.color = new Color(255, 255, 0, 255); // always yellow
 
-        // Store chip label reference
+        // Store chip label and overlay references
         this.playerChipLabels.set(player.id, chipsLabel);
+        const chipOverlaySpriteComp = chipOverlay.getComponent(Sprite);
+        if (chipOverlaySpriteComp) {
+            this.playerChipOverlays.set(player.id, chipOverlaySpriteComp);
+        }
 
         // Create status label (for ALL-IN, ELIMINATED, etc.)
         const statusNode = new Node('PlayerStatus');
@@ -946,9 +946,8 @@ export class GameTable extends Component {
         const betLabel = betNode.addComponent(Label);
         betLabel.string = '';
         betLabel.fontSize = 24;
-        betLabel.color = player.id === 'player'
-            ? new Color(255, 255, 0, 255)  // Bright yellow for human player
-            : new Color(255, 255, 255, 255); // White for AI
+        // Default bet label color: white for all players (winner styling applied at showdown)
+        betLabel.color = new Color(255, 255, 255, 255);
         betLabel.horizontalAlign = Label.HorizontalAlign.CENTER;
         betLabel.lineHeight = 40;
         // Add outline for better visibility
@@ -1130,6 +1129,10 @@ export class GameTable extends Component {
      */
     private updateHumanHandLabel() {
         if (!this.handLabel) return;
+        if (this.humanFolded) {
+            this.handLabel.string = '';
+            return;
+        }
         const hole = this.playerHoleCards.get('player');
         if (!hole || hole.length === 0) {
             this.handLabel.string = '';
@@ -1338,6 +1341,13 @@ export class GameTable extends Component {
                 // Unknown action type - log it
                 console.warn(` Unknown action type: ${action.type}`);
                 this.updatePlayerBetLabel(playerId, player.bet);
+            }
+            // If human folded, clear and stop updating hand strength label
+            if (playerId === 'player' && action.type === 'fold') {
+                this.humanFolded = true;
+                if (this.handLabel) {
+                    this.handLabel.string = '';
+                }
             }
         }
 
@@ -1677,16 +1687,68 @@ export class GameTable extends Component {
             console.log('📊 Hand Result:', statusMsg);
         }
 
-        // Clear all bet labels and mark the winner(s)
+        // Clear all bet labels
         this.clearAllBetLabels();
+        // Only show hand names on bet labels if there was an actual showdown (not a fold win)
+        if (result && result.winningHand) {
+            try {
+                const gameState = this.engine ? this.engine.getGameState() : null;
+                const players = gameState ? gameState.players : [];
+                const winnerIds: string[] = Array.isArray(result.winners) ? result.winners : [];
+
+                players.forEach((p: any) => {
+                    // Only show for showdown participants (have cards and not folded)
+                    if (!p || !p.cards || p.cards.length === 0 || p.folded) {
+                        return;
+                    }
+                    try {
+                        const strength = evaluateHand([...(p.cards as any[]), ...this.currentCommunityCards] as any);
+                        const handName = getHandName(strength);
+                        this.updatePlayerBetLabel(p.id, 0, handName);
+
+                        const betLabel = this.playerBetLabels.get(p.id);
+                        if (betLabel) {
+                            const isWinner = winnerIds.indexOf(p.id) !== -1;
+                            betLabel.isBold = isWinner;
+                            betLabel.fontSize = isWinner ? 24 : 20;
+                            betLabel.color = isWinner ? new Color(255, 255, 0, 255) : new Color(255, 255, 255, 255);
+                        }
+                    } catch (err) {
+                        console.warn('Failed to set showdown hand for', p.id, err);
+                    }
+                });
+            } catch (e) {
+                console.warn('Could not set showdown bet labels:', e);
+            }
+        }
+
+        // Temporarily set winner name labels to "* Winner *" (bold yellow) for the full showdown display duration (8s)
         try {
             const winnerIds: string[] = Array.isArray(result.winners) ? result.winners : [];
-            const winnerLabelText = 'Winner';
             winnerIds.forEach((pid) => {
-                this.updatePlayerBetLabel(pid, 0, winnerLabelText);
+                const nameLabel = this.playerNameLabels.get(pid);
+                if (!nameLabel) return;
+
+                const originalText = nameLabel.string;
+                const originalBold = nameLabel.isBold;
+                const originalColor = new Color(nameLabel.color.r, nameLabel.color.g, nameLabel.color.b, nameLabel.color.a);
+                const originalFontSize = nameLabel.fontSize;
+
+                nameLabel.string = '* Winner *';
+                nameLabel.isBold = true;
+                nameLabel.fontSize = originalFontSize;
+                nameLabel.color = new Color(255, 255, 0, 255);
+
+                this.scheduleOnce(() => {
+                    if (!nameLabel || !nameLabel.isValid) return;
+                    nameLabel.string = originalText;
+                    nameLabel.isBold = originalBold;
+                    nameLabel.fontSize = originalFontSize;
+                    nameLabel.color = originalColor;
+                }, 8);
             });
         } catch (e) {
-            console.warn('Could not set winner labels:', e);
+            console.warn('Could not set winner name labels:', e);
         }
 
         // Clear tracking state so next hand starts fresh

@@ -2,6 +2,23 @@
 
 All notable changes to the MikoPoker project will be documented in this file.
 
+## [UI 0.2.8] - 2025-10-13
+
+### Improvements
+- Stack label UX: always bold/yellow; added dark active-tint highlight on chip overlay bar to indicate turn.
+- Top/side name placement: player names moved above hole cards for seats 3–5 (rectangular) and sides (2,6).
+- Bet labels: tuned positions for top row; default color unified to white; showdown now shows hand strengths (only on real showdowns) with winner highlighted.
+- Winner display: winner’s name label briefly shows “* Winner *” in bold yellow during showdown.
+- Board position: moved community cards up by 20px for readability.
+- Hole/board sizing: hole 80x112, board 100x140 with updated spacing.
+- Card deck: switched to `deck4`.
+
+### Fixes
+- Prevented stale board from leaking into next hand’s hand-strength evaluation.
+- Human hand-strength label clears and stops updating after folding.
+- Only reveal and display hand strengths when actual showdown occurs; fold wins do not reveal AI hands.
+
+## [0.1.0] - 2025-10-13 (First Tag)
 ## [0.1.0] - 2025-10-13 (First Tag)
 
 ### Versions
