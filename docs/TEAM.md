@@ -30,7 +30,15 @@ Michael serves as the **Product Owner** and primary **UI Integrator** for the Mi
 
 ---
 
-## 👩‍💻 Claude (Senior Software Engineer)
+## 👩‍💻 Cursor Auto (Software Development Manager)
+
+### Cursor's Team
+
+- claude (claude4-sonnet) - Senior Software Engineer
+- gpt-5 - Senior Software Engineer
+- cheetah - Software Engineer
+- code-supernova - Software Engineer
+
 
 ### **Role Summary**
 Claude is the **Senior Software Engineer** responsible for building and maintaining the MikoPoker engine and underlying systems.
@@ -70,24 +78,43 @@ ChatGPT serves as the **Software Architect** and **Principal Engineer**, respons
 
 ---
 
+## 🤖 GPT‑5 (UI Lead / Senior Software Engineer)
+
+### **Role Summary**
+GPT‑5 serves as the **UI Development Lead** and **Senior Software Engineer** driving day‑to‑day implementation across the Cocos UI while Claude is bandwidth‑constrained. GPT‑5 coordinates closely with Michael, executing UI features, integrating engine events, and ensuring a cohesive player experience.
+
+### **Responsibilities**
+- Implement gameplay UI features in Cocos (cards, stacks, bet labels, HUD, dealer button, board, animations).
+- Integrate engine events (deals, actions, pot updates, street changes, hand complete) into the scene.
+- Maintain consistent UX patterns: sizing, spacing, seat layouts, readability, and highlight systems.
+- Collaborate with ChatGPT on architecture and with Claude on engine/UI contracts.
+- Author and update documentation (CHANGELOG, ROADMAP) for UI changes and versioning.
+
+### **Tools**
+- **Cocos Creator (TypeScript)**
+- **TypeScript / Engine bindings**
+- **GitHub / Markdown**
+
+---
+
 ## ⚙️ Development Workflow
 
-1. **Feature Definition (Michael)**  
+1. **Feature Definition (Michael)**
    Michael writes a clear feature request or specification.
 
-2. **Architecture Review (ChatGPT)**  
+2. **Architecture Review (ChatGPT)**
    The Architect reviews the request, designs system flow, and defines module interfaces.
 
-3. **Implementation (Claude)**  
+3. **Implementation (Claude)**
    Claude implements the feature and performs unit testing locally.
 
-4. **Code Review (ChatGPT)**  
+4. **Code Review (ChatGPT)**
    The Architect reviews code, suggests improvements, and ensures architectural compliance.
 
-5. **QA & Feedback (Michael)**  
+5. **QA & Feedback (Michael)**
    Michael tests the feature in Cocos Creator, verifies correctness, and logs issues.
 
-6. **Iteration Loop**  
+6. **Iteration Loop**
    Repeat the cycle per milestone or feature set.
 
 ---

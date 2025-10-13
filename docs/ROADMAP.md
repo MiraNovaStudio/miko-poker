@@ -83,6 +83,8 @@ Both editions emphasize play realism, configurable AI, and rich statistical trac
 **Goal:** Build functional Hold’em UI (cash + SNG) with animated chips, dealer button, pot tracking, and rounded HUD elements for player stacks.
 Includes player HUD redesign and slot indicators.
 
+**Engineering Note (Cursor Auto Switch):** Due to Claude bandwidth limits, we are actively using multiple engines via Cursor Auto, including **gpt-5** (primary) and backup models (cheetah, code-supernova). This ensures continuous development throughput across UI and Engine tasks.
+
 **Deliverable:** UI Alpha v0.3.0 — Interactive Hold’em environment.
 
 ---
