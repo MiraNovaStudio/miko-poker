@@ -122,6 +122,12 @@ export class GameTable extends Component {
         this.hideActionButtons(); // Hide until player's turn
         this.hideNewGameButton(); // Hide until game over
 
+        // Move community cards board up by ~20px
+        if (this.communityCardsNode && this.communityCardsNode.isValid) {
+            const pos = this.communityCardsNode.getPosition();
+            this.communityCardsNode.setPosition(pos.x, pos.y + 20, pos.z);
+        }
+
         // Wait a frame for SlotLayoutManager to create slots
         this.scheduleOnce(() => {
             console.log('=== Starting First Hand (delayed) ===');
@@ -797,34 +803,61 @@ export class GameTable extends Component {
         // Store name label reference
         this.playerNameLabels.set(player.id, nameLabel);
 
-        // Create chips label
-        const chipsNode = new Node('PlayerChips');
-        chipsNode.setParent(slotNode);
-        chipsNode.setPosition(0, -70, 0);
+        // Chip stack overlay bar on bottom portion of hole cards (in Overlay)
+        // Create or get Overlay container (always rendered on top)
+        let overlayNode = slotNode.getChildByName('Overlay');
+        if (!overlayNode) {
+            overlayNode = new Node('Overlay');
+            overlayNode.setParent(slotNode);
+            overlayNode.addComponent(UITransform);
+            console.log(`    🎨 Created Overlay container for ${player.id}`);
+        }
+        // Ensure Overlay is the last child (rendered on top)
+        overlayNode.setSiblingIndex(slotNode.children.length - 1);
 
-        const chipsLabel = chipsNode.addComponent(Label);
+        // Create chip overlay bar
+        let chipOverlay = overlayNode.getChildByName('ChipOverlay');
+        if (!chipOverlay) {
+            chipOverlay = new Node('ChipOverlay');
+            chipOverlay.setParent(overlayNode);
+            const chipOverlayTransform = chipOverlay.addComponent(UITransform);
+            // Wide rectangle to span both overlapped hole cards with extra padding
+            chipOverlayTransform.setContentSize(140, 36);
+
+            const chipOverlaySprite = chipOverlay.addComponent(Sprite);
+            chipOverlaySprite.sizeMode = Sprite.SizeMode.CUSTOM;
+            // Load a simple white texture and tint to semi-transparent black
+            resources.load('white/spriteFrame', SpriteFrame, (err, spriteFrame) => {
+                if (!chipOverlay || !chipOverlay.isValid) return;
+                if (!err && spriteFrame) {
+                    chipOverlaySprite.spriteFrame = spriteFrame;
+                    chipOverlaySprite.color = new Color(0, 0, 0, 255); // solid black
+                }
+            });
+        }
+        // Position the overlay to cover the lower portion of the hole cards and extend to edges
+        // Cards container is at y=20; card height=112 → bottom edge around y=-36
+        chipOverlay.setPosition(0, -18, 0);
+
+        // Create or update chips label centered on the overlay bar
+        let chipsNode = chipOverlay.getChildByName('PlayerChips');
+        if (!chipsNode) {
+            chipsNode = new Node('PlayerChips');
+            chipsNode.setParent(chipOverlay);
+            const chipsTransform = chipsNode.addComponent(UITransform);
+            chipsTransform.setContentSize(140, 36);
+            chipsNode.setPosition(0, 0, 0);
+        }
+
+        // Attach/refresh label component
+        let chipsLabel = chipsNode.getComponent(Label);
+        if (!chipsLabel) chipsLabel = chipsNode.addComponent(Label);
         chipsLabel.string = `$${player.chips}`;
-        chipsLabel.fontSize = 24; // default chip stack font size matches bet label
-        chipsLabel.lineHeight = 28;
+        chipsLabel.fontSize = 24;
+        chipsLabel.lineHeight = 30;
+        chipsLabel.horizontalAlign = Label.HorizontalAlign.CENTER;
+        chipsLabel.verticalAlign = Label.VerticalAlign.CENTER;
         chipsLabel.color = new Color(255, 255, 0, 255);
-
-        // For top-row and side seats (indices 3, 4, 5, 2, 6), place name above cards and chips below cards
-        if (seatIndex === 3 || seatIndex === 4 || seatIndex === 5 || seatIndex === 2 || seatIndex === 6) {
-            // Cards container is centered at y=20; cards height ~112, so top ~+76, bottom ~-36
-            // Place name just above cards, chips just below
-            nameNode.setPosition(0, 90, 0);
-            chipsNode.setPosition(0, -50, 0);
-            // Increase chip stack font to match bet label size
-            chipsLabel.fontSize = 24; // ensure top-row keeps size
-            chipsLabel.lineHeight = 28;
-        }
-
-        // For bottom-row seats (indices 0, 1, 7), keep name at default and move chips above cards
-        if (seatIndex === 0 || seatIndex === 1 || seatIndex === 7) {
-            chipsNode.setPosition(0, 90, 0);
-            chipsLabel.fontSize = 24;
-            chipsLabel.lineHeight = 28;
-        }
 
         // Store chip label reference
         this.playerChipLabels.set(player.id, chipsLabel);
@@ -847,17 +880,7 @@ export class GameTable extends Component {
         // Store status label reference
         this.playerStatusLabels.set(player.id, statusLabel);
 
-        // Create or get Overlay container (always rendered on top)
-        let overlayNode = slotNode.getChildByName('Overlay');
-        if (!overlayNode) {
-            overlayNode = new Node('Overlay');
-            overlayNode.setParent(slotNode);
-            overlayNode.addComponent(UITransform);
-            console.log(`    🎨 Created Overlay container for ${player.id}`);
-        }
-
-        // Ensure Overlay is the last child (rendered on top)
-        overlayNode.setSiblingIndex(slotNode.children.length - 1);
+        // Overlay container already ensured above
 
         // Calculate bet label position based on seat location
         let betLabelX = 0;
@@ -1162,17 +1185,20 @@ export class GameTable extends Component {
     private onStreetChanged(street: string, communityCards: EngineCard[]) {
         console.log(` Street: ${street.toUpperCase()} - Betting round ended, moving bets to pot`);
 
-        // Finalize betting round: move outstanding bets to pot
-        this.finalizeBettingRound();
+        // Pause 2s so final bet labels remain visible, then advance UI to next street
+        this.scheduleOnce(() => {
+            // Finalize betting round: move outstanding bets to pot
+            this.finalizeBettingRound();
 
-        // Clear bet labels for new round
-        this.clearAllBetLabels();
+            // Clear bet labels for new round
+            this.clearAllBetLabels();
 
-        if (this.statusLabel) {
-            this.statusLabel.string = street.toUpperCase();
-        }
+            if (this.statusLabel) {
+                this.statusLabel.string = street.toUpperCase();
+            }
 
-        this.displayCommunityCards(communityCards);
+            this.displayCommunityCards(communityCards);
+        }, 2);
     }
 
     /**
@@ -1566,21 +1592,35 @@ export class GameTable extends Component {
         // Check for eliminated players (0 chips)
         this.checkForEliminatedPlayers();
 
-        // Flip all AI cards face-up for showdown
-        this.revealAllCardsAtShowdown();
+        // Reveal cards only when there is a showdown (not a fold win)
+        if ((result as any).winningHand) {
+            this.revealAllCardsAtShowdown();
+        }
 
         // Display showdown results with detailed information
         if (this.statusLabel) {
             const winners = result.winners.join(', ');
 
-            // Show only winner(s) and winning hand
+            // One-line status: winners and (optional) winning hand inline
             let statusMsg = `🏆 ${winners} wins!`;
             if (result.winningHand) {
-                statusMsg += `\nWinning Hand: ${result.winningHand}`;
+                statusMsg += ` Winning Hand: ${result.winningHand}`;
             }
 
             this.statusLabel.string = statusMsg;
             console.log('📊 Hand Result:', statusMsg);
+        }
+
+        // Clear all bet labels and mark the winner(s)
+        this.clearAllBetLabels();
+        try {
+            const winnerIds: string[] = Array.isArray(result.winners) ? result.winners : [];
+            const winnerLabelText = 'Winner';
+            winnerIds.forEach((pid) => {
+                this.updatePlayerBetLabel(pid, 0, winnerLabelText);
+            });
+        } catch (e) {
+            console.warn('Could not set winner labels:', e);
         }
 
         // Schedule next hand with 5-second delay for user to see results
@@ -1600,7 +1640,7 @@ export class GameTable extends Component {
                     this.advanceGame();
                 }, 0.5);
             }
-        }, 5); // 5 second delay for showdown review
+        }, 8); // 8 second delay for showdown review
     }
 
     /**
