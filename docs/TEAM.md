@@ -40,6 +40,9 @@ Michael serves as the **Product Owner** and primary **UI Integrator** for the Mi
 - code-supernova - Software Engineer
 
 
+
+## 👩‍💻 Claude (Senior Software Engineer)
+
 ### **Role Summary**
 Claude is the **Senior Software Engineer** responsible for building and maintaining the MikoPoker engine and underlying systems.
 
