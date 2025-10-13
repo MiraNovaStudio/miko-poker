@@ -9,6 +9,10 @@ export class SceneChanger extends Component {
 
     onClick() {
         if (this.targetScene) {
+            // just needed for web browser because music won't play until
+            // there is some type of user interaction
+            (globalThis as any).first_started = 1;
+
             director.loadScene(this.targetScene);
         }
     }

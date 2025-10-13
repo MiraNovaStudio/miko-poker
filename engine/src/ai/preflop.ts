@@ -85,11 +85,15 @@ export function decidePreflopAction(
   const toCall = currentBet - playerBet;
   const canCheck = toCall === 0;
 
-  // Simple pre-flop: mostly check/fold, occasionally bet with premium hands
+  // Simple pre-flop: mostly check/fold, occasionally bet/raise with premium hands
   if (canCheck) {
-    // No bet to face - check unless premium hand
+    // Can check - no additional money to call
     if (strength > 0.75 && Math.random() < config.aggression * 0.4) {
       const betAmount = Math.min(Math.floor(playerChips * 0.15), playerChips);
+      // If there's already a bet on the table (e.g., we're BB and matched), raise instead of bet
+      if (currentBet > 0) {
+        return { type: 'raise', amount: betAmount };
+      }
       return { type: 'bet', amount: betAmount };
     }
     return { type: 'check' };

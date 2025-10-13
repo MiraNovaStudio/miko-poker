@@ -324,6 +324,8 @@ export class GameTable extends Component {
             }
 
             // Get AI decision and process it
+            // Random delay between 0.3 and 2 seconds to simulate natural thinking
+            const thinkingDelay = 0.3 + Math.random() * 1.7;
             this.scheduleOnce(() => {
                 try {
                     const action = this.engine!.getAIAction(currentPlayer.id);
@@ -335,7 +337,7 @@ export class GameTable extends Component {
                 } catch (error) {
                     console.error(` Error processing AI action:`, error);
                 }
-            }, 2.0); // 2 second delay to simulate thinking
+            }, thinkingDelay);
         }
     }
 

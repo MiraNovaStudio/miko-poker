@@ -75,19 +75,27 @@ export function decidePostflopAction(
   const shouldBluff = Math.random() < config.bluffFrequency;
 
   if (canCheck) {
-    // No bet to face - decide whether to bet or check
+    // Can check - no additional money to call
 
-    // Strong hand - value bet
+    // Strong hand - value bet/raise
     if (strength > 0.7) {
       const betSize = Math.floor(pot * (0.5 + Math.random() * 0.5)); // 50-100% pot
       const betAmount = Math.min(betSize, playerChips);
+      // If there's already a bet (e.g., we matched it), raise instead of bet
+      if (currentBet > 0) {
+        return { type: 'raise', amount: betAmount };
+      }
       return { type: 'bet', amount: betAmount };
     }
 
-    // Medium hand - sometimes bet, sometimes check
+    // Medium hand - sometimes bet/raise, sometimes check
     if (strength > 0.5) {
       if (Math.random() < config.aggression) {
         const betAmount = Math.min(Math.floor(pot * 0.5), playerChips);
+        // If there's already a bet (e.g., we matched it), raise instead of bet
+        if (currentBet > 0) {
+          return { type: 'raise', amount: betAmount };
+        }
         return { type: 'bet', amount: betAmount };
       }
       return { type: 'check' };
@@ -96,6 +104,10 @@ export function decidePostflopAction(
     // Weak hand - bluff occasionally
     if (shouldBluff && Math.random() < 0.3) {
       const betAmount = Math.min(Math.floor(pot * 0.6), playerChips);
+      // If there's already a bet (e.g., we matched it), raise instead of bet
+      if (currentBet > 0) {
+        return { type: 'raise', amount: betAmount };
+      }
       return { type: 'bet', amount: betAmount };
     }
 
