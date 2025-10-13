@@ -1,44 +1,57 @@
-# 🗺️ MikoPoker Development Roadmap
+# 🗺️ MikoPoker Development Roadmap (Updated October 2025)
 
-This roadmap defines the development milestones and strategic direction for the **MikoPoker** project.
-It ensures all team members share a unified understanding of project goals, priorities, and release phases.
+This roadmap defines the evolving milestones and strategic direction for the **MikoPoker** project.
+It ensures all contributors share a unified understanding of goals, priorities, and release phases.
 
 ---
 
 ## 🎯 Project Vision
 
-**MikoPoker** is a cross-platform poker training application designed to help players improve their real-world poker skills through AI-driven gameplay and analytics.
-Players will face lifelike opponents in authentic game formats — **Cash Games**, **Sit’n’Gos**, and **Tournaments** — using **play money only**, with deep statistical tracking to measure progress.
+**MikoPoker** is a cross-platform poker simulator and training suite that delivers authentic poker experiences with AI-driven opponents.
+It provides two versions:
+- **Lite (Free)** — Focused on *Texas Hold’em*, ideal for casual and entry-level users.
+- **Pro (Paid)** — Adds *Omaha4*, *Omaha5*, *Omaha Hi/Lo (Pot Limit)*, and *7-Card Stud*, plus analytics, player history, and full tournament modes.
 
-The app replicates the online card room experience and prepares users for playing against real people for real stakes.
+Both editions emphasize play realism, configurable AI, and rich statistical tracking to improve real-world poker understanding.
+
+---
+
+## 💎 Edition Overview
+
+| Feature | Lite (Free) | Pro (Paid) |
+|----------|--------------|------------|
+| **Game Types** | Texas Hold’em only | Hold’em, Omaha4, Omaha5, Omaha Hi/Lo, 7-Card Stud |
+| **Cash Games** | One table available | Unlimited tables, multiple limits |
+| **Sit’n’Go** | One available | All structures supported |
+| **Tournaments** | Single event | Multi-table tournament simulation |
+| **AI Difficulty Settings** | Basic (fixed speed) | Adjustable speed + advanced opponent profiles |
+| **Analytics & Player History** | ✗ | ✓ |
+| **Customization / Themes** | ✗ | ✓ |
 
 ---
 
 ## 🧠 Key Features
 
 - **Realistic Game Formats**
-  - Cash Games with continuous blinds and rebuys
-  - Sit’n’Gos with single-table elimination
-  - Multi-table Tournaments with **Big Blind Antes**
-
+  - Cash Games, Sit’n’Gos, Multi-Table Tournaments
+  - Pot Limit and No Limit betting modes
+  - Big Blind Antes (for tournaments)
+- **Extended Game Variants (Pro)**
+  - Omaha4, Omaha5, Omaha Hi/Lo Pot Limit, 7-Card Stud
 - **Adaptive AI Opponents**
-  - Configurable styles and difficulty levels
-  - Independent AI player instances
-  - Dynamic decision-making that mimics real online opponents
-
-- **Player Analytics**
-  - VPIP, PFR, Aggression Factor, Showdown Win Rate
-  - Positional stats, hand histories, and skill progression graphs
-
-- **Cross-Platform Builds**
-  - Windows (desktop)
-  - Android (mobile)
-  - iOS (via macOS + Xcode)
-
-- **Future Features**
-  - “AI Coach” mode offering strategic feedback
-  - Expanded analytics and recommendation engine
-  - Optional cloud save for account-based data storage
+  - Configurable difficulty & speed
+  - Dynamic bluffing and pattern recognition
+- **Player Analytics (Pro)**
+  - VPIP, PFR, AF, Winrate, Position stats, Leak tracking
+- **Tournament Engine**
+  - Sit’n’Go → Multi-Table scalable structure
+  - Progressive blind levels, payouts, chip stacks
+- **Cross-Platform Support**
+  - Windows, Android, iOS (via macOS/Xcode)
+- **Future Menus & Options**
+  - AI Speed (slow, normal, fast)
+  - AI Difficulty (casual → expert)
+  - Game type, variant, and seat configuration menus
 
 ---
 
@@ -46,11 +59,11 @@ The app replicates the online card room experience and prepares users for playin
 
 | Layer | Technology | Responsibility |
 |-------|-------------|----------------|
-| **Core Engine** | TypeScript | Game logic, betting, AI, hand evaluation |
-| **UI Layer** | Cocos Creator (TypeScript) | Scene management, visuals, animations |
-| **Persistence** | Local Storage / SQLite | Player stats, profiles, configurations |
-| **Analytics** | Custom Module | Player development and stat aggregation |
-| **Deployment** | Cocos Export Targets | Windows EXE, Android APK, iOS IPA |
+| **Core Engine** | TypeScript | Game logic, betting, AI, multi-variant support |
+| **UI Layer** | Cocos Creator (TypeScript) | Visual interface and menus |
+| **Persistence** | Local Storage / SQLite | Player profiles, settings, histories |
+| **Analytics** | Custom Module | Stats aggregation and visualization |
+| **Deployment** | Cocos Export | Windows EXE, Android APK, iOS IPA |
 
 ---
 
@@ -58,73 +71,58 @@ The app replicates the online card room experience and prepares users for playin
 
 ### **Phase 1 — Core Engine & Game Logic**
 **Status:** In Progress
-**Lead:** Claude
-**Goal:** Finalize the core gameplay foundation.
+**Goal:** Finalize Hold’em foundation and modularize engine for additional variants.
+**Next Additions:** Pot Limit logic, variant extensibility, tournament structure base.
 
-**Tasks**
-- [x] Implement small/big blind logic
-- [ ] Add **Big Blind Ante** for tournaments only
-- [x] Add `GameConfig` field for game type (`cash`, `sng`, `tournament`)
-- [x] Add `BlindStructure` interface for tournaments
-- [x] Modularize AI under `/src/ai/` directory
-- [x] Implement event hooks (`onBlindPosted`, `onLevelChange`, `onGameModeChanged`)
-- [x] Add automated unit tests for blind posting and betting logic
-
-**Deliverable:** Engine v0.2.0 — stable, extensible game logic ready for UI integration.
+**Deliverable:** Engine v0.2.5 — Stable core with variant-ready design.
 
 ---
 
 ### **Phase 2 — Cocos UI Integration**
-**Status:** Pending
-**Lead:** Michael (with ChatGPT architectural support)
-**Goal:** Integrate the engine into a fully functional, visual interface.
+**Status:** Active
+**Goal:** Build functional Hold’em UI (cash + SNG) with animated chips, dealer button, pot tracking, and rounded HUD elements for player stacks.
+Includes player HUD redesign and slot indicators.
 
-**Tasks**
-- [x] Build primary **Table Scene** with dealer button and blinds indicators
-- [ ] Implement **Player HUDs** showing stack size, action buttons, and timers
-- [ ] Add chip animations, bet indicators, and pot display
-- [ ] Create reusable components for cards, chips, and status messages
-- [x] Integrate engine events into the Cocos scene
-- [ ] Build an internal debug/test scene for rapid iteration
-
-**Deliverable:** UI-integrated **Alpha Build v0.3.0**
+**Deliverable:** UI Alpha v0.3.0 — Interactive Hold’em environment.
 
 ---
 
-### **Phase 3 — Multi-Platform Packaging & Analytics**
+### **Phase 3 — Sit’n’Go & Tournament Engine**
 **Status:** Upcoming
-**Lead:** Michael (builds), ChatGPT (toolchain setup)
-**Goal:** Release-ready packaging for all target platforms.
+**Goal:** Implement Sit’n’Go tournaments, then extend to Multi-Table Tournament (MTT) framework.
+Focus on table transitions, blind structures, and payout logic.
 
-**Tasks**
-- [ ] Configure Cocos Creator export for Windows, Android, and iOS
-- [ ] Set up Xcode build and signing for iOS deployment (requires macOS)
-- [ ] Implement player analytics and stat tracking systems
-- [ ] Add player profile management and data persistence
-- [ ] Perform optimization and compression for mobile builds
-- [ ] Conduct beta testing and collect feedback
-
-**Deliverable:** Cross-platform **Beta Build v0.5.0** ready for app store submission.
+**Deliverable:** Tournament Alpha v0.4.0
 
 ---
 
-## 🚀 Long-Term Goals
-- “AI Coach” system for personalized strategy feedback
-- Deep analytics module to identify leaks in player strategy
-- Recommendation engine that suggests study areas or adjustments
-- Optional cloud save for player stats and progression
-- Continued improvements to AI realism and adaptability
+### **Phase 4 — Multi-Platform Packaging & Analytics**
+**Status:** Future
+**Goal:** Package for all target platforms, implement player analytics, data persistence, and performance tuning.
+Includes AI speed/difficulty settings in menus.
+
+**Deliverable:** Cross-Platform Beta v0.5.0
+
+---
+
+### **Phase 5 — Pro Edition Expansion**
+**Status:** Long-Term
+**Goal:** Add Omaha4, Omaha5, Omaha Hi/Lo, and 7-Card Stud engines with shared evaluation core.
+Enable player history, deeper analytics, and advanced AI profiles.
+
+**Deliverable:** Pro Edition Launch v1.0.0
 
 ---
 
 ## 🧭 Version Targets
+
 | Version | Milestone | Description |
 |----------|------------|-------------|
-| **v0.2.0** | Engine Stable | Full blind/ante system, AI modularization |
-| **v0.3.0** | UI Alpha | Visual gameplay experience in Cocos |
-| **v0.5.0** | Beta Release | Multi-platform packaging + analytics |
-| **v1.0.0** | Public Launch | Fully featured single-player poker trainer |
-| **v1.5.0+** | Post-Launch | Advanced player analytics, AI coaching system, optional cloud sync (no leaderboards or multiplayer) |
+| **v0.2.5** | Engine Modular | Variant-ready Hold’em engine |
+| **v0.3.0** | UI Alpha | Visual gameplay + player HUDs |
+| **v0.4.0** | SNG/Tournament Alpha | Tournament mode prototype |
+| **v0.5.0** | Beta Release | Analytics, settings menus, cross-platform builds |
+| **v1.0.0** | Pro Launch | Multi-variant support + full analytics suite |
 
 ---
 
@@ -132,6 +130,3 @@ The app replicates the online card room experience and prepares users for playin
 - **Michael** — Product Owner / UI Integrator
 - **Claude** — Senior Software Engineer
 - **ChatGPT** — Architect / Code Reviewer
-
----
-
