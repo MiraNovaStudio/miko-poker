@@ -2,6 +2,23 @@
 
 All notable changes to the MikoPoker project will be documented in this file.
 
+## [0.1.0] - 2025-10-13 (First Tag)
+
+### Versions
+- Engine: 0.3.2
+- UI: 0.2.5
+- Main App: 0.1.0
+
+### Highlights
+- Switched card assets to `deck4`.
+- Card sizing: hole cards 80x112; board cards 100x140; enforce CUSTOM sizing after sprite loads.
+- Label layout updates:
+  - Top (ai3, ai4, ai5) and sides (ai2, ai6): player name above cards; chip stack below cards; chip font 24.
+  - Bottom (ai1, player, ai7): keep name at original; chip stack above cards; chip font 24; active chip font 26.
+  - Bet labels adjusted: top-row bet labels positioned just below chip stacks with small spacing.
+- Rectangular layout: moved top-row seats (3, 4, 5) down by ~40px for better spacing.
+- Showdown status: displays winner(s) and winning hand only (no player hand/pot amount).
+
 ## [UI] - 2025-10-11 23:30
 
 ### GameTable UI

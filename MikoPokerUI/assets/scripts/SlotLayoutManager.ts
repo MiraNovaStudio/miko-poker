@@ -98,11 +98,11 @@ export class SlotLayoutManager extends Component {
                 configs.push(
                     { position: new Vec3(0, -250, 0), rotation: 0, seatIndex: 0 },      // Seat 0: Human (bottom center)
                     { position: new Vec3(-200, -250, 0), rotation: 0, seatIndex: 1 },   // Seat 1: ai1 (bottom left)
-                    { position: new Vec3(-400, 0, 0), rotation: 90, seatIndex: 2 },     // Seat 2: ai2 (left side)
-                    { position: new Vec3(-200, 250, 0), rotation: 180, seatIndex: 3 },  // Seat 3: ai3 (top left)
-                    { position: new Vec3(0, 250, 0), rotation: 180, seatIndex: 4 },     // Seat 4: ai4 (top center)
-                    { position: new Vec3(200, 250, 0), rotation: 180, seatIndex: 5 },   // Seat 5: ai5 (top right)
-                    { position: new Vec3(400, 0, 0), rotation: 270, seatIndex: 6 },     // Seat 6: ai6 (right side)
+                    { position: new Vec3(-440, 0, 0), rotation: 90, seatIndex: 2 },     // Seat 2: ai2 (left side)
+                    { position: new Vec3(-200, 220, 0), rotation: 180, seatIndex: 3 },  // Seat 3: ai3 (top left, moved down 40px)
+                    { position: new Vec3(0, 220, 0), rotation: 180, seatIndex: 4 },     // Seat 4: ai4 (top center, moved down 40px)
+                    { position: new Vec3(200, 220, 0), rotation: 180, seatIndex: 5 },   // Seat 5: ai5 (top right, moved down 40px)
+                    { position: new Vec3(440, 0, 0), rotation: 270, seatIndex: 6 },     // Seat 6: ai6 (right side)
                     { position: new Vec3(200, -250, 0), rotation: 0, seatIndex: 7 }     // Seat 7: ai7 (bottom right)
                 );
                 break;
@@ -181,7 +181,7 @@ export class SlotLayoutManager extends Component {
         // Go clockwise (negative direction in standard math, but visually clockwise on screen)
         const startAngle = 3 * Math.PI / 2;  // 270 degrees (bottom)
         const angleStep = (2 * Math.PI) / totalSeats;
-        
+
         return startAngle - (seatIndex * angleStep);
     }
 
@@ -211,7 +211,7 @@ export class SlotLayoutManager extends Component {
         debugLabel.string = `Slot ${index}`;
         debugLabel.fontSize = 12;
         debugLabel.color = new Color(255, 255, 0, 255);
-        
+
         console.log(`✅ Created Slot ${index} at position (${config.position.x.toFixed(0)}, ${config.position.y.toFixed(0)})`);
 
         return slot;

@@ -868,7 +868,7 @@ export class GameTable extends Component {
             betLabelY = 120;
         } else if (slotPos.y > 100) {
             // Top players (slots 3, 4, 5) - place label BELOW cards/name/stack
-            betLabelY = -120; // Further down to avoid name/stack overlap
+            betLabelY = -120; // default for top; may be adjusted below per seat
         } else {
             // Side players (slots 2, 6) - place label to the side
             if (slotPos.x < 0) {
@@ -880,6 +880,12 @@ export class GameTable extends Component {
                 betLabelX = -120;
                 betLabelY = 0;
             }
+        }
+
+        // Fine-tune top-row bet labels (seats 3, 4, 5): place just below chip stack
+        if (seatIndex === 3 || seatIndex === 4 || seatIndex === 5) {
+            betLabelX = 0;
+            betLabelY = -75; // chips at -50 → small gap (~25px) below
         }
 
         // Create bet label under Overlay (initially hidden)
@@ -1566,22 +1572,11 @@ export class GameTable extends Component {
         // Display showdown results with detailed information
         if (this.statusLabel) {
             const winners = result.winners.join(', ');
-            const potAmount = result.potAmount || 0;
 
-            // Build a detailed status message
-            let statusMsg = `🏆 ${winners} wins $${potAmount}!`;
-
-            // Only show hand info if there was a showdown (not a fold win)
+            // Show only winner(s) and winning hand
+            let statusMsg = `🏆 ${winners} wins!`;
             if (result.winningHand) {
                 statusMsg += `\nWinning Hand: ${result.winningHand}`;
-
-                // If there's player hand info, show it
-                if (result.playerHand) {
-                    statusMsg += `\nYour Hand: ${result.playerHand}`;
-                }
-            } else {
-                // Win by fold - no showdown occurred
-                statusMsg += '\n(Everyone else folded)';
             }
 
             this.statusLabel.string = statusMsg;
