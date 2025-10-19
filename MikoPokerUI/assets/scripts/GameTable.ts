@@ -1754,7 +1754,10 @@ export class GameTable extends Component {
                 const gameState = this.engine ? this.engine.getGameState() : null;
                 const winners: string[] = Array.isArray(result.winners) ? result.winners : [];
                 if (gameState && this.communityCardsNode && this.currentCommunityCards.length >= 3) {
-                    winners.forEach((winnerId) => this.highlightWinningBoardCards(winnerId));
+                    winners.forEach((winnerId) => {
+                        this.highlightWinningBoardCards(winnerId);
+                        this.highlightWinningHoleCards(winnerId);
+                    });
                 }
             } catch (err) {
                 console.warn('Failed to highlight winning board cards:', err);
@@ -1932,5 +1935,112 @@ export class GameTable extends Component {
         // handle wheel straight where evaluator uses high=5
         const seq: number[] = high === 5 ? [5, 4, 3, 2, 14] : [high, high - 1, high - 2, high - 3, high - 4];
         return new Set(seq);
+    }
+
+    /**
+     * Raise winner's hole cards that contribute to best 5-card hand by ~25px
+     * Includes relevant kickers (e.g., One Pair + top kicker)
+     */
+    private highlightWinningHoleCards(winnerId: string) {
+        if (!this.engine || !this.slotLayoutManager) return;
+
+        const gameState = this.engine.getGameState();
+        const players = gameState.players;
+        const winnerIndex = players.findIndex((p: any) => p.id === winnerId);
+        if (winnerIndex < 0) return;
+
+        const winner = players[winnerIndex];
+        if (!winner || !winner.cards || winner.cards.length === 0) return;
+
+        const board = this.currentCommunityCards;
+        const hole = winner.cards as EngineCard[];
+        const combined = [...hole, ...board] as EngineCard[];
+
+        let hand: { category: number; kickers: number[] } | null = null;
+        try {
+            hand = evaluateHand(combined as any) as any;
+        } catch {
+            return;
+        }
+        if (!hand) return;
+
+        const raiseBy = 25;
+        const slot = this.slotLayoutManager.getSlot(winnerIndex);
+        if (!slot) return;
+        const cardsContainer = slot.getChildByName('Cards');
+        if (!cardsContainer) return;
+
+        // Determine which hole card ranks (and possibly suits) are part of the best hand
+        const rankToVal: Record<string, number> = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 };
+        const val = (r: string) => rankToVal[r];
+
+        // Count ranks in combined cards to detect pairs/trips/quads composition
+        const countByVal = new Map<number, number>();
+        combined.forEach(c => countByVal.set(val(c.rank), (countByVal.get(val(c.rank)) || 0) + 1));
+
+        // Helper to check if a specific card (rank/suit) is used in best hand
+        const isHoleCardUsed = (card: EngineCard): boolean => {
+            const v = val(card.rank);
+            switch (hand!.category) {
+                case 8: { // Straight Flush
+                    // Needs both rank in straight set and suit equals flush suit
+                    const suitCounts = new Map<string, number>();
+                    combined.forEach(c => suitCounts.set(c.suit, (suitCounts.get(c.suit) || 0) + 1));
+                    let flushSuit: string | null = null;
+                    for (const [s, ct] of suitCounts) { if (ct >= 5) { flushSuit = s; break; } }
+                    const needed = this.getStraightValues(hand!.kickers[0]);
+                    return card.suit === flushSuit && needed.has(v);
+                }
+                case 7: { // Four of a Kind (hand.kickers[0] is quad rank)
+                    return v === hand!.kickers[0] || (hand!.kickers.length > 1 && v === hand!.kickers[1]);
+                }
+                case 6: { // Full House [trips, pair]
+                    const tripsV = hand!.kickers[0];
+                    const pairV = hand!.kickers[1];
+                    return v === tripsV || v === pairV;
+                }
+                case 5: { // Flush
+                    const suitCounts = new Map<string, number>();
+                    combined.forEach(c => suitCounts.set(c.suit, (suitCounts.get(c.suit) || 0) + 1));
+                    let flushSuit: string | null = null;
+                    for (const [s, ct] of suitCounts) { if (ct >= 5) { flushSuit = s; break; } }
+                    return card.suit === flushSuit;
+                }
+                case 4: { // Straight
+                    const needed = this.getStraightValues(hand!.kickers[0]);
+                    return needed.has(v);
+                }
+                case 3: { // Trips (hand.kickers[0] is trips rank)
+                    return v === hand!.kickers[0];
+                }
+                case 2: { // Two Pair [p1,p2,kicker] — include kicker as it is part of best 5
+                    const p1 = hand!.kickers[0];
+                    const p2 = hand!.kickers[1];
+                    const kicker = hand!.kickers[2];
+                    return v === p1 || v === p2 || v === kicker;
+                }
+                case 1: { // One Pair [pair, kicker1, kicker2]
+                    const pairV = hand!.kickers[0];
+                    const k1 = hand!.kickers[1];
+                    const k2 = hand!.kickers[2];
+                    return v === pairV || v === k1 || v === k2;
+                }
+                default: { // High card: typically highest 5 by rank; include if among top kickers
+                    // Take top 2 hole cards if they are among top 5 ranks
+                    const sortedVals = [...combined.map(c => val(c.rank))].sort((a, b) => b - a).slice(0, 5);
+                    return sortedVals.indexOf(v) !== -1;
+                }
+            }
+        };
+
+        // Raise any hole cards that are part of the best 5-card hand
+        hole.forEach((card, idx) => {
+            if (!isHoleCardUsed(card)) return;
+            const node = cardsContainer.children[idx];
+            if (node && node.isValid) {
+                const pos = node.getPosition();
+                node.setPosition(pos.x, pos.y + raiseBy, pos.z);
+            }
+        });
     }
 }
