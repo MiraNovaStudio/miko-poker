@@ -148,6 +148,49 @@ export class PlayerSlot extends Container {
     this.cardsContainer.visible = false;
   }
 
+  /** Animate cards flying to a target position (scene coords), then hide */
+  foldCardsTo(targetX: number, targetY: number): void {
+    if (this.cardsContainer.children.length === 0) {
+      this.cardsContainer.visible = false;
+      return;
+    }
+
+    // Convert target from scene coords to this slot's local coords
+    const localTargetX = targetX - this.x;
+    const localTargetY = targetY - this.y - this.cardsContainer.y;
+
+    const cards = [...this.cardsContainer.children];
+    const startPositions = cards.map(c => ({ x: c.x, y: c.y }));
+    const startTime = performance.now();
+    const duration = 400;
+
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      const ease = t * t;
+
+      cards.forEach((card, i) => {
+        const start = startPositions[i];
+        card.x = start.x + (localTargetX - start.x) * ease;
+        card.y = start.y + (localTargetY - start.y) * ease;
+        card.alpha = 1 - ease * 0.7;
+        card.scale.set(1 - ease * 0.5);
+      });
+
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        this.cardsContainer.visible = false;
+        cards.forEach((card, i) => {
+          card.x = startPositions[i].x;
+          card.y = startPositions[i].y;
+          card.alpha = 1;
+          card.scale.set(1);
+        });
+      }
+    };
+    requestAnimationFrame(animate);
+  }
+
   showCards(): void {
     this.cardsContainer.visible = true;
   }

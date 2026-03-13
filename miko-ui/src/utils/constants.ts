@@ -74,7 +74,7 @@ export const FONTS = {
 export function getBetLabelOffset(seatIndex: number, seatPos: { x: number; y: number }): { x: number; y: number } {
   // Top-row seats: below chips
   if (seatIndex === 3 || seatIndex === 4 || seatIndex === 5) {
-    return { x: 0, y: 75 };
+    return { x: 0, y: 95 };
   }
   // Bottom players: above cards
   if (seatPos.y > 100) {
