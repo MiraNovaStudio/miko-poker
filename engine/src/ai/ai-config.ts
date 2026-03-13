@@ -41,10 +41,10 @@ export interface AIConfig {
 export const PLAYSTYLE_DEFAULTS: Record<Playstyle, AIConfig> = {
   passive: {
     playstyle: 'passive',
-    vpipThreshold: 0.35,
+    vpipThreshold: 0.45,
     aggression: 0.15,
     bluffFrequency: 0.03,
-    callThreshold: 0.2,
+    callThreshold: 0.3,
     valueBetThreshold: 0.8,
   },
   nit: {

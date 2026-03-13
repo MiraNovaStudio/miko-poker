@@ -112,3 +112,4 @@ export const GAME_CONFIG = {
   aiThinkingDelayMin: 0.3,
   aiThinkingDelayMax: 2.0,
 } as const;
+

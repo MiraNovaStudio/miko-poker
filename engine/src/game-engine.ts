@@ -859,6 +859,16 @@ export class PokerGameEngine {
   }
 
   /**
+   * Set the dealer index directly (used for deal-for-button ceremony)
+   * The next startNewHand() will advance from this position.
+   * Pass the index BEFORE the desired first dealer so that
+   * startNewHand()'s +1 rotation lands on the correct seat.
+   */
+  setDealerIndex(index: number): void {
+    this.dealerIndex = index;
+  }
+
+  /**
    * Subscribe to game events
    * @param listener Event listener function
    */

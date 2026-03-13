@@ -99,7 +99,7 @@ export function decidePreflopAction(
       return { type: 'call', amount: toCall };
     }
     // Passive players occasionally limp/call with marginal hands
-    if (config.playstyle === 'passive' && strength > config.vpipThreshold - 0.1 && Math.random() < 0.3) {
+    if (config.playstyle === 'passive' && strength > config.vpipThreshold - 0.1 && Math.random() < 0.15) {
       return { type: 'call', amount: toCall };
     }
     return { type: 'fold' };
@@ -129,8 +129,12 @@ export function decidePreflopAction(
     return { type: 'call', amount: toCall };
   }
 
-  // Marginal (vpipThreshold–0.6): call if cheap
-  if (callRatio > 0.15 && config.playstyle !== 'passive') {
+  // Marginal (vpipThreshold–0.6): call if cheap, fold if expensive
+  if (callRatio > 0.15) {
+    // Passive players have a slightly higher tolerance for calling
+    if (config.playstyle === 'passive' && callRatio <= 0.25) {
+      return { type: 'call', amount: toCall };
+    }
     return { type: 'fold' };
   }
   return { type: 'call', amount: toCall };

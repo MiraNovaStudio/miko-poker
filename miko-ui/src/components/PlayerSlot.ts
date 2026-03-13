@@ -6,6 +6,7 @@ import {
   CHIP_OVERLAY_WIDTH, CHIP_OVERLAY_HEIGHT, CHIP_OVERLAY_Y,
   COLORS, FONTS, TOP_ROW_SEATS, getBetLabelOffset,
 } from '../utils/constants.js';
+import { formatChips } from '../managers/SettingsManager.js';
 
 const CHIP_OVERLAY_RADIUS = 8;
 
@@ -25,6 +26,7 @@ export class PlayerSlot extends Container {
   private _isHighlighted = false;
   private _folded = false;
   private _foldedCards: CardData[] = [];
+  private _allIn = false;
 
   constructor(seatIndex: number, seatPos: { x: number; y: number }) {
     super();
@@ -78,7 +80,7 @@ export class PlayerSlot extends Container {
   }
 
   setChips(amount: number): void {
-    this.chipsLabel.text = `$${amount}`;
+    this.chipsLabel.text = formatChips(amount);
   }
 
   setBet(amount: number, actionText?: string): void {
@@ -91,7 +93,7 @@ export class PlayerSlot extends Container {
       this.betLabel.visible = true;
     } else if (amount > 0) {
       this.betLabel.style.fill = COLORS.yellow;
-      this.betLabel.text = `$${amount}`;
+      this.betLabel.text = formatChips(amount);
       this.betLabel.visible = true;
     } else {
       this.betLabel.text = '';
@@ -127,6 +129,19 @@ export class PlayerSlot extends Container {
   clearStatus(): void {
     this.statusLabel.text = '';
     this.statusLabel.visible = false;
+  }
+
+  /** Show "ALL IN" in bold red inside the chip overlay, replacing the chip count */
+  showAllIn(): void {
+    this._allIn = true;
+    this.chipsLabel.text = 'ALL IN';
+    this.chipsLabel.style.fill = COLORS.statusRed;
+  }
+
+  /** Restore chip label to normal yellow style */
+  clearAllIn(): void {
+    this._allIn = false;
+    this.chipsLabel.style.fill = (FONTS.chipStack as { fill: number }).fill;
   }
 
   /** Deal hole cards. faceUp = true only for human player. */
@@ -254,6 +269,84 @@ export class PlayerSlot extends Container {
     this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
   }
 
+  /** Show an animated "BUTTON" label over the cards area */
+  showButtonLabel(duration = 3000): void {
+    this.hideWinnerLabel();
+
+    this.winnerLabel = new Text({
+      text: 'BUTTON',
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 42,
+        fontWeight: 'bold',
+        fill: COLORS.yellow,
+        stroke: { color: COLORS.black, width: 3 },
+      } as TextStyleOptions,
+    });
+    this.winnerLabel.anchor.set(0.5);
+    this.winnerLabel.y = -20;
+    this.winnerLabel.scale.set(0);
+    this.winnerLabel.alpha = 0;
+    this.addChild(this.winnerLabel);
+
+    const startTime = performance.now();
+    const animDuration = 300;
+    const label = this.winnerLabel;
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / animDuration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      const overshoot = t < 1 ? 1 + 0.3 * Math.sin(t * Math.PI) : 1;
+      label.scale.set(ease * overshoot);
+      label.alpha = ease;
+      if (t < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+
+    this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
+  }
+
+  /** Show an animated "KNOCKED OUT" label over the cards area */
+  showKnockedOutLabel(duration = 7000): void {
+    this.hideWinnerLabel();
+
+    this.winnerLabel = new Text({
+      text: 'KNOCKED OUT',
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 32,
+        fontWeight: 'bold',
+        fill: 0xff4444,
+        stroke: { color: COLORS.black, width: 3 },
+      } as TextStyleOptions,
+    });
+    this.winnerLabel.anchor.set(0.5);
+    this.winnerLabel.y = -20;
+    this.winnerLabel.scale.set(0);
+    this.winnerLabel.alpha = 0;
+    this.addChild(this.winnerLabel);
+
+    // Animate: shake + scale up
+    const startTime = performance.now();
+    const animDuration = 500;
+    const label = this.winnerLabel;
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / animDuration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      label.scale.set(ease);
+      label.alpha = ease;
+      // Shake effect during animation
+      if (t < 0.8) {
+        label.x = (Math.random() - 0.5) * 6 * (1 - t);
+      } else {
+        label.x = 0;
+      }
+      if (t < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+
+    this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
+  }
+
   hideWinnerLabel(): void {
     if (this.winnerTimer) {
       clearTimeout(this.winnerTimer);
@@ -271,6 +364,7 @@ export class PlayerSlot extends Container {
     this.clearCards();
     this.clearBet();
     this.clearStatus();
+    this.clearAllIn();
     this.highlight(false);
     this.hideWinnerLabel();
     this._folded = false;
@@ -322,11 +416,11 @@ export class PlayerSlot extends Container {
       // Ease-out quad for a smooth deceleration
       const ease = 1 - (1 - t) * (1 - t);
       const current = Math.round(from + (to - from) * ease);
-      label.text = `$${current}`;
+      label.text = formatChips(current);
       if (t < 1) {
         requestAnimationFrame(animate);
       } else {
-        label.text = `$${to}`;
+        label.text = formatChips(to);
       }
     };
     requestAnimationFrame(animate);

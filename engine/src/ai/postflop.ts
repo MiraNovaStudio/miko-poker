@@ -137,9 +137,12 @@ export function decidePostflopAction(
 
   // Above call threshold — call based on pot odds
   if (strength > config.callThreshold) {
-    // Passive players call almost everything above their threshold
+    // Passive players are more willing to call but still fold to big bets
     if (config.playstyle === 'passive') {
-      return { type: 'call', amount: toCall };
+      if (callRatio < 0.7 || Math.random() < 0.4) {
+        return { type: 'call', amount: toCall };
+      }
+      return { type: 'fold' };
     }
     // Others check pot odds
     if (callRatio < 0.5 || Math.random() < 0.6) {

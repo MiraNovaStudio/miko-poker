@@ -4,7 +4,7 @@
  * Engine code is NOT modified; only UI calls change.
  */
 
-import { PokerGameEngine, evaluateHand, getHandName } from '@engine/index.js';
+import { PokerGameEngine, evaluateHand, getHandName, Deck } from '@engine/index.js';
 import type { GameEvent, GameResult, Card as EngineCard, PlayerState } from '@engine/index.js';
 
 import { SlotLayout } from '../components/SlotLayout.js';
@@ -14,7 +14,7 @@ import { DealerButton } from '../components/DealerButton.js';
 import { StatusBar } from '../components/StatusBar.js';
 import { ActionBar } from '../components/ActionBar.js';
 import { AudioManager } from './AudioManager.js';
-import { SettingsManager } from './SettingsManager.js';
+import { SettingsManager, formatChips } from './SettingsManager.js';
 import { Card } from '../components/Card.js';
 import { PLAYER_ROSTER, pickNewPlayer, type RosterEntry } from '../data/player-roster.js';
 import { Text, Container, type TextStyleOptions } from 'pixi.js';
@@ -52,6 +52,11 @@ export class GameManager {
   private humanFolded = false;
   private streetJustChanged = false;
 
+  // All-in runout sequencing
+  private allInRunout = false;
+  private streetQueue: { street: string; cards: EngineCard[] }[] = [];
+  private pendingHandResult: GameResult | null = null;
+
   // New Game callback (set externally to show/hide new game button)
   onGameOver: (() => void) | null = null;
   onNewGameReady: (() => void) | null = null;
@@ -78,13 +83,16 @@ export class GameManager {
       () => this.onFold(),
     );
 
-    // Refresh UI when settings change (deck type or player name)
+    // Refresh UI when settings change (deck type, player name, chip display)
     SettingsManager.instance.onChange(() => {
       this.refreshAllCards();
       // Update player display name live
       this.displayNameById.set('player', SettingsManager.instance.playerName);
       const slot = this.slotLayout.getSlot(0);
       if (slot) slot.setPlayerName(SettingsManager.instance.playerName);
+      // Refresh chip labels and pot when chip display mode changes
+      this.updateAllChipLabels();
+      this.updatePotLabel();
     });
   }
 
@@ -172,8 +180,96 @@ export class GameManager {
 
   private startFirstHand(): void {
     if (!this.engine) return;
-    this.engine.startNewHand();
-    setTimeout(() => this.advanceGame(), 500);
+    this.dealForButton();
+  }
+
+  // ─── Deal for Button ────────────────────────────────────────
+
+  private static readonly RANK_VALUE: Record<string, number> = {
+    '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
+    '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14,
+  };
+  private static readonly SUIT_VALUE: Record<string, number> = {
+    clubs: 0, diamonds: 1, hearts: 2, spades: 3,
+  };
+
+  /** Deal one card face-up to each player; highest card gets the button. */
+  private dealForButton(): void {
+    const deck = new Deck();
+    const numPlayers = this.playerIdBySeat.length;
+    const dealtCards: EngineCard[] = [];
+
+    // Deal one card per seat
+    for (let i = 0; i < numPlayers; i++) {
+      dealtCards.push(deck.deal());
+    }
+
+    // Set up all slots with names and chips first
+    this.playerIdBySeat.forEach((pid, idx) => {
+      const slot = this.slotLayout.getSlot(idx);
+      if (!slot) return;
+      slot.resetForNewHand();
+      slot.setPlayerName(this.getDisplayName(pid));
+      slot.setChips(GAME_CONFIG.startingChips);
+      slot.visible = true;
+    });
+
+    this.statusBar.setStatus('Dealing for the button...');
+    this.statusBar.setPot('');
+    this.statusBar.setHand('');
+
+    // Stagger dealing: show each card with a small delay
+    const dealDelay = 300; // ms between each player's card
+    dealtCards.forEach((card, idx) => {
+      setTimeout(() => {
+        const slot = this.slotLayout.getSlot(idx);
+        if (!slot) return;
+        slot.dealCards([{ rank: card.rank, suit: card.suit }], true);
+        this.audioManager.playFoldSound();
+      }, idx * dealDelay);
+    });
+
+    // After all cards are dealt, determine the winner
+    const revealTime = numPlayers * dealDelay + 1500;
+    setTimeout(() => {
+      // Find the highest card (rank first, then suit: spades > hearts > diamonds > clubs)
+      let winnerIdx = 0;
+      let bestRank = GameManager.RANK_VALUE[dealtCards[0].rank];
+      let bestSuit = GameManager.SUIT_VALUE[dealtCards[0].suit];
+
+      for (let i = 1; i < numPlayers; i++) {
+        const rank = GameManager.RANK_VALUE[dealtCards[i].rank];
+        const suit = GameManager.SUIT_VALUE[dealtCards[i].suit];
+        if (rank > bestRank || (rank === bestRank && suit > bestSuit)) {
+          winnerIdx = i;
+          bestRank = rank;
+          bestSuit = suit;
+        }
+      }
+
+      const winnerName = this.getDisplayName(this.playerIdBySeat[winnerIdx]);
+      const winCard = dealtCards[winnerIdx];
+      this.statusBar.setStatus(
+        `${winnerName} has the high card (${winCard.rank} of ${winCard.suit}) — dealing!`
+      );
+
+      // Show BUTTON animation on the winner's slot
+      const winnerSlot = this.slotLayout.getSlot(winnerIdx);
+      if (winnerSlot) winnerSlot.showButtonLabel(3000);
+
+      // Set dealer index so startNewHand()'s +1 rotation lands on the winner
+      // startNewHand does: dealerIndex = (dealerIndex + 1) % numPlayers
+      // So we set it to (winnerIdx - 1 + numPlayers) % numPlayers
+      const prevIdx = (winnerIdx - 1 + numPlayers) % numPlayers;
+      this.engine!.setDealerIndex(prevIdx);
+
+      // After the BUTTON label has shown, clear and start the real hand
+      setTimeout(() => {
+        this.slotLayout.getAllSlots().forEach(s => s.resetForNewHand());
+        this.engine!.startNewHand();
+        setTimeout(() => this.advanceGame(), 500);
+      }, 3000);
+    }, revealTime);
   }
 
   // ─── Game Loop ─────────────────────────────────────────────
@@ -200,7 +296,15 @@ export class GameManager {
     const canActPlayers = activePlayers.filter((p: PlayerState) => !p.allIn);
 
     if (canActPlayers.length === 0 && activePlayers.length > 1) {
-      this.engine.forceHandComplete();
+      // Engine normally auto-calls forceHandComplete() inside processAction,
+      // but if we reach here, trigger it manually with runout sequencing.
+      if (!this.allInRunout) {
+        this.revealAllCardsAtShowdown();
+        this.allInRunout = true;
+        this.streetQueue = [];
+        this.pendingHandResult = null;
+        this.engine.forceHandComplete();
+      }
       return;
     }
 
@@ -212,7 +316,7 @@ export class GameManager {
       return;
     }
     if (currentPlayer.allIn) {
-      this.getSlotForPlayer(currentPlayer.id)?.setStatus('ALL-IN', true);
+      this.getSlotForPlayer(currentPlayer.id)?.showAllIn();
       setTimeout(() => this.advanceGame(), 500);
       return;
     }
@@ -332,14 +436,7 @@ export class GameManager {
   }
 
   private onBlindPosted(playerId: string, amount: number): void {
-    let label: string;
-    if (amount === GAME_CONFIG.smallBlind) {
-      label = `SB $${amount}`;
-    } else if (amount === GAME_CONFIG.bigBlind) {
-      label = `BB $${amount}`;
-    } else {
-      label = `$${amount}`;
-    }
+    const label = formatChips(amount);
 
     const slot = this.getSlotForPlayer(playerId);
     if (slot) {
@@ -375,6 +472,12 @@ export class GameManager {
   }
 
   private onStreetChanged(street: string, cards: EngineCard[]): void {
+    // During all-in runout, queue events for sequential replay
+    if (this.allInRunout) {
+      this.streetQueue.push({ street, cards: cards.slice() });
+      return;
+    }
+
     this.streetJustChanged = true;
     this.updatePotLabel();
 
@@ -394,9 +497,50 @@ export class GameManager {
     }, 1500);
   }
 
+  /** Replay queued street_changed events with delays between each street */
+  private processStreetQueue(): void {
+    const queue = this.streetQueue;
+    if (queue.length === 0) {
+      // No new streets (all-in on river) — process hand result immediately
+      if (this.pendingHandResult) {
+        const result = this.pendingHandResult;
+        this.allInRunout = false;
+        this.pendingHandResult = null;
+        this.onHandComplete(result);
+      }
+      return;
+    }
+
+    const streetDelay = 2000; // 2s between each street reveal
+
+    // Clear bets before the runout starts
+    this.slotLayout.getAllSlots().forEach(s => s.clearBet());
+
+    queue.forEach((item, idx) => {
+      setTimeout(() => {
+        this.statusBar.setStatus(item.street.toUpperCase());
+        this.currentCommunityCards = item.cards.slice();
+        this.communityCards.display(
+          item.cards.map(c => ({ rank: c.rank, suit: c.suit })),
+        );
+        this.updateHumanHandLabel();
+
+        // After the last street is revealed, process hand completion
+        if (idx === queue.length - 1 && this.pendingHandResult) {
+          setTimeout(() => {
+            const result = this.pendingHandResult!;
+            this.allInRunout = false;
+            this.pendingHandResult = null;
+            this.onHandComplete(result);
+          }, streetDelay);
+        }
+      }, (idx + 1) * streetDelay); // +1 so first street has a pause too
+    });
+  }
+
   private onPlayerAction(playerId: string, action: { type: string; amount?: number }): void {
     const displayName = this.getDisplayName(playerId);
-    const actionText = `${displayName} ${action.type}${action.amount ? ` $${action.amount}` : ''}`;
+    const actionText = `${displayName} ${action.type}${action.amount ? ` ${formatChips(action.amount)}` : ''}`;
     this.statusBar.setStatus(actionText);
 
     if (!this.engine) return;
@@ -405,9 +549,9 @@ export class GameManager {
     const slot = this.getSlotForPlayer(playerId);
     if (!player || !slot) return;
 
-    // Update status if all-in
+    // Update chip overlay if all-in
     if (player.allIn) {
-      slot.setStatus('ALL-IN', true);
+      slot.showAllIn();
     }
 
     // Update bet label and play sound
@@ -432,9 +576,32 @@ export class GameManager {
     // Update all chip labels
     this.updateAllChipLabels();
     this.updatePotLabel();
+
+    // Detect all-in condition: engine will auto-call forceHandComplete() inside
+    // processAction, so street_changed events are about to fire synchronously.
+    // Set allInRunout BEFORE those events arrive.
+    if (!this.allInRunout && this.engine) {
+      const gs = this.engine.getGameState();
+      const active = gs.players.filter((p: PlayerState) => !p.folded);
+      const canAct = active.filter((p: PlayerState) => !p.allIn);
+      if (canAct.length === 0 && active.length > 1) {
+        this.revealAllCardsAtShowdown();
+        this.allInRunout = true;
+        this.streetQueue = [];
+        this.pendingHandResult = null;
+      }
+    }
   }
 
   private onHandComplete(result: GameResult): void {
+    // During all-in runout, defer until board is fully revealed
+    if (this.allInRunout && !this.pendingHandResult) {
+      this.pendingHandResult = result;
+      // Kick off sequential board reveal (called once, after all events are queued)
+      setTimeout(() => this.processStreetQueue(), 0);
+      return;
+    }
+
     this.handPhase = 'showdown';
     this.actionBar.hide();
 
@@ -478,7 +645,7 @@ export class GameManager {
 
     // Display winner status with pot amount and full hand
     const winners = result.winners.map(id => this.getDisplayName(id)).join(', ');
-    let statusMsg = `${winners} wins $${result.potAmount}!`;
+    let statusMsg = `${winners} wins ${formatChips(result.potAmount)}!`;
     if (result.winningHand && this.engine) {
       const handDesc = this.getWinningHandDescription(result.winners[0]);
       statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
@@ -496,12 +663,13 @@ export class GameManager {
     // Animate pot flying to winner's stack (chips update on arrival)
     this.animatePotToWinners(result.winners, preWinChips, postWinChips);
 
-    // Highlight winning cards (raise them up)
+    // Highlight winning cards (raise them up) and dim non-winning cards
     if (result.winningHand) {
       result.winners.forEach(wid => {
         this.highlightWinningBoardCards(wid);
         this.highlightWinningHoleCards(wid);
       });
+      this.dimNonWinningCards(result.winners);
     }
 
     // Clear tracking state
@@ -593,13 +761,13 @@ export class GameManager {
     const sidePots = this.engine.getSidePots();
 
     if (sidePots && sidePots.length > 0) {
-      let text = `Main: $${enginePot}`;
+      let text = `Main: ${formatChips(enginePot)}`;
       sidePots.forEach((pot: { amount: number }, i: number) => {
-        text += ` | Side ${i + 1}: $${pot.amount}`;
+        text += ` | Side ${i + 1}: ${formatChips(pot.amount)}`;
       });
       this.statusBar.setPot(text);
     } else {
-      this.statusBar.setPot(`Pot: $${enginePot}`);
+      this.statusBar.setPot(`Pot: ${formatChips(enginePot)}`);
     }
   }
 
@@ -712,7 +880,7 @@ export class GameManager {
 
         const slot = this.getSlotForPlayer(player.id);
         if (slot) {
-          slot.setStatus('ELIMINATED', true);
+          slot.showKnockedOutLabel(7000);
         }
 
         if (player.id === 'player') {
@@ -1046,6 +1214,63 @@ export class GameManager {
       const slotCards = slot.children[0]; // cardsContainer is first child
       if (slotCards && slotCards.children[idx]) {
         slotCards.children[idx].y += raiseBy;
+      }
+    });
+  }
+
+  /** Dim all cards not part of the winning hand to 85% opacity */
+  private dimNonWinningCards(winnerIds: string[]): void {
+    if (!this.engine) return;
+    const gameState = this.engine.getGameState();
+    const board = this.currentCommunityCards;
+    const winnerSet = new Set(winnerIds);
+    const DIM_ALPHA = 0.25;
+
+    // Collect board indices used by any winner
+    const usedBoardIndices = new Set<number>();
+    for (const wid of winnerIds) {
+      const winner = gameState.players.find(p => p.id === wid);
+      if (!winner?.cards?.length || !board.length) continue;
+      const combined = [...(winner.cards as EngineCard[]), ...board];
+      try {
+        const hand = evaluateHand(combined as EngineCard[]) as { category: number; kickers: number[] };
+        const indices = this.computeBoardIndicesForHand(hand, winner.cards as EngineCard[], board);
+        indices.forEach(i => usedBoardIndices.add(i));
+      } catch { /* skip */ }
+    }
+
+    // Dim board cards not used in winning hand
+    board.forEach((_, idx) => {
+      if (usedBoardIndices.has(idx)) return;
+      const card = this.communityCards.children[idx];
+      if (card) card.alpha = 1 - DIM_ALPHA;
+    });
+
+    // Dim losing players' hole cards and winner's unused hole cards
+    gameState.players.forEach((player, seatIdx) => {
+      if (!player.cards || player.cards.length === 0 || player.folded) return;
+      const slot = this.slotLayout.getSlot(seatIdx);
+      if (!slot) return;
+      const slotCards = slot.children[0]; // cardsContainer
+      if (!slotCards) return;
+
+      if (!winnerSet.has(player.id)) {
+        // Losing player — dim all hole cards
+        slotCards.children.forEach(c => { c.alpha = 1 - DIM_ALPHA; });
+      } else {
+        // Winner — dim only unused hole cards
+        const hole = player.cards as EngineCard[];
+        const combined = [...hole, ...board];
+        try {
+          const hand = evaluateHand(combined as EngineCard[]) as { category: number; kickers: number[] };
+          hole.forEach((card, idx) => {
+            if (!this.isHoleCardUsed(card, hand, combined)) {
+              if (slotCards.children[idx]) {
+                slotCards.children[idx].alpha = 1 - DIM_ALPHA;
+              }
+            }
+          });
+        } catch { /* skip */ }
       }
     });
   }
