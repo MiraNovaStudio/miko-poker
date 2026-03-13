@@ -189,7 +189,7 @@ export class Card extends Container {
     const color = SUIT_COLORS[suit] ?? 0x000000;
     const suitSymbol = SUIT_SYMBOLS[suit] ?? '?';
     const r = Math.max(CARD_RADIUS * (w / 80), 3);
-    const pad = w * 0.08;
+    const pad = w * 0.07;
 
     // Draw card background
     this.unicodeBg.clear();
@@ -198,31 +198,33 @@ export class Card extends Container {
     this.unicodeBg.roundRect(-w / 2, -h / 2, w, h, r);
     this.unicodeBg.stroke({ color: CARD_BORDER, width: 1 });
 
-    // Scale font sizes relative to card dimensions
-    const rankSize = Math.round(h * 0.22);
-    const suitSmallSize = Math.round(h * 0.16);
-    const suitLargeSize = Math.round(h * 0.42);
+    // Scale font sizes — big bold rank, massive center suit
+    const rankSize = Math.round(h * 0.26);
+    const suitSmallSize = Math.round(h * 0.15);
+    const suitLargeSize = Math.round(h * 0.6);
 
-    // Rank label (top-left corner)
+    // Rank label (top-left corner, bold)
     this.rankLabel.style.fontSize = rankSize;
     this.rankLabel.style.fill = color;
     this.rankLabel.text = this.cardData.rank;
     this.rankLabel.x = -w / 2 + pad;
-    this.rankLabel.y = -h / 2 + pad * 0.5;
+    this.rankLabel.y = -h / 2 + pad * 0.4;
 
-    // Small suit symbol (below rank)
+    // Small suit symbol (below rank, top-left)
     this.suitSmallLabel.style.fontSize = suitSmallSize;
     this.suitSmallLabel.style.fill = color;
     this.suitSmallLabel.text = suitSymbol;
-    this.suitSmallLabel.x = -w / 2 + pad;
-    this.suitSmallLabel.y = this.rankLabel.y + rankSize * 0.85;
+    this.suitSmallLabel.anchor.set(0.5, 0);
+    this.suitSmallLabel.x = this.rankLabel.x + rankSize * 0.3;
+    this.suitSmallLabel.y = this.rankLabel.y + rankSize * 0.9;
 
-    // Large suit symbol (bottom-right)
+    // Massive center suit symbol — dominates the card like ACR
     this.suitLargeLabel.style.fontSize = suitLargeSize;
     this.suitLargeLabel.style.fill = color;
     this.suitLargeLabel.text = suitSymbol;
-    this.suitLargeLabel.x = w / 2 - pad;
-    this.suitLargeLabel.y = h / 2 - pad * 0.3;
+    this.suitLargeLabel.anchor.set(0.5, 0.5);
+    this.suitLargeLabel.x = w * 0.08;
+    this.suitLargeLabel.y = h * 0.08;
   }
 
   private drawUnicodeBack(): void {
