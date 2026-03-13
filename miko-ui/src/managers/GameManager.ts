@@ -61,6 +61,9 @@ export class GameManager {
   private streetQueue: { street: string; cards: EngineCard[] }[] = [];
   private pendingHandResult: GameResult | null = null;
 
+  // Side pot tracking: snapshot chips at hand start for accurate winnings
+  private handStartChips: Map<string, number> = new Map();
+
   // New Game callback (set externally to show/hide game-over modal)
   onGameOver: ((message?: string) => void) | null = null;
 
@@ -549,6 +552,10 @@ export class GameManager {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
 
+    // Snapshot chips at hand start for accurate per-player winnings later
+    this.handStartChips.clear();
+    gameState.players.forEach(p => this.handStartChips.set(p.id, p.chips));
+
     // Update all player slots
     gameState.players.forEach((player, index) => {
       if (this.eliminatedPlayers.has(player.id)) {
@@ -768,32 +775,46 @@ export class GameManager {
     // Clear bets but do NOT update chip labels yet — wait for pot animation
     this.slotLayout.getAllSlots().forEach(s => s.clearBet());
 
-    // Snapshot chip amounts: engine has already updated, so derive pre-win from post-win
+    // Compute actual per-player winnings using chip deltas from hand start.
+    // Engine's awardPots() has already distributed chips correctly per pot layer.
     const postWinChips = new Map<string, number>();
     const preWinChips = new Map<string, number>();
+    const perPlayerWinnings = new Map<string, number>();
     if (this.engine) {
       const gameState = this.engine.getGameState();
-      const potPerWinner = Math.floor(result.potAmount / result.winners.length);
 
       // Capture post-win chips for ALL players
       gameState.players.forEach(p => {
         postWinChips.set(p.id, p.chips);
       });
 
-      // Calculate pre-win chips for winners
-      for (const pid of result.winners) {
-        const postChips = postWinChips.get(pid) ?? 0;
-        preWinChips.set(pid, postChips - potPerWinner);
+      // Compute pre-win and winnings from hand start snapshot
+      for (const p of gameState.players) {
+        const startChips = this.handStartChips.get(p.id) ?? p.chips;
+        const endChips = p.chips;
+        // preWin = what they had after committing bets but before receiving winnings
+        // = startChips - totalBet
+        const preWin = startChips - p.totalBet;
+        preWinChips.set(p.id, preWin);
+
+        // Winnings = endChips - preWin (can be 0 for losers, positive for winners)
+        const winnings = endChips - preWin;
+        if (winnings > 0) {
+          perPlayerWinnings.set(p.id, winnings);
+        }
       }
     }
 
-    // Show pre-win chip amounts for winners, current amounts for others
+    // Show pre-win chip amounts for players who won something, current for others
     this.slotLayout.getAllSlots().forEach((slot, idx) => {
       const pid = this.playerIdBySeat[idx];
       if (!pid) return;
-      const pre = preWinChips.get(pid);
-      const post = postWinChips.get(pid);
-      slot.setChips(pre !== undefined ? pre : (post ?? 0));
+      const winnings = perPlayerWinnings.get(pid);
+      if (winnings && winnings > 0) {
+        slot.setChips(preWinChips.get(pid) ?? (postWinChips.get(pid) ?? 0));
+      } else {
+        slot.setChips(postWinChips.get(pid) ?? 0);
+      }
     });
 
     this.checkForEliminatedPlayers();
@@ -803,9 +824,16 @@ export class GameManager {
       this.revealAllCardsAtShowdown();
     }
 
-    // Display winner status with pot amount and full hand
-    const winners = result.winners.map(id => this.getDisplayName(id)).join(', ');
-    let statusMsg = `${winners} wins ${formatChips(result.potAmount)}!`;
+    // Build status message showing per-player winnings
+    const actualWinnerIds = Array.from(perPlayerWinnings.keys());
+    const winnerParts: string[] = [];
+    for (const pid of actualWinnerIds) {
+      const amt = perPlayerWinnings.get(pid) ?? 0;
+      winnerParts.push(`${this.getDisplayName(pid)} wins ${formatChips(amt)}`);
+    }
+    let statusMsg = winnerParts.length > 0
+      ? winnerParts.join(', ')
+      : `${result.winners.map(id => this.getDisplayName(id)).join(', ')} wins ${formatChips(result.potAmount)}!`;
     if (result.winningHand && this.engine) {
       const handDesc = this.getWinningHandDescription(result.winners[0]);
       statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
@@ -818,11 +846,12 @@ export class GameManager {
       this.showShowdownHandNames(result.winners);
     }
 
-    // Highlight winner names temporarily
-    this.highlightWinnerNames(result.winners);
+    // Highlight winner names temporarily (all players who received winnings)
+    const allWinners = actualWinnerIds.length > 0 ? actualWinnerIds : result.winners;
+    this.highlightWinnerNames(allWinners);
 
-    // Animate pot flying to winner's stack (chips update on arrival)
-    this.animatePotToWinners(result.winners, preWinChips, postWinChips);
+    // Animate pot flying to each winner's stack (chips update on arrival)
+    this.animatePotToWinners(allWinners, preWinChips, postWinChips, perPlayerWinnings);
 
     // Highlight winning cards (raise them up) and dim non-winning cards
     if (result.winningHand) {
@@ -960,15 +989,60 @@ export class GameManager {
     return this.slotLayout.getSlot(seat);
   }
 
+  /**
+   * Compute layered side pots from player totalBet values.
+   * Returns array of pots: first is main pot, rest are side pots.
+   * Each pot has amount and list of eligible (non-folded) player IDs.
+   */
+  private computeSidePots(players: PlayerState[]): { amount: number; eligible: string[] }[] {
+    const contributors = players
+      .filter(p => p.totalBet > 0)
+      .sort((a, b) => a.totalBet - b.totalBet);
+
+    if (contributors.length === 0) return [];
+
+    // Deduplicate contribution levels
+    const levels: number[] = [];
+    for (const p of contributors) {
+      if (levels.length === 0 || levels[levels.length - 1] !== p.totalBet) {
+        levels.push(p.totalBet);
+      }
+    }
+
+    const pots: { amount: number; eligible: string[] }[] = [];
+    let previousLevel = 0;
+
+    for (const level of levels) {
+      const increment = level - previousLevel;
+      if (increment <= 0) continue;
+
+      const numContributors = contributors.filter(p => p.totalBet >= level).length;
+      const potAmount = increment * numContributors;
+      const eligible = contributors
+        .filter(p => p.totalBet >= level && !p.folded)
+        .map(p => p.id);
+
+      pots.push({ amount: potAmount, eligible });
+      previousLevel = level;
+    }
+
+    return pots;
+  }
+
   private updatePotLabel(): void {
     if (!this.engine) return;
     const totalPot = this.engine.getCurrentPot();
-    const sidePots = this.engine.getSidePots();
+    const gameState = this.engine.getGameState();
 
-    if (sidePots && sidePots.length > 0) {
+    // Compute side pots from player totalBet + current street bets
+    const pots = this.computeSidePots(gameState.players);
+
+    if (pots.length > 1) {
       let text = `Pot: ${formatChips(totalPot)}`;
-      sidePots.forEach((pot: { amount: number }, i: number) => {
-        text += `\nSP${i + 1}: ${formatChips(pot.amount)}`;
+      // First pot is main pot, rest are side pots
+      pots.forEach((pot, i) => {
+        if (i === 0) return; // main pot already shown in total
+        text += `  SP${i}: ${formatChips(pot.amount)}`;
       });
       this.statusBar.setPot(text);
     } else {
@@ -1352,10 +1426,14 @@ export class GameManager {
     });
   }
 
-  /** Animate the pot label flying to each winner's chip stack, then pulse and count up */
-  private animatePotToWinners(winnerIds: string[], preWinChips: Map<string, number>, postWinChips: Map<string, number>): void {
+  /** Animate per-player winnings flying from pot to each winner's chip stack */
+  private animatePotToWinners(
+    winnerIds: string[],
+    preWinChips: Map<string, number>,
+    postWinChips: Map<string, number>,
+    perPlayerWinnings?: Map<string, number>,
+  ): void {
     const potPos = this.statusBar.getPotLabelScenePosition();
-    const potText = this.statusBar.getPotText();
     const scene = this.statusBar.parent;
     if (!scene) return;
 
@@ -1370,9 +1448,13 @@ export class GameManager {
       const targetX = slot.x;
       const targetY = slot.y + CHIP_OVERLAY_Y;
 
+      // Show per-player winnings amount on the floating label
+      const winAmount = perPlayerWinnings?.get(pid) ?? 0;
+      const labelText = winAmount > 0 ? `+${formatChips(winAmount)}` : this.statusBar.getPotText();
+
       // Create a floating pot text clone
       const floatingText = new Text({
-        text: potText,
+        text: labelText,
         style: FONTS.potLabel as TextStyleOptions,
       });
       floatingText.anchor.set(0.5);
@@ -1380,8 +1462,8 @@ export class GameManager {
       floatingText.y = potPos.y;
       scene.addChild(floatingText);
 
-      // Stagger multiple winners slightly
-      const delay = idx * 300;
+      // Stagger multiple winners
+      const delay = idx * 600;
 
       setTimeout(() => {
         const startX = floatingText.x;
