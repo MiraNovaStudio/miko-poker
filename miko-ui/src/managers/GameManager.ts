@@ -670,8 +670,15 @@ export class GameManager {
       } as TextStyleOptions,
     });
     label.anchor.set(0.5);
-    label.x = slot.x + betLabelPos.x;
-    label.y = slot.y + betLabelPos.y;
+    // Side seats (ai2=2, ai6=6): position under name label instead of at bet label
+    const seatIdx = slot.seatIndex;
+    if (seatIdx === 2 || seatIdx === 6) {
+      label.x = slot.x;
+      label.y = slot.y + 70; // below name label at y=50
+    } else {
+      label.x = slot.x + betLabelPos.x;
+      label.y = slot.y + betLabelPos.y;
+    }
     label.alpha = 0;
     label.scale.set(0.5);
     scene.addChild(label);
