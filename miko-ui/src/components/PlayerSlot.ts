@@ -97,6 +97,10 @@ export class PlayerSlot extends Container {
     }
   }
 
+  getBetLabelPosition(): { x: number; y: number } {
+    return { x: this.betLabel.x, y: this.betLabel.y };
+  }
+
   setBetColor(color: number): void {
     this.betLabel.style.fill = color;
   }
