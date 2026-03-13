@@ -31,9 +31,26 @@ export function evaluatePostflopHand(
   if (allCards.length < 5) return 0.3;
 
   const hand = evaluateHand(allCards);
-  let strength = hand.category / 8;
+
+  // Map hand categories to a spread that reflects how strong they actually are.
+  // Most showdown hands are high-card/pair/two-pair, so we need granularity there.
+  const categoryStrength: Record<number, number> = {
+    0: 0.10,  // high card
+    1: 0.30,  // one pair
+    2: 0.50,  // two pair
+    3: 0.65,  // three of a kind
+    4: 0.75,  // straight
+    5: 0.80,  // flush
+    6: 0.88,  // full house
+    7: 0.95,  // four of a kind
+    8: 1.00,  // straight flush
+  };
+
+  let strength = categoryStrength[hand.category] ?? hand.category / 8;
+
+  // Add kicker bonus within the category (up to +0.08)
   if (hand.kickers.length > 0) {
-    strength = Math.min(1, strength + (hand.kickers[0] / 14) * 0.1);
+    strength = Math.min(1, strength + (hand.kickers[0] / 14) * 0.08);
   }
   return strength;
 }
@@ -53,9 +70,10 @@ export function decidePostflopAction(
 
   // --- Can check (no bet to face) ---
   if (canCheck) {
-    // Value bet with strong hands
+    // Strong hands (two pair+) — everyone bets these most of the time
     if (strength > config.valueBetThreshold) {
-      if (Math.random() < config.aggression) {
+      const betChance = Math.max(config.aggression, 0.6); // at least 60% even for passives
+      if (Math.random() < betChance) {
         const betSize = Math.floor(pot * (0.5 + Math.random() * 0.5));
         const amount = Math.min(betSize, playerChips);
         return currentBet > 0
@@ -64,16 +82,21 @@ export function decidePostflopAction(
       }
     }
 
-    // Medium hands — aggressive players bet, others check
-    if (strength > 0.4 && Math.random() < config.aggression * 0.5) {
-      const amount = Math.min(Math.floor(pot * 0.4), playerChips);
-      return currentBet > 0
-        ? { type: 'raise', amount }
-        : { type: 'bet', amount };
+    // Made hands (pair+) — bet sometimes, even passives should bet top pair
+    if (strength > 0.28) {
+      // Passives bet ~35% with made hands, sharks/maniacs much more
+      const betChance = config.playstyle === 'passive' ? 0.35 : config.aggression;
+      if (Math.random() < betChance) {
+        const betSize = Math.floor(pot * (0.3 + Math.random() * 0.4));
+        const amount = Math.min(betSize, playerChips);
+        return currentBet > 0
+          ? { type: 'raise', amount }
+          : { type: 'bet', amount };
+      }
     }
 
     // Bluff with weak hands
-    if (shouldBluff && strength < 0.3) {
+    if (shouldBluff && strength < 0.2) {
       const amount = Math.min(Math.floor(pot * (0.5 + Math.random() * 0.3)), playerChips);
       return currentBet > 0
         ? { type: 'raise', amount }
