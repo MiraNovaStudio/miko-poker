@@ -83,6 +83,15 @@ async function init() {
       updateDeckButtons();
     });
 
+    // Player name input
+    const nameInput = document.getElementById('player-name') as HTMLInputElement | null;
+    if (nameInput) {
+      nameInput.value = settings.playerName;
+      nameInput.addEventListener('input', () => {
+        settings.playerName = nameInput.value;
+      });
+    }
+
     // Sync button state with saved preference on load
     updateDeckButtons();
   }

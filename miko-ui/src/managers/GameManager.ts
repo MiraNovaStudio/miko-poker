@@ -78,8 +78,14 @@ export class GameManager {
       () => this.onFold(),
     );
 
-    // Refresh all cards when deck type changes
-    SettingsManager.instance.onChange(() => this.refreshAllCards());
+    // Refresh UI when settings change (deck type or player name)
+    SettingsManager.instance.onChange(() => {
+      this.refreshAllCards();
+      // Update player display name live
+      this.displayNameById.set('player', SettingsManager.instance.playerName);
+      const slot = this.slotLayout.getSlot(0);
+      if (slot) slot.setPlayerName(SettingsManager.instance.playerName);
+    });
   }
 
   // ─── Public API ────────────────────────────────────────────
@@ -134,7 +140,7 @@ export class GameManager {
     const initialRoster = shuffled.slice(0, 7);
 
     this.playerIdBySeat = ['player'];
-    this.displayNameById.set('player', 'You');
+    this.displayNameById.set('player', SettingsManager.instance.playerName);
     this.usedRosterNames.clear();
 
     for (let i = 0; i < 7; i++) {
