@@ -154,7 +154,7 @@ export class PlayerSlot extends Container {
       text: 'WINNER!',
       style: {
         fontFamily: 'Arial',
-        fontSize: 28,
+        fontSize: 42,
         fontWeight: 'bold',
         fill: COLORS.yellow,
         stroke: { color: COLORS.black, width: 3 },
@@ -204,6 +204,31 @@ export class PlayerSlot extends Container {
     this.highlight(false);
     this.hideWinnerLabel();
     this.cardsContainer.visible = true;
+  }
+
+  /** Pulse the chip overlay to indicate chips received */
+  pulseChipOverlay(): void {
+    const startTime = performance.now();
+    const pulseDuration = 600;
+    const overlay = this.chipOverlay;
+    const label = this.chipsLabel;
+    const originalScaleX = overlay.scale.x;
+    const originalScaleY = overlay.scale.y;
+
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / pulseDuration, 1);
+      // Pulse: scale up then back down
+      const pulse = 1 + 0.3 * Math.sin(t * Math.PI);
+      overlay.scale.set(originalScaleX * pulse, originalScaleY * pulse);
+      label.scale.set(pulse);
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        overlay.scale.set(originalScaleX, originalScaleY);
+        label.scale.set(1);
+      }
+    };
+    requestAnimationFrame(animate);
   }
 
   // --- Internal ---

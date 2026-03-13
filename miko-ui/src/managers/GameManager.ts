@@ -14,7 +14,8 @@ import { StatusBar } from '../components/StatusBar.js';
 import { ActionBar } from '../components/ActionBar.js';
 import { Card } from '../components/Card.js';
 import { AudioManager } from './AudioManager.js';
-import { GAME_CONFIG, SEAT_POSITIONS } from '../utils/constants.js';
+import { Text, type TextStyleOptions } from 'pixi.js';
+import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS } from '../utils/constants.js';
 
 type HandPhase = 'idle' | 'starting' | 'dealing' | 'betting' | 'showdown';
 
@@ -400,6 +401,9 @@ export class GameManager {
     // Highlight winner names temporarily
     this.highlightWinnerNames(result.winners);
 
+    // Animate pot flying to winner's stack
+    this.animatePotToWinners(result.winners);
+
     // Highlight winning cards (raise them up)
     if (result.winningHand) {
       result.winners.forEach(wid => {
@@ -583,6 +587,69 @@ export class GameManager {
       const slot = this.getSlotForPlayer(pid);
       if (!slot) return;
       slot.showWinnerLabel(8000);
+    });
+  }
+
+  /** Animate the pot label flying to each winner's chip stack, then pulse it */
+  private animatePotToWinners(winnerIds: string[]): void {
+    const potPos = this.statusBar.getPotLabelScenePosition();
+    const potText = this.statusBar.getPotText();
+    const scene = this.statusBar.parent;
+    if (!scene) return;
+
+    winnerIds.forEach((pid, idx) => {
+      const slot = this.getSlotForPlayer(pid);
+      if (!slot) return;
+
+      // Target: center of the chip overlay in scene coords
+      const targetX = slot.x;
+      const targetY = slot.y + CHIP_OVERLAY_Y;
+
+      // Create a floating pot text clone
+      const floatingText = new Text({
+        text: potText,
+        style: FONTS.potLabel as TextStyleOptions,
+      });
+      floatingText.anchor.set(0.5);
+      floatingText.x = potPos.x;
+      floatingText.y = potPos.y;
+      scene.addChild(floatingText);
+
+      // Stagger multiple winners slightly
+      const delay = idx * 200;
+
+      setTimeout(() => {
+        const startX = floatingText.x;
+        const startY = floatingText.y;
+        const startTime = performance.now();
+        const flyDuration = 800;
+
+        const animate = (now: number) => {
+          const t = Math.min((now - startTime) / flyDuration, 1);
+          // Ease-in-out cubic
+          const ease = t < 0.5
+            ? 4 * t * t * t
+            : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+          floatingText.x = startX + (targetX - startX) * ease;
+          floatingText.y = startY + (targetY - startY) * ease;
+          // Shrink slightly as it arrives
+          floatingText.scale.set(1 - 0.3 * ease);
+          floatingText.alpha = 1 - 0.2 * ease;
+
+          if (t < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            // Remove the floating text
+            scene.removeChild(floatingText);
+            floatingText.destroy();
+            // Pulse the winner's chip overlay and update chips
+            slot.pulseChipOverlay();
+            this.updateAllChipLabels();
+          }
+        };
+        requestAnimationFrame(animate);
+      }, delay);
     });
   }
 

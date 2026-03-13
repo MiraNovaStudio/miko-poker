@@ -43,4 +43,16 @@ export class StatusBar extends Container {
   setHand(text: string): void {
     this.handLabel.text = text;
   }
+
+  /** Return the pot label's position relative to StatusBar's parent (scene coords) */
+  getPotLabelScenePosition(): { x: number; y: number } {
+    return {
+      x: this.x + this.potLabel.x,
+      y: this.y + this.potLabel.y,
+    };
+  }
+
+  getPotText(): string {
+    return this.potLabel.text;
+  }
 }
