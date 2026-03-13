@@ -759,6 +759,20 @@ export class GameManager {
           this.deferredReplacements = stillWaiting;
         }
 
+        // Check if player is last one standing (all AI eliminated, none incoming)
+        const activeAI = this.playerIdBySeat.filter(
+          id => id !== 'player' && !this.eliminatedPlayers.has(id)
+        );
+        const noReplacements = this.pendingReplacements.length === 0
+          && this.deferredReplacements.length === 0;
+        if (activeAI.length === 0 && noReplacements) {
+          this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
+          this.actionBar.hide();
+          this.handPhase = 'idle';
+          this.onGameOver?.('You eliminated all opponents!');
+          return;
+        }
+
         // Apply pending with slide-in animation, then start hand
         if (this.pendingReplacements.length > 0) {
           this.applyPendingReplacementsAnimated(() => {
