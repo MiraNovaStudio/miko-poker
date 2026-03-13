@@ -7,73 +7,64 @@ A professional Texas Hold'em poker game built with a clean separation between ga
 MikoPoker consists of two main components:
 
 1. **Engine** (`engine/`) - Pure TypeScript poker game logic (UI-agnostic)
-2. **UI** (`MikoPokerUI/`) - Cocos Creator UI that calls the engine
+2. **UI** (`miko-ui/`) - PixiJS v8 browser-based UI with Vite
 
 ## Quick Start
 
-### Build the Engine
+### Install Dependencies
 
 ```bash
-cd engine
 npm install
-npm run build
-npm test
 ```
 
-### Open the UI
+### Development
 
-1. Open Cocos Creator
-2. Open the `MikoPokerUI` project
-3. The GameController script is ready in `assets/scripts/`
+```bash
+npm run dev          # Vite dev server on http://localhost:3000
+```
+
+### Production Build & Serve
+
+```bash
+npm run build        # builds engine → UI → deploys to public/
+npm run serve        # serves public/ on http://localhost:9001
+```
+
+### Run Tests
+
+```bash
+npm test             # engine unit tests
+```
 
 ## Features
 
-### ✅ Complete Poker Engine
+### Complete Poker Engine
 
-- **Full Texas Hold'em Rules**
-  - Pre-flop, flop, turn, river, showdown
-  - Proper betting with blinds, raises, all-ins
-  - Pot management including side pots
+- **Full Texas Hold'em Rules** - Pre-flop, flop, turn, river, showdown
+- **Proper Betting** - Blinds, raises, all-ins, side pots
+- **Hand Evaluation** - All poker hands with tie-breaking and kickers
+- **AI Opponents** - Configurable difficulty (aggression, tightness, bluff frequency)
+- **Event System** - Clean separation between logic and UI via observer pattern
+- **Type Safety** - 100% TypeScript with full type definitions
 
-- **Hand Evaluation**
-  - All poker hands (high card to straight flush)
-  - Proper tie-breaking with kickers
-  - Handles edge cases (wheel, etc.)
+### PixiJS Browser UI
 
-- **AI Opponent**
-  - Configurable difficulty (aggression, tightness, bluff frequency)
-  - Pre-flop and post-flop strategies
-  - Hand strength evaluation
-
-- **Event System**
-  - Clean separation between logic and UI
-  - Subscribe to game events
-  - Reactive UI updates
-
-- **Type Safety**
-  - 100% TypeScript
-  - Full type definitions
-  - IDE autocomplete support
-
-- **Well Tested**
-  - 21 unit tests (all passing)
-  - Coverage of core functionality
-  - Hand evaluation thoroughly tested
-
-### 🚧 UI Integration (Ready to Build)
-
-- Template GameController created
-- Card images and table graphics available
-- Ready for Cocos Creator scene setup
+- **PixiJS v8** - WebGPU-ready canvas rendering
+- **Responsive Layout** - Aspect-ratio scaling (960x720 design resolution)
+- **8-Max Table** - Rectangular poker table with 8 player seats
+- **Card Rendering** - 52-card sprite deck with flip animations
+- **Sound Effects** - Web Audio API for check, bet, fold sounds + background music
+- **HTML Bet Input** - Overlay input positioned via canvas transform
+- **Start Screen** - Splash screen before entering the game
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────┐
-│         Cocos Creator UI                │
-│  (GameController, Card Display, etc.)   │
+│         PixiJS Browser UI              │
+│  (GameScene, ActionBar, PlayerSlot)    │
 └──────────────┬──────────────────────────┘
-               │ calls methods
+               │ imports @engine
                │ subscribes to events
 ┌──────────────▼──────────────────────────┐
 │         Poker Engine (TypeScript)       │
@@ -90,19 +81,32 @@ npm test
 └─────────────────────────────────────────┘
 ```
 
+## Engine Events
+
+The engine emits these events that the UI subscribes to:
+
+| Event | Description |
+|-------|-------------|
+| `hand_started` | New hand begins |
+| `cards_dealt` | Hole cards dealt to players |
+| `street_changed` | Community cards revealed (flop/turn/river) |
+| `player_action` | A player acts (bet, call, fold, etc.) |
+| `pot_updated` | Pot amount changes |
+| `blind_posted` | Blind or ante posted |
+| `hand_complete` | Hand finishes with results |
+| `game_over` | Tournament/game ends |
+
 ## Usage Example
 
 ```typescript
-import { PokerGameEngine } from '../../engine/dist/index.js';
+import { PokerGameEngine } from '@engine/index.js';
 
-// Create engine
 const engine = new PokerGameEngine({
   smallBlind: 5,
   bigBlind: 10,
   startingChips: 1000
 });
 
-// Listen to events
 engine.on((event) => {
   switch (event.type) {
     case 'hand_started':
@@ -120,199 +124,86 @@ engine.on((event) => {
   }
 });
 
-// Initialize and start
-engine.initGame(['player', 'ai']);
+engine.initGame(['player', 'ai1', 'ai2']);
 engine.startNewHand();
-
-// Player acts
-const state = engine.getGameState();
-if (state.canCall) {
-  engine.processAction('player', {
-    type: 'call',
-    amount: state.callAmount
-  });
-}
-
-// AI acts
-engine.processAIAction('ai');
-```
-
-## Documentation
-
-- **[Engine README](engine/README.md)** - Complete engine API documentation
-- **[Integration Guide](engine/INTEGRATION.md)** - How to integrate with Cocos Creator
-- **[Project Structure](PROJECT_STRUCTURE.md)** - Detailed architecture overview
-- **[Development Notes](NOTES.md)** - Progress tracking and notes
-
-## Project Status
-
-### Phase 1: Core Engine ✅ COMPLETE
-- [x] Card and deck system
-- [x] Hand evaluation (all hand types)
-- [x] Player management
-- [x] Betting system with proper validation
-- [x] Pot management (main + side pots)
-- [x] Modular AI system with difficulty presets
-- [x] Game engine orchestration
-- [x] Event system
-- [x] Game modes (Cash, SNG, Tournament)
-- [x] Tournament blinds with antes
-- [x] Multiplayer support (2-8 players)
-- [x] Comprehensive tests (50+ tests)
-- [x] Full documentation with JSDoc
-
-### Phase 2: UI Integration 🚧 READY TO START
-- [x] GameController template created
-- [ ] Cocos scene setup
-- [ ] Card display components
-- [ ] Button handlers
-- [ ] Animations
-- [ ] Sound effects
-
-### Phase 3: Polish 📋 PLANNED
-- [ ] Advanced AI difficulty levels
-- [ ] Hand history
-- [ ] Statistics tracking
-- [ ] Tutorial mode
-- [ ] Settings menu
-
-### Phase 4: Multiplayer 📋 FUTURE
-- [ ] Network architecture
-- [ ] Server integration
-- [ ] Lobby system
-- [ ] Tournaments
-
-## Testing
-
-```bash
-cd engine
-npm test
-```
-
-**Results:**
-```
-✓ Deck (3 tests)
-✓ Hand Evaluator (11 tests)  
-✓ Game Engine (6 tests)
-✓ AI (1 test)
-
-Test Files  1 passed (1)
-     Tests  21 passed (21)
 ```
 
 ## File Structure
 
 ```
 MikoPoker/
-├── engine/                 # Pure TypeScript engine
-│   ├── src/               # Source code
-│   │   ├── index.ts       # Main exports
-│   │   ├── types.ts       # Type definitions
-│   │   ├── deck.ts        # Deck management
-│   │   ├── hand-evaluator.ts  # Hand evaluation
-│   │   ├── player.ts      # Player state
-│   │   ├── pot.ts         # Pot management
-│   │   ├── betting.ts     # Betting rounds
-│   │   ├── ai.ts          # AI opponent
-│   │   └── game-engine.ts # Main orchestrator
-│   ├── dist/              # Compiled output
-│   ├── tests/             # Test suite
-│   ├── examples/          # Usage examples
-│   ├── package.json
+├── engine/                    # Pure TypeScript poker engine
+│   ├── src/                   # Engine source code
+│   ├── dist/                  # Compiled output (gitignored)
+│   ├── tests/                 # Engine test suite
+│   ├── package.json           # @miko/engine
+│   └── tsconfig.json
+├── miko-ui/                   # PixiJS browser UI
+│   ├── src/
+│   │   ├── main.ts            # App init, scaling, scene management
+│   │   ├── types.ts           # Shared UI types
+│   │   ├── scenes/
+│   │   │   ├── StartScene.ts  # Splash/start screen
+│   │   │   └── GameScene.ts   # Main game table scene
+│   │   ├── components/
+│   │   │   ├── ActionBar.ts   # Check/Call, Bet/Raise, Fold buttons
+│   │   │   ├── Card.ts        # Card sprite with face/back
+│   │   │   ├── CommunityCards.ts
+│   │   │   ├── DealerButton.ts
+│   │   │   ├── PlayerSlot.ts  # Per-player UI (cards, chips, name)
+│   │   │   ├── SlotLayout.ts  # 8-seat rectangular layout
+│   │   │   └── StatusBar.ts   # Pot/hand info display
+│   │   ├── managers/
+│   │   │   ├── AssetManager.ts   # Texture preloading
+│   │   │   ├── AudioManager.ts   # Web Audio API sounds
+│   │   │   └── GameManager.ts    # Engine orchestration (~500 lines)
+│   │   └── utils/
+│   │       └── constants.ts      # Layout, colors, fonts, config
+│   ├── static/                # Static assets (cards, table, sounds)
+│   ├── index.html
+│   ├── vite.config.ts
 │   ├── tsconfig.json
-│   ├── README.md
-│   └── INTEGRATION.md
-├── MikoPokerUI/           # Cocos Creator project
-│   └── assets/
-│       ├── resources/     # Card images, table graphics
-│       └── scripts/       # UI scripts
-│           └── GameController.ts
-├── MikoPokerFirstTry/     # Reference implementation
-├── README.md              # This file
-├── PROJECT_STRUCTURE.md   # Architecture details
-└── NOTES.md               # Development notes
+│   └── package.json           # @miko/ui
+├── public/                    # Production deploy target (gitignored)
+├── nova/                      # Planning docs
+├── build.sh                   # Full build + deploy script
+├── package.json               # Root workspace config
+├── CHANGELOG.md
+└── README.md
 ```
+
+## Build System
+
+The project uses **npm workspaces** with two packages:
+
+- `@miko/engine` — the poker engine (TypeScript → CommonJS)
+- `@miko/ui` — the PixiJS UI (TypeScript → Vite bundle)
+
+The `build.sh` script orchestrates the full pipeline:
+1. Build engine (`engine/dist/`)
+2. Build UI (`miko-ui/dist/`)
+3. Deploy to `public/`
+
+The UI resolves the engine via the `@engine` alias in both `tsconfig.json` (paths) and `vite.config.ts` (resolve.alias), pointing to `../engine/dist`.
+
+## npm Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Vite dev server (port 3000) |
+| `npm run build` | Full build + deploy to public/ |
+| `npm run build:engine` | Build engine only |
+| `npm run build:ui` | Build UI only |
+| `npm run serve` | Serve public/ on port 9001 |
+| `npm test` | Run engine tests |
+| `npm run lint` | Lint engine code |
 
 ## Requirements
 
 - Node.js 20+
-- npm
-- Cocos Creator 3.x
+- npm 9+
 - TypeScript 5+
-
-## Development
-
-### Build Engine
-```bash
-cd engine
-npm run build
-```
-
-### Run Tests
-```bash
-cd engine
-npm test
-```
-
-### Watch Mode
-```bash
-cd engine
-npm run test:watch
-```
-
-## Key Features Explained
-
-### Event-Driven Architecture
-The engine emits events that the UI listens to. This creates a clean separation where:
-- Engine focuses on game rules
-- UI focuses on display
-- No circular dependencies
-- Easy to test
-
-### Type Safety
-Full TypeScript types mean:
-- Compile-time error checking
-- IDE autocomplete
-- Self-documenting code
-- Easier refactoring
-
-### Modular Design
-Each component has a single responsibility:
-- `Deck` - Card management
-- `HandEvaluator` - Poker logic
-- `Player` - Player state
-- `Pot` - Money management
-- `BettingRound` - Action validation
-- `AI` - Decision making
-- `GameEngine` - Orchestration
-
-### Comprehensive Testing
-Tests cover:
-- All hand types
-- Hand comparison
-- Betting logic
-- Game flow
-- AI decisions
-
-## Contributing
-
-This is a private project, but contributions from team members are welcome:
-
-1. Follow the existing code style
-2. Add tests for new features
-3. Update documentation
-4. Run tests before committing
 
 ## License
 
-Private/Proprietary
-
-## Contact
-
-- Developer: Claude AI
-- Design: ChatGPT & Team
-- Code Review: Team
-
----
-
-**Ready to start building the UI!** 🎮♠️♥️♦️♣️
+See [LICENSE](LICENSE).

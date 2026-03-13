@@ -2,6 +2,48 @@
 
 All notable changes to the MikoPoker project will be documented in this file.
 
+## [UI 1.0.0] - 2026-03-12
+
+### Added — PixiJS Port (Complete Rewrite from Cocos Creator)
+
+**New UI framework: PixiJS v8 + Vite**
+- Replaced Cocos Creator with PixiJS v8 browser-based rendering
+- Vite bundler with TypeScript, dev server on port 3000, production build to `public/`
+- npm workspaces: `@miko/engine` + `@miko/ui` managed from root `package.json`
+
+**Scenes**
+- `StartScene` — splash screen with start button
+- `GameScene` — main game table with all components wired to the engine
+
+**Components**
+- `ActionBar` — Check/Call, Bet/Raise, Fold buttons with hover effects and HTML bet input overlay
+- `Card` — sprite-based card with face/back display and flip support
+- `CommunityCards` — 5-card board display
+- `DealerButton` — positional dealer chip
+- `PlayerSlot` — per-player container (cards, chips, name, bet, status labels)
+- `SlotLayout` — 8-seat rectangular poker table layout
+- `StatusBar` — pot and hand info display
+
+**Managers**
+- `AssetManager` — preloads 52 card textures, card back, table, dealer button, start screen
+- `AudioManager` — Web Audio API for check/bet/fold sounds + background music (looping)
+- `GameManager` — full port of Cocos GameTable orchestration (~500 lines), engine event dispatch, game loop, showdown reveal, winner highlighting, elimination detection
+
+**Infrastructure**
+- Responsive aspect-ratio scaling (960x720 design resolution)
+- `build.sh` at project root: engine build → UI build → deploy to `public/`
+- Static assets served from `miko-ui/static/` (Vite `publicDir: 'static'`)
+- `@engine` alias resolves to `../engine/dist` via tsconfig paths and vite.config.ts
+
+### Changed
+- Design resolution updated from 960x600 to 960x720 to fit action bar below the table
+- Action bar positioned at y=320 in design space (below table edge)
+- Project README rewritten to reflect PixiJS architecture
+
+### Notes
+- Engine (`@miko/engine`) is unchanged — all existing tests pass
+- Old Cocos Creator UI remains in `MikoPokerUI/` for reference
+
 ## [UI 0.2.8] - 2025-10-13
 
 ### Improvements
