@@ -206,15 +206,22 @@ export class PokerGameEngine {
       player.resetForNewHand();
     }
 
-    // Move dealer button
-    this.dealerIndex = (this.dealerIndex + 1) % this.players.length;
+    // Move dealer button (skip eliminated players)
     this.players.forEach(p => p.isDealer = false);
+    let nextDealer = (this.dealerIndex + 1) % this.players.length;
+    let attempts = 0;
+    while (!this.players[nextDealer].isActive && attempts < this.players.length) {
+      nextDealer = (nextDealer + 1) % this.players.length;
+      attempts++;
+    }
+    this.dealerIndex = nextDealer;
     this.players[this.dealerIndex].isDealer = true;
 
     this.emitEvent({ type: 'hand_started' });
 
-    // Deal hole cards
+    // Deal hole cards (skip eliminated players with 0 chips)
     for (const player of this.players) {
+      if (!player.isActive) continue;
       const cards = this.deck.dealMultiple(2);
       player.dealCards(cards);
       this.emitEvent({ type: 'cards_dealt', playerId: player.id, cards });
@@ -691,9 +698,15 @@ export class PokerGameEngine {
 
       this.bettingRound.setInitialBet(bigBlind);
     } else {
-      // Multiplayer: Player after dealer is small blind, next is big blind
-      const sbIndex = (this.dealerIndex + 1) % this.players.length;
-      const bbIndex = (this.dealerIndex + 2) % this.players.length;
+      // Multiplayer: Player after dealer is small blind, next is big blind (skip eliminated)
+      let sbIndex = (this.dealerIndex + 1) % this.players.length;
+      while (!this.players[sbIndex].isActive) {
+        sbIndex = (sbIndex + 1) % this.players.length;
+      }
+      let bbIndex = (sbIndex + 1) % this.players.length;
+      while (!this.players[bbIndex].isActive) {
+        bbIndex = (bbIndex + 1) % this.players.length;
+      }
 
       const sbPlayer = this.players[sbIndex];
       const bbPlayer = this.players[bbIndex];

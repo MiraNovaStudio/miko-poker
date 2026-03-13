@@ -34,10 +34,10 @@ export class Player {
   resetForNewHand(): void {
     this.bet = 0;
     this.totalBet = 0;
-    this.folded = false;
+    this.isActive = this.chips > 0;
+    this.folded = !this.isActive;
     this.allIn = false;
     this.cards = [];
-    this.isActive = this.chips > 0;
   }
 
   /**
