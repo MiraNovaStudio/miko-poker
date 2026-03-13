@@ -57,6 +57,8 @@ async function init() {
   const fourColorOnBtn = document.getElementById('fourcolor-on');
   const fourColorOffBtn = document.getElementById('fourcolor-off');
   const fourColorRow = document.getElementById('four-color-row');
+  const table1Btn = document.getElementById('table-1');
+  const table2Btn = document.getElementById('table-2');
 
   if (settingsBtn && settingsModal) {
     settingsBtn.style.display = 'none'; // hidden on start screen
@@ -148,6 +150,22 @@ async function init() {
       updateFourColorButtons();
     });
 
+    // Table style selection
+    const updateTableButtons = () => {
+      table1Btn?.classList.toggle('active', settings.tableStyle === 'table1');
+      table2Btn?.classList.toggle('active', settings.tableStyle === 'table2');
+    };
+
+    table1Btn?.addEventListener('click', () => {
+      settings.tableStyle = 'table1';
+      updateTableButtons();
+    });
+
+    table2Btn?.addEventListener('click', () => {
+      settings.tableStyle = 'table2';
+      updateTableButtons();
+    });
+
     // Player name input
     const nameInput = document.getElementById('player-name') as HTMLInputElement | null;
     if (nameInput) {
@@ -162,6 +180,7 @@ async function init() {
     updateFourColorButtons();
     updateChipButtons();
     updateAnimButtons();
+    updateTableButtons();
   }
 
   const pageTitle = document.getElementById('page-title');

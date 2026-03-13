@@ -1,6 +1,7 @@
 // (c) 2026 MiraNova Studios
 import { Container, Sprite } from 'pixi.js';
 import { AssetManager } from '../managers/AssetManager.js';
+import { SettingsManager } from '../managers/SettingsManager.js';
 import { GameManager } from '../managers/GameManager.js';
 import { AudioManager } from '../managers/AudioManager.js';
 import { SlotLayout } from '../components/SlotLayout.js';
@@ -12,17 +13,19 @@ import { ActionBar } from '../components/ActionBar.js';
 export class GameScene extends Container {
   private gameManager: GameManager | null = null;
   private actionBar: ActionBar;
+  private tableSprite: Sprite;
   onQuit: (() => void) | null = null;
 
   constructor() {
     super();
 
     // Table background
-    const table = new Sprite(AssetManager.get('table'));
-    table.anchor.set(0.5);
-    table.width = 960;
-    table.height = 540;
-    this.addChild(table);
+    const tableAlias = SettingsManager.instance.tableStyle === 'table2' ? 'table2' : 'table';
+    this.tableSprite = new Sprite(AssetManager.get(tableAlias));
+    this.tableSprite.anchor.set(0.5);
+    this.tableSprite.width = 960;
+    this.tableSprite.height = 540;
+    this.addChild(this.tableSprite);
 
     // Slot layout
     const slotLayout = new SlotLayout();
@@ -95,8 +98,17 @@ export class GameScene extends Container {
       });
     }
 
+    // Update table texture when settings change
+    SettingsManager.instance.onChange(() => this.updateTableTexture());
+
     // Audio is already initialized by main.ts — start the game
     this.gameManager.start();
+  }
+
+  /** Swap table background texture based on current setting. */
+  private updateTableTexture(): void {
+    const alias = SettingsManager.instance.tableStyle === 'table2' ? 'table2' : 'table';
+    this.tableSprite.texture = AssetManager.get(alias);
   }
 
   /** Called from main.ts on window resize to reposition HTML overlays.

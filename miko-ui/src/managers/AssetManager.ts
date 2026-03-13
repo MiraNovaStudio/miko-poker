@@ -28,6 +28,7 @@ export class AssetManager {
 
     // Table and UI
     manifest.push({ alias: 'table', src: 'assets/table.png' });
+    manifest.push({ alias: 'table2', src: 'assets/table2.png' });
     manifest.push({ alias: 'dealer_button', src: 'assets/dealer_button.png' });
     manifest.push({ alias: 'start_screen', src: 'assets/start_screen.png' });
     manifest.push({ alias: 'white', src: 'assets/white.png' });
