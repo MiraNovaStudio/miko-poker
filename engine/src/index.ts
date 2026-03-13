@@ -39,8 +39,8 @@ export { BettingRound } from './betting.js';
 // AI
 export { PokerAI } from './ai/PokerAI.js';
 export type { GameContext } from './ai/PokerAI.js';
-export type { AIConfig, AIDifficulty } from './ai/ai-config.js';
-export { getAIPreset, createCustomAI, AI_PRESETS } from './ai/ai-config.js';
+export type { AIConfig, Playstyle } from './ai/ai-config.js';
+export { PLAYSTYLE_DEFAULTS, getPlaystyleConfig } from './ai/ai-config.js';
 
 // Game modes
 export { GameModeManager, STANDARD_STRUCTURES } from './game-mode.js';

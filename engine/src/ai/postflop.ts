@@ -7,9 +7,6 @@ import type { Card, PlayerAction } from '../types.js';
 import type { AIConfig } from './ai-config.js';
 import { evaluateHand } from '../hand-evaluator.js';
 
-/**
- * Game context for post-flop decisions
- */
 export interface PostflopContext {
   pot: number;
   currentBet: number;
@@ -23,44 +20,26 @@ export interface PostflopContext {
 
 /**
  * Evaluate post-flop hand strength (0-1 scale)
- * @param holeCards Player's hole cards
- * @param communityCards Community cards
- * @returns Hand strength (0-1)
  */
 export function evaluatePostflopHand(
   holeCards: Card[],
   communityCards: Card[]
 ): number {
-  if (communityCards.length === 0) {
-    return 0.3; // Shouldn't happen, but fallback
-  }
+  if (communityCards.length === 0) return 0.3;
 
   const allCards = [...holeCards, ...communityCards];
-  if (allCards.length < 5) {
-    return 0.3;
-  }
+  if (allCards.length < 5) return 0.3;
 
   const hand = evaluateHand(allCards);
-
-  // Convert hand category to 0-1 scale
-  // Category ranges from 0 (high card) to 8 (straight flush)
   let strength = hand.category / 8;
-
-  // Add kicker strength bonus (small)
   if (hand.kickers.length > 0) {
-    const kickerBonus = (hand.kickers[0] / 14) * 0.1;
-    strength = Math.min(1, strength + kickerBonus);
+    strength = Math.min(1, strength + (hand.kickers[0] / 14) * 0.1);
   }
-
   return strength;
 }
 
 /**
- * Make post-flop decision
- * @param context Game context
- * @param config AI configuration
- * @param strength Hand strength
- * @returns Player action
+ * Make post-flop decision based on playstyle config.
  */
 export function decidePostflopAction(
   context: PostflopContext,
@@ -70,88 +49,91 @@ export function decidePostflopAction(
   const { pot, currentBet, playerBet, playerChips, minRaise } = context;
   const toCall = currentBet - playerBet;
   const canCheck = toCall === 0;
-  const potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
-
-  // Bluff factor
   const shouldBluff = Math.random() < config.bluffFrequency;
 
+  // --- Can check (no bet to face) ---
   if (canCheck) {
-    // Can check - no additional money to call
-
-    // Strong hand - value bet/raise
-    if (strength > 0.7) {
-      const betSize = Math.floor(pot * (0.5 + Math.random() * 0.5)); // 50-100% pot
-      const betAmount = Math.min(betSize, playerChips);
-      // If there's already a bet (e.g., we matched it), raise instead of bet
-      if (currentBet > 0) {
-        return { type: 'raise', amount: betAmount };
-      }
-      return { type: 'bet', amount: betAmount };
-    }
-
-    // Medium hand - sometimes bet/raise, sometimes check
-    if (strength > 0.5) {
+    // Value bet with strong hands
+    if (strength > config.valueBetThreshold) {
       if (Math.random() < config.aggression) {
-        const betAmount = Math.min(Math.floor(pot * 0.5), playerChips);
-        // If there's already a bet (e.g., we matched it), raise instead of bet
-        if (currentBet > 0) {
-          return { type: 'raise', amount: betAmount };
-        }
-        return { type: 'bet', amount: betAmount };
+        const betSize = Math.floor(pot * (0.5 + Math.random() * 0.5));
+        const amount = Math.min(betSize, playerChips);
+        return currentBet > 0
+          ? { type: 'raise', amount }
+          : { type: 'bet', amount };
       }
-      return { type: 'check' };
     }
 
-    // Weak hand - bluff occasionally
-    if (shouldBluff && Math.random() < 0.3) {
-      const betAmount = Math.min(Math.floor(pot * 0.6), playerChips);
-      // If there's already a bet (e.g., we matched it), raise instead of bet
-      if (currentBet > 0) {
-        return { type: 'raise', amount: betAmount };
-      }
-      return { type: 'bet', amount: betAmount };
+    // Medium hands — aggressive players bet, others check
+    if (strength > 0.4 && Math.random() < config.aggression * 0.5) {
+      const amount = Math.min(Math.floor(pot * 0.4), playerChips);
+      return currentBet > 0
+        ? { type: 'raise', amount }
+        : { type: 'bet', amount };
+    }
+
+    // Bluff with weak hands
+    if (shouldBluff && strength < 0.3) {
+      const amount = Math.min(Math.floor(pot * (0.5 + Math.random() * 0.3)), playerChips);
+      return currentBet > 0
+        ? { type: 'raise', amount }
+        : { type: 'bet', amount };
+    }
+
+    // Maniacs bet with almost anything
+    if (config.playstyle === 'maniac' && Math.random() < 0.35) {
+      const amount = Math.min(Math.floor(pot * 0.6), playerChips);
+      return currentBet > 0
+        ? { type: 'raise', amount }
+        : { type: 'bet', amount };
     }
 
     return { type: 'check' };
   }
 
-  // Facing a bet - ONLY call or fold (no re-raising to prevent infinite loops)
+  // --- Facing a bet ---
+
+  // All-in decision
   if (toCall >= playerChips) {
-    // All-in call decision
-    if (strength > 0.8 || (strength > 0.6 && Math.random() < 0.4)) {
+    if (strength > 0.75) return { type: 'allin', amount: playerChips };
+    if (strength > 0.5 && config.playstyle === 'maniac' && Math.random() < 0.3) {
+      return { type: 'allin', amount: playerChips };
+    }
+    if (strength > 0.6 && Math.random() < 0.3) {
       return { type: 'allin', amount: playerChips };
     }
     return { type: 'fold' };
   }
 
-  // Strong hand - call (no re-raising)
-  if (strength > 0.75) {
+  const callRatio = toCall / pot;
+
+  // Strong hand — call (no re-raising to prevent infinite loops)
+  if (strength > 0.7) {
     return { type: 'call', amount: toCall };
   }
 
-  // Good hand - call if pot odds favorable
-  if (strength > 0.6) {
-    if (potOdds < 0.3 || Math.random() < 0.7) {
+  // Above call threshold — call based on pot odds
+  if (strength > config.callThreshold) {
+    // Passive players call almost everything above their threshold
+    if (config.playstyle === 'passive') {
+      return { type: 'call', amount: toCall };
+    }
+    // Others check pot odds
+    if (callRatio < 0.5 || Math.random() < 0.6) {
       return { type: 'call', amount: toCall };
     }
     return { type: 'fold' };
   }
 
-  // Medium hand - call if cheap, fold if expensive
-  if (strength > 0.4) {
-    const callRatio = toCall / pot;
-    if (callRatio < 0.3 || (callRatio < 0.5 && Math.random() < 0.5)) {
-      return { type: 'call', amount: toCall };
-    }
-    return { type: 'fold' };
+  // Below threshold but cheap — occasional call
+  if (callRatio < 0.2 && Math.random() < 0.25) {
+    return { type: 'call', amount: toCall };
   }
 
-  // Weak hand - fold (no bluff raises)
-  // Cheap call with weak hand if pot odds very favorable
-  if (toCall < pot * 0.15 && Math.random() < 0.3) {
+  // Maniacs sometimes call with garbage
+  if (config.playstyle === 'maniac' && Math.random() < 0.2) {
     return { type: 'call', amount: toCall };
   }
 
   return { type: 'fold' };
 }
-

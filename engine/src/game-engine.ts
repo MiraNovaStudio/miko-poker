@@ -10,7 +10,7 @@ import { PotManager } from './pot.js';
 import { BettingRound } from './betting.js';
 import { evaluateHand, compareHands, getHandName } from './hand-evaluator.js';
 import { PokerAI } from './ai/PokerAI.js';
-import type { AIConfig } from './ai/ai-config.js';
+import type { AIConfig, Playstyle } from './ai/ai-config.js';
 import { GameModeManager, STANDARD_STRUCTURES, type BlindStructure } from './game-mode.js';
 import { debugLog, debugBettingState } from './debug.js';
 import type { Card, Street, PlayerAction, GameConfig, PlayerState } from './types.js';
@@ -135,7 +135,7 @@ export class PokerGameEngine {
    * @param playerIds Array of player IDs
    * @param aiDifficulties Optional map of player ID to AI difficulty
    */
-  initGame(playerIds: string[], aiDifficulties?: Map<string, 'easy' | 'normal' | 'hard' | 'pro'>): void {
+  initGame(playerIds: string[], aiConfigs?: Map<string, AIConfig | Playstyle>): void {
     if (playerIds.length < 2) {
       throw new Error('Need at least 2 players');
     }
@@ -155,8 +155,8 @@ export class PokerGameEngine {
     // Create AI instances for each AI player
     for (const id of playerIds) {
       if (id !== 'player' && id.startsWith('ai')) {
-        const difficulty = aiDifficulties?.get(id) ?? 'normal';
-        this.aiInstances.set(id, new PokerAI(difficulty, id));
+        const config = aiConfigs?.get(id) ?? 'passive';
+        this.aiInstances.set(id, new PokerAI(config, id));
       }
     }
   }
@@ -832,7 +832,7 @@ export class PokerGameEngine {
    * Replace a player at the given seat index with a new player (buy-in).
    * Only allowed between hands. The new player gets startingChips.
    */
-  replacePlayer(seatIndex: number, newId: string, aiConfig?: AIConfig | 'easy' | 'normal' | 'hard' | 'pro'): void {
+  replacePlayer(seatIndex: number, newId: string, aiConfig?: AIConfig | Playstyle): void {
     if (this.handInProgress) {
       throw new Error('Cannot replace player during a hand');
     }
@@ -853,7 +853,7 @@ export class PokerGameEngine {
 
     // Create AI instance for new player
     if (newId !== 'player') {
-      const config = aiConfig ?? 'normal';
+      const config = aiConfig ?? 'passive';
       this.aiInstances.set(newId, new PokerAI(config, newId));
     }
   }
@@ -911,7 +911,7 @@ export class PokerGameEngine {
    * @param playerId Player ID
    * @param config AI configuration or difficulty
    */
-  setAIConfig(playerId: string, config: 'easy' | 'normal' | 'hard' | 'pro'): void {
+  setAIConfig(playerId: string, config: AIConfig | Playstyle): void {
     const ai = this.aiInstances.get(playerId);
     if (ai) {
       ai.setConfig(config);

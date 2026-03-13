@@ -6,9 +6,6 @@
 import type { Card, PlayerAction } from '../types.js';
 import type { AIConfig } from './ai-config.js';
 
-/**
- * Game context for AI decisions
- */
 export interface PreflopContext {
   pot: number;
   currentBet: number;
@@ -21,61 +18,40 @@ export interface PreflopContext {
 
 /**
  * Evaluate pre-flop hand strength (0-1 scale)
- * @param holeCards Player's hole cards
- * @returns Hand strength (0-1)
  */
 export function evaluatePreflopHand(holeCards: Card[]): number {
   if (holeCards.length !== 2) return 0.3;
-
-  const card1 = holeCards[0];
-  const card2 = holeCards[1];
 
   const rankValues: Record<string, number> = {
     'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10,
     '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2
   };
 
-  const val1 = rankValues[card1.rank];
-  const val2 = rankValues[card2.rank];
+  const val1 = rankValues[holeCards[0].rank];
+  const val2 = rankValues[holeCards[1].rank];
   const maxVal = Math.max(val1, val2);
   const minVal = Math.min(val1, val2);
-
   const isPair = val1 === val2;
-  const isSuited = card1.suit === card2.suit;
+  const isSuited = holeCards[0].suit === holeCards[1].suit;
   const gap = maxVal - minVal;
 
   let strength = 0;
 
-  // Pocket pairs
   if (isPair) {
-    strength = 0.5 + (maxVal / 14) * 0.4; // 0.5-0.9
+    strength = 0.5 + (maxVal / 14) * 0.4; // 0.5–0.9
     return Math.min(1, strength);
   }
 
-  // High cards
-  strength = (maxVal + minVal) / 28; // 0.14-1.0
-
-  // Suited bonus
-  if (isSuited) {
-    strength += 0.1;
-  }
-
-  // Connected cards bonus
-  if (gap === 1) {
-    strength += 0.05;
-  } else if (gap === 2) {
-    strength += 0.03;
-  }
+  strength = (maxVal + minVal) / 28;
+  if (isSuited) strength += 0.1;
+  if (gap === 1) strength += 0.05;
+  else if (gap === 2) strength += 0.03;
 
   return Math.min(1, Math.max(0, strength));
 }
 
 /**
- * Make pre-flop decision
- * @param context Game context
- * @param config AI configuration
- * @param strength Hand strength
- * @returns Player action
+ * Make pre-flop decision based on playstyle config.
  */
 export function decidePreflopAction(
   context: PreflopContext,
@@ -86,55 +62,76 @@ export function decidePreflopAction(
   const toCall = currentBet - playerBet;
   const canCheck = toCall === 0;
 
-  // Simple pre-flop: mostly check/fold, occasionally bet/raise with premium hands
+  // --- Can check (no bet to face) ---
   if (canCheck) {
-    // Can check - no additional money to call
-    if (strength > 0.75 && Math.random() < config.aggression * 0.4) {
-      const betAmount = Math.min(Math.floor(playerChips * 0.15), playerChips);
-      // If there's already a bet on the table (e.g., we're BB and matched), raise instead of bet
-      if (currentBet > 0) {
-        return { type: 'raise', amount: betAmount };
-      }
-      return { type: 'bet', amount: betAmount };
+    // Premium hands: raise
+    if (strength > 0.75 && Math.random() < config.aggression) {
+      const amount = Math.min(Math.floor(playerChips * 0.15), playerChips);
+      return currentBet > 0
+        ? { type: 'raise', amount }
+        : { type: 'bet', amount };
+    }
+    // Maniacs raise with mediocre hands too
+    if (config.playstyle === 'maniac' && strength > 0.4 && Math.random() < 0.4) {
+      const amount = Math.min(Math.floor(playerChips * 0.12), playerChips);
+      return currentBet > 0
+        ? { type: 'raise', amount }
+        : { type: 'bet', amount };
     }
     return { type: 'check' };
   }
 
-  // Facing a bet - be more selective (fold more often for realistic 8-max)
+  // --- Facing a bet ---
+
+  // All-in decision
   if (toCall >= playerChips) {
-    // All-in call decision - only with very strong hands
-    if (strength > 0.8) {
+    if (strength > 0.8) return { type: 'allin', amount: playerChips };
+    if (config.playstyle === 'maniac' && strength > 0.55 && Math.random() < 0.3) {
       return { type: 'allin', amount: playerChips };
     }
     return { type: 'fold' };
   }
 
-  // Fold weak/medium hands more aggressively
-  if (strength < 0.5) {
-    return { type: 'fold' };
-  }
-
-  // Good hand (0.5-0.7) - fold if bet is large
-  if (strength < 0.7) {
-    if (toCall > playerChips * 0.15) {
-      return { type: 'fold' };
+  // VPIP gate: fold if hand is below our threshold (with some randomness)
+  if (strength < config.vpipThreshold) {
+    // Maniacs sometimes call anyway
+    if (config.playstyle === 'maniac' && Math.random() < 0.25) {
+      return { type: 'call', amount: toCall };
     }
-    // Call only if cheap
-    if (Math.random() < 0.6) {
+    // Passive players occasionally limp/call with marginal hands
+    if (config.playstyle === 'passive' && strength > config.vpipThreshold - 0.1 && Math.random() < 0.3) {
       return { type: 'call', amount: toCall };
     }
     return { type: 'fold' };
   }
 
-  // Strong hand (0.7-0.8) - call most of the time
-  if (strength < 0.8) {
-    if (toCall > playerChips * 0.25) {
-      return { type: 'fold' };
+  // Above VPIP threshold — decide whether to raise or call
+  const callRatio = toCall / playerChips;
+
+  // Premium (0.75+): raise if aggressive enough
+  if (strength > 0.75) {
+    if (Math.random() < config.aggression) {
+      const raiseAmt = Math.max(minRaise, Math.floor(currentBet * 2.5));
+      return { type: 'raise', amount: Math.min(raiseAmt, playerChips) };
     }
     return { type: 'call', amount: toCall };
   }
 
-  // Premium hand (0.8+) - always call
+  // Strong (0.6–0.75): sharks raise, others mostly call
+  if (strength > 0.6) {
+    if (callRatio > 0.25 && config.playstyle !== 'maniac') {
+      return { type: 'fold' };
+    }
+    if (Math.random() < config.aggression * 0.5) {
+      const raiseAmt = Math.max(minRaise, Math.floor(currentBet * 2));
+      return { type: 'raise', amount: Math.min(raiseAmt, playerChips) };
+    }
+    return { type: 'call', amount: toCall };
+  }
+
+  // Marginal (vpipThreshold–0.6): call if cheap
+  if (callRatio > 0.15 && config.playstyle !== 'passive') {
+    return { type: 'fold' };
+  }
   return { type: 'call', amount: toCall };
 }
-

@@ -4,8 +4,8 @@
  */
 
 import type { Card, Street, PlayerAction } from '../types.js';
-import type { AIConfig } from './ai-config.js';
-import { getAIPreset, type AIDifficulty } from './ai-config.js';
+import type { AIConfig, Playstyle } from './ai-config.js';
+import { PLAYSTYLE_DEFAULTS } from './ai-config.js';
 import { decidePreflopAction, evaluatePreflopHand } from './preflop.js';
 import { decidePostflopAction, evaluatePostflopHand } from './postflop.js';
 
@@ -25,38 +25,25 @@ export interface GameContext {
 }
 
 /**
- * Poker AI - makes decisions for computer-controlled players
+ * Poker AI — makes decisions based on a playstyle configuration.
  */
 export class PokerAI {
   private config: AIConfig;
   private playerId: string;
 
-  /**
-   * Create a new AI instance
-   * @param config AI configuration or difficulty preset
-   * @param playerId Optional player ID for this AI
-   */
-  constructor(config?: AIConfig | AIDifficulty, playerId?: string) {
+  constructor(config?: AIConfig | Playstyle, playerId?: string) {
     if (typeof config === 'string') {
-      this.config = getAIPreset(config);
+      this.config = { ...PLAYSTYLE_DEFAULTS[config] };
     } else {
-      this.config = config ?? getAIPreset('normal');
+      this.config = config ?? { ...PLAYSTYLE_DEFAULTS.passive };
     }
     this.playerId = playerId ?? 'ai';
   }
 
-  /**
-   * Make a decision based on current game state
-   * @param context Game context
-   * @returns Player action
-   */
   decide(context: GameContext): PlayerAction {
     const { street } = context;
-
-    // Calculate hand strength
     const strength = this.evaluateHandStrength(context);
 
-    // Pre-flop logic
     if (street === 'preflop' || context.communityCards.length === 0) {
       return decidePreflopAction(
         {
@@ -73,61 +60,34 @@ export class PokerAI {
       );
     }
 
-    // Post-flop logic
     return decidePostflopAction(context, this.config, strength);
   }
 
-  /**
-   * Evaluate hand strength (0-1 scale)
-   * @param context Game context
-   * @returns Hand strength
-   */
   private evaluateHandStrength(context: GameContext): number {
     const { street, holeCards, communityCards } = context;
-
-    // Pre-flop: simple hand strength based on hole cards
     if (street === 'preflop' || communityCards.length === 0) {
       return evaluatePreflopHand(holeCards);
     }
-
-    // Post-flop: evaluate actual hand
     return evaluatePostflopHand(holeCards, communityCards);
   }
 
-  /**
-   * Update AI configuration
-   * @param config New configuration or difficulty preset
-   */
-  setConfig(config: AIConfig | AIDifficulty): void {
+  setConfig(config: AIConfig | Playstyle): void {
     if (typeof config === 'string') {
-      this.config = getAIPreset(config);
+      this.config = { ...PLAYSTYLE_DEFAULTS[config] };
     } else {
-      this.config = { ...this.config, ...config };
+      this.config = { ...config };
     }
   }
 
-  /**
-   * Get current configuration
-   * @returns Current AI configuration
-   */
   getConfig(): AIConfig {
     return { ...this.config };
   }
 
-  /**
-   * Get player ID for this AI
-   * @returns Player ID
-   */
   getPlayerId(): string {
     return this.playerId;
   }
 
-  /**
-   * Set player ID for this AI
-   * @param playerId Player ID
-   */
   setPlayerId(playerId: string): void {
     this.playerId = playerId;
   }
 }
-
