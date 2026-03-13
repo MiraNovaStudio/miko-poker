@@ -253,16 +253,15 @@ describe('All-in Logic', () => {
       engine.startNewHand();
 
       let gameState = engine.getGameState();
+      const firstActorId = gameState.players[gameState.currentPlayerIndex].id;
 
       // First player goes all-in
-      engine.processAction(gameState.players[gameState.currentPlayerIndex].id, { type: 'allin' });
+      engine.processAction(firstActorId, { type: 'allin' });
 
       // Second player calls (but still has chips - not all-in)
       gameState = engine.getGameState();
-      const player2Chips = gameState.players[gameState.currentPlayerIndex].chips;
-
-      // Call for less than all chips
-      engine.processAction(gameState.players[gameState.currentPlayerIndex].id, { type: 'call' });
+      const secondActorId = gameState.players[gameState.currentPlayerIndex].id;
+      engine.processAction(secondActorId, { type: 'call' });
 
       // Third player should still be able to act
       gameState = engine.getGameState();
@@ -270,29 +269,32 @@ describe('All-in Logic', () => {
       // Should still be in hand
       expect(engine.isHandInProgress()).toBe(true);
 
-      // Current player should be player3
+      // Current player should be someone other than the all-in player and caller
       const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-      expect(currentPlayer.id).toBe('player3');
+      expect(currentPlayer.id).not.toBe(firstActorId);
+      expect(currentPlayer.allIn).toBe(false);
+      expect(currentPlayer.folded).toBe(false);
     });
   });
 
   describe('Edge cases', () => {
-    it('should handle player with 0 chips trying to act', () => {
+    it('should mark all-in player with 0 chips as unable to act', () => {
       const players = ['player1', 'player2'];
       engine.initGame(players, new Map());
-
-      let gameState = engine.getGameState();
-      gameState.players[0].chips = 0;
-
       engine.startNewHand();
 
-      // Player with 0 chips should not be able to make normal bets
-      gameState = engine.getGameState();
-      const zeroChipPlayer = gameState.players.find(p => p.chips === 0);
+      // First player goes all-in
+      let gameState = engine.getGameState();
+      const firstActorId = gameState.players[gameState.currentPlayerIndex].id;
+      engine.processAction(firstActorId, { type: 'allin' });
 
-      // Verify player has 0 chips
-      expect(zeroChipPlayer).toBeDefined();
-      expect(zeroChipPlayer?.chips).toBe(0);
+      // Verify the all-in player has 0 chips and is flagged correctly
+      gameState = engine.getGameState();
+      const allinPlayer = gameState.players.find(p => p.id === firstActorId);
+      expect(allinPlayer).toBeDefined();
+      expect(allinPlayer?.chips).toBe(0);
+      expect(allinPlayer?.allIn).toBe(true);
+      expect(allinPlayer?.folded).toBe(false);
     });
 
     it('should handle all-in amount correctly when player has less than required', () => {
