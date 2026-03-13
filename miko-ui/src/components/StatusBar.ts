@@ -9,22 +9,25 @@ export class StatusBar extends Container {
   constructor() {
     super();
 
-    // Pot label (top center of status area)
+    // Pot label (center, above the table)
     this.potLabel = new Text({ text: 'Pot: $0', style: FONTS.potLabel as TextStyleOptions });
     this.potLabel.anchor.set(0.5);
-    this.potLabel.y = -30;
+    this.potLabel.y = -15;
     this.addChild(this.potLabel);
 
-    // Status label (center)
+    // Status label ("AI is thinking...", etc.) — bottom-left, aligned with action bar
+    // StatusBar is at y=-140, action bar at y=320, so offset = 460
     this.statusLabel = new Text({ text: '', style: FONTS.statusBar as TextStyleOptions });
-    this.statusLabel.anchor.set(0.5);
-    this.statusLabel.y = 0;
+    this.statusLabel.anchor.set(0, 0.5);
+    this.statusLabel.x = -460;
+    this.statusLabel.y = 460;
     this.addChild(this.statusLabel);
 
-    // Hand label (below status, shows human's current hand strength)
+    // Hand label (hand ranking) — bottom-right, aligned with action bar
     this.handLabel = new Text({ text: '', style: FONTS.handLabel as TextStyleOptions });
-    this.handLabel.anchor.set(0.5);
-    this.handLabel.y = 30;
+    this.handLabel.anchor.set(1, 0.5);
+    this.handLabel.x = 460;
+    this.handLabel.y = 460;
     this.addChild(this.handLabel);
   }
 
