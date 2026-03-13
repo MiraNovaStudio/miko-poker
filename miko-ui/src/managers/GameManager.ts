@@ -226,7 +226,11 @@ export class GameManager {
       if (gameState.canFold) validActions.push('fold');
       if (gameState.canCheck) validActions.push('check');
       if (gameState.canCall) validActions.push('call');
-      if (gameState.canBet) validActions.push('bet');
+      // BB preflop: show "raise" instead of "bet" since blinds are already in
+      if (gameState.canBet) {
+        const isPreflop = gameState.street === 'preflop';
+        validActions.push(isPreflop ? 'raise' : 'bet');
+      }
       if (gameState.canRaise) validActions.push('raise');
 
       this.actionBar.updateLabels(validActions);
@@ -533,8 +537,11 @@ export class GameManager {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
     const actionType = gameState.canBet ? 'bet' : 'raise';
-    // Default raise = min raise from engine; default bet = big blind
-    const defaultAmount = gameState.canBet ? gameState.minBetAmount : gameState.minRaiseAmount;
+    // Default amount: use minRaise preflop (BB raise), minBet postflop, minRaise when facing bet
+    const isPreflop = gameState.street === 'preflop';
+    const defaultAmount = gameState.canBet
+      ? (isPreflop ? gameState.minRaiseAmount : gameState.minBetAmount)
+      : gameState.minRaiseAmount;
     const amount = this.actionBar.getBetAmount(defaultAmount);
     this.engine.processAction('player', { type: actionType as 'bet' | 'raise', amount });
     this.actionBar.hide();
