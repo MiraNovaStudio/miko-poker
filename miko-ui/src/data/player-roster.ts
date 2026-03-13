@@ -29,7 +29,7 @@ function nameHash(name: string): number {
 
 // [name, playstyle] — 14 passive (44%), 6 nit (19%), 8 shark (25%), 4 maniac (12%)
 const ROSTER_DATA: [string, Playstyle][] = [
-  // --- Passive (14 = 43.75%) ---
+  // --- Passive ---
   ['TiltedGrandma',   'passive'],
   ['LuckyRiver13',    'passive'],
   ['LuckyFlop420',    'passive'],
@@ -40,7 +40,7 @@ const ROSTER_DATA: [string, Playstyle][] = [
   ['NeonHeart7',  'passive'],
   ['LadyAllIn',       'passive'],
 
-  // --- Nit (6 = 18.75%) ---
+  // --- Nit ---
   ['FoldMaster64',    'nit'],
   ['SilentGrinder',   'nit'],
   ['RiverGhost',      'nit'],
@@ -53,7 +53,7 @@ const ROSTER_DATA: [string, Playstyle][] = [
   ['PotBuilderX',     'nit'],
   ['RiverRaptor',     'nit'],
 
-  // --- Shark (8 = 25%) ---
+  // --- Shark ---
   ['GoddessOfWar',      'shark'],
   ['AceHuntress44',     'shark'],
   ['GTO_Samurai',     'shark'],
@@ -62,9 +62,9 @@ const ROSTER_DATA: [string, Playstyle][] = [
   ['StackOverflow',   'shark'],
   ['FlopDonkey76',    'shark'],
   ['crypt0zenith',   'shark'],
-  ['Phil H377muth', 'shark'],
+  ['HappyFish', 'shark'],
 
-  // --- Maniac (4 = 12.5%) ---
+  // --- Maniac ---
   ['MaxDegenMad',  'maniac'],
   ['AllInGoblin',     'maniac'],
   ['UltraSage11',   'maniac'],
