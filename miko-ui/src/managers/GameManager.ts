@@ -301,7 +301,11 @@ export class GameManager {
       label = `$${amount}`;
     }
 
-    this.getSlotForPlayer(playerId)?.setBet(amount, label);
+    const slot = this.getSlotForPlayer(playerId);
+    if (slot) {
+      slot.setBet(amount, label);
+      slot.setBetColor(0xffff00); // yellow for blind amounts
+    }
     this.updatePotLabel();
   }
 

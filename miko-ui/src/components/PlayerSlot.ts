@@ -97,6 +97,10 @@ export class PlayerSlot extends Container {
     }
   }
 
+  setBetColor(color: number): void {
+    this.betLabel.style.fill = color;
+  }
+
   setBetSmallItalic(text: string): void {
     this.betLabel.style.fontSize = 16;
     this.betLabel.style.fontStyle = 'italic';
