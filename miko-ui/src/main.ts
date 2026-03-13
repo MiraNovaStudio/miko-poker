@@ -1,5 +1,6 @@
 import { Application } from 'pixi.js';
 import { AssetManager } from './managers/AssetManager.js';
+import { AudioManager } from './managers/AudioManager.js';
 import { StartScene } from './scenes/StartScene.js';
 import { GameScene } from './scenes/GameScene.js';
 
@@ -22,6 +23,26 @@ async function init() {
 
   // Load all textures
   await AssetManager.load();
+
+  // Shared audio manager (singleton, persists across scenes)
+  const audio = AudioManager.instance;
+  await audio.initialize();
+
+  // Music toggle button (HTML overlay, top-right of viewport)
+  const musicBtn = document.getElementById('music-toggle');
+  if (musicBtn) {
+    const updateIcon = () => {
+      musicBtn.innerHTML = audio.musicPlaying ? '&#x1F50A;' : '&#x1F507;';
+    };
+    musicBtn.addEventListener('click', () => {
+      if (audio.musicPlaying) {
+        audio.stopMusic();
+      } else {
+        audio.playMusic(0.2);
+      }
+      updateIcon();
+    });
+  }
 
   let currentScene: StartScene | GameScene | null = null;
 

@@ -52,10 +52,9 @@ export class GameScene extends Container {
     this.newGameBtn.visible = false;
     this.addChild(this.newGameBtn);
 
-    // Audio manager
-    const audioManager = new AudioManager();
+    // Game manager (uses shared AudioManager singleton)
+    const audioManager = AudioManager.instance;
 
-    // Game manager
     this.gameManager = new GameManager(
       slotLayout,
       communityCards,
@@ -69,10 +68,8 @@ export class GameScene extends Container {
       if (this.newGameBtn) this.newGameBtn.visible = true;
     };
 
-    // Initialize audio then start
-    audioManager.initialize().then(() => {
-      this.gameManager!.start();
-    });
+    // Audio is already initialized by main.ts — start the game
+    this.gameManager.start();
   }
 
   /** Called from main.ts on window resize to reposition the HTML bet input */

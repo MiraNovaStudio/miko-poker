@@ -1,12 +1,9 @@
 import { Container, Sprite, Graphics, Text, type TextStyleOptions } from 'pixi.js';
 import { AssetManager } from '../managers/AssetManager.js';
-import { AudioManager } from '../managers/AudioManager.js';
 import { FONTS } from '../utils/constants.js';
 
 export class StartScene extends Container {
   onStart: (() => void) | null = null;
-  private audioManager: AudioManager;
-  private musicPlaying = false;
 
   constructor() {
     super();
@@ -65,57 +62,8 @@ export class StartScene extends Container {
     btn.on('pointerover', () => drawBtn(0x3a8e5f));
     btn.on('pointerout', () => drawBtn(0x2a6e3f));
     btn.on('pointerdown', () => {
-      this.audioManager.stopMusic();
       this.onStart?.();
     });
     this.addChild(btn);
-
-    // Music toggle button (top-right corner, muted by default)
-    const musicBtn = new Container();
-    musicBtn.x = 430;
-    musicBtn.y = -250;
-
-    const musicBg = new Graphics();
-    const musicIcon = new Text({
-      text: '',
-      style: { fontFamily: 'Arial', fontSize: 28, fill: 0xffffff } as TextStyleOptions,
-    });
-    musicIcon.anchor.set(0.5);
-
-    const drawMusicBtn = (hovered: boolean) => {
-      musicBg.clear();
-      musicBg.roundRect(-22, -22, 44, 44, 8);
-      musicBg.fill({ color: hovered ? 0x445566 : 0x334455, alpha: 0.8 });
-      musicBg.stroke({ color: 0x5588aa, width: 2 });
-      musicIcon.text = this.musicPlaying ? '\u{1F50A}' : '\u{1F507}';
-    };
-    drawMusicBtn(false);
-
-    musicBtn.addChild(musicBg);
-    musicBtn.addChild(musicIcon);
-    musicBtn.eventMode = 'static';
-    musicBtn.cursor = 'pointer';
-    musicBtn.on('pointerover', () => drawMusicBtn(true));
-    musicBtn.on('pointerout', () => drawMusicBtn(false));
-    musicBtn.on('pointerdown', () => {
-      if (this.musicPlaying) {
-        this.audioManager.stopMusic();
-        this.musicPlaying = false;
-      } else {
-        this.audioManager.playMusic(0.2);
-        this.musicPlaying = true;
-      }
-      drawMusicBtn(true);
-    });
-    this.addChild(musicBtn);
-
-    // Initialize audio (muted by default — user clicks music button to enable)
-    this.audioManager = new AudioManager();
-    this.audioManager.initialize();
-  }
-
-  destroy(): void {
-    this.audioManager.stopMusic();
-    super.destroy();
   }
 }

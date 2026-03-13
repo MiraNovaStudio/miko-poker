@@ -1,9 +1,20 @@
 export class AudioManager {
+  private static _instance: AudioManager | null = null;
+
+  /** Get or create the shared AudioManager singleton */
+  static get instance(): AudioManager {
+    if (!AudioManager._instance) {
+      AudioManager._instance = new AudioManager();
+    }
+    return AudioManager._instance;
+  }
+
   private audioCtx: AudioContext | null = null;
   private buffers: Map<string, AudioBuffer> = new Map();
   private loaded = false;
   private musicSource: AudioBufferSourceNode | null = null;
   private musicGain: GainNode | null = null;
+  musicPlaying = false;
 
   async initialize(): Promise<void> {
     this.audioCtx = new AudioContext();
@@ -73,6 +84,7 @@ export class AudioManager {
     this.musicSource.loop = true;
     this.musicSource.connect(this.musicGain);
     this.musicSource.start(0);
+    this.musicPlaying = true;
   }
 
   /** Stop background music */
@@ -86,5 +98,6 @@ export class AudioManager {
       this.musicGain.disconnect();
       this.musicGain = null;
     }
+    this.musicPlaying = false;
   }
 }
