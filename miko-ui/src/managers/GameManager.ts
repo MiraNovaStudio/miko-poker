@@ -675,6 +675,9 @@ export class GameManager {
     if (seatIdx === 2 || seatIdx === 6) {
       label.x = slot.x;
       label.y = slot.y + 70; // below name label at y=50
+    } else if (seatIdx === 3 || seatIdx === 4 || seatIdx === 5) {
+      label.x = slot.x + betLabelPos.x;
+      label.y = slot.y + betLabelPos.y - 20;
     } else {
       label.x = slot.x + betLabelPos.x;
       label.y = slot.y + betLabelPos.y;
