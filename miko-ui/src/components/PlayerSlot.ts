@@ -275,17 +275,17 @@ export class PlayerSlot extends Container {
     this.hideWinnerLabel();
     this._folded = false;
     this._foldedCards = [];
-    this.cardsContainer.eventMode = 'none';
-    this.cardsContainer.cursor = 'default';
-    this.cardsContainer.removeAllListeners();
+    this.chipOverlay.eventMode = 'none';
+    this.chipOverlay.cursor = 'default';
+    this.chipOverlay.removeAllListeners();
     this.cardsContainer.visible = true;
   }
 
-  /** For human player only: show folded cards at 80% opacity on hover */
+  /** For human player only: toggle folded cards at 50% opacity on click of stack box */
   private setupFoldHover(): void {
     if (this.seatIndex !== 0 || !this._folded || this._foldedCards.length === 0) return;
 
-    // Re-deal the cards face-up but hidden, ready for hover
+    // Re-deal the cards face-up but hidden, ready for toggle
     this.clearCards();
     this._foldedCards.forEach((cardData, index) => {
       const xOffset = index * CARD_SPACING_HOLE - (CARD_SPACING_HOLE / 2);
@@ -296,27 +296,19 @@ export class PlayerSlot extends Container {
     });
     this.cardsContainer.visible = false;
 
-    // Make the slot area interactive for hover
-    this.cardsContainer.eventMode = 'static';
-    this.cardsContainer.cursor = 'pointer';
-    // Expand hit area so hover works even when cards are hidden
-    this.cardsContainer.hitArea = {
-      contains: (x: number, y: number) => {
-        const halfW = HOLE_CARD_WIDTH;
-        const halfH = HOLE_CARD_HEIGHT / 2;
-        return x >= -halfW && x <= halfW && y >= -halfH && y <= halfH;
-      },
-    };
+    // Make chip overlay clickable to toggle folded cards
+    this.chipOverlay.eventMode = 'static';
+    this.chipOverlay.cursor = 'pointer';
 
-    this.cardsContainer.on('pointerover', () => {
+    this.chipOverlay.on('pointerdown', () => {
       if (!this._folded) return;
-      this.cardsContainer.visible = true;
-      this.cardsContainer.alpha = 0.5;
-    });
-    this.cardsContainer.on('pointerout', () => {
-      if (!this._folded) return;
-      this.cardsContainer.visible = false;
-      this.cardsContainer.alpha = 1;
+      if (this.cardsContainer.visible) {
+        this.cardsContainer.visible = false;
+        this.cardsContainer.alpha = 1;
+      } else {
+        this.cardsContainer.visible = true;
+        this.cardsContainer.alpha = 0.5;
+      }
     });
   }
 
