@@ -16,6 +16,9 @@ export const SEAT_POSITIONS: { x: number; y: number }[] = [
 /** Top-row seats where name labels go above cards */
 export const TOP_ROW_SEATS = [3, 4, 5];
 
+/** Side seats where action labels need a background (overlap community cards) */
+export const SIDE_SEATS = [2, 6];
+
 /** Card sizes */
 export const HOLE_CARD_WIDTH = 80;
 export const HOLE_CARD_HEIGHT = 112;
@@ -80,12 +83,12 @@ export function getBetLabelOffset(seatIndex: number, seatPos: { x: number; y: nu
   if (seatPos.y > 100) {
     return { x: 0, y: -120 };
   }
-  // Side players
+  // Side players — vertically aligned with stack box
   if (seatPos.x < 0) {
-    return { x: 120, y: 0 }; // left side → label to right
+    return { x: 120, y: CHIP_OVERLAY_Y }; // left side → label to right
   }
   if (seatPos.x > 0) {
-    return { x: -120, y: 0 }; // right side → label to left
+    return { x: -120, y: CHIP_OVERLAY_Y }; // right side → label to left
   }
   return { x: 0, y: -120 };
 }
