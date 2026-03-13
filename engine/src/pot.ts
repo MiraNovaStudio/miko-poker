@@ -51,10 +51,32 @@ export class PotManager {
 
   /**
    * Collect bets from all players into the pot.
-   * Accumulates into mainPot each street; layered side-pot splitting
-   * happens at award time using totalBet.
+   * Before collecting, returns any uncalled bet portion to the bettor.
+   * If one player bet more than any other active player matched,
+   * the unmatched excess is returned (standard poker rule).
    */
   collectBets(players: Player[]): void {
+    // Return uncalled bet: find the highest bet that was matched by 2+ players
+    const activePlayers = players.filter(p => !p.folded);
+    if (activePlayers.length >= 2) {
+      const sortedBets = activePlayers.map(p => p.bet).sort((a, b) => b - a);
+      const highestBet = sortedBets[0];
+      const secondHighest = sortedBets[1];
+      if (highestBet > secondHighest) {
+        const excess = highestBet - secondHighest;
+        const topBettor = activePlayers.find(p => p.bet === highestBet);
+        if (topBettor) {
+          topBettor.chips += excess;
+          topBettor.bet -= excess;
+          topBettor.totalBet -= excess;
+          // Player is no longer all-in if they got chips back
+          if (topBettor.chips > 0 && topBettor.allIn) {
+            topBettor.allIn = false;
+          }
+        }
+      }
+    }
+
     let total = 0;
     for (const player of players) {
       total += player.bet;

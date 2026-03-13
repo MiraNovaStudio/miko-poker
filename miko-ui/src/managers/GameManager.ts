@@ -410,6 +410,9 @@ export class GameManager {
         this.pendingHandResult = null;
         this.actionBar.hide();
         this.engine.forceHandComplete();
+        // Refresh chip labels — uncalled bets have been returned by collectBets
+        this.updateAllChipLabels();
+        this.updatePotLabel();
       }
       return;
     }
