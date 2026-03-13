@@ -11,5 +11,21 @@ export class SettingsManager {
     return SettingsManager._instance;
   }
 
-  deckType: DeckType = 'png';
+  private _deckType: DeckType = 'png';
+  private _onChange: (() => void) | null = null;
+
+  get deckType(): DeckType {
+    return this._deckType;
+  }
+
+  set deckType(value: DeckType) {
+    if (this._deckType === value) return;
+    this._deckType = value;
+    this._onChange?.();
+  }
+
+  /** Register a callback for when settings change */
+  onChange(cb: () => void): void {
+    this._onChange = cb;
+  }
 }

@@ -14,7 +14,9 @@ import { DealerButton } from '../components/DealerButton.js';
 import { StatusBar } from '../components/StatusBar.js';
 import { ActionBar } from '../components/ActionBar.js';
 import { AudioManager } from './AudioManager.js';
-import { Text, type TextStyleOptions } from 'pixi.js';
+import { SettingsManager } from './SettingsManager.js';
+import { Card } from '../components/Card.js';
+import { Text, Container, type TextStyleOptions } from 'pixi.js';
 import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS } from '../utils/constants.js';
 
 type HandPhase = 'idle' | 'starting' | 'dealing' | 'betting' | 'showdown';
@@ -70,6 +72,9 @@ export class GameManager {
       () => this.onBetOrRaise(),
       () => this.onFold(),
     );
+
+    // Refresh all cards when deck type changes
+    SettingsManager.instance.onChange(() => this.refreshAllCards());
   }
 
   // ─── Public API ────────────────────────────────────────────
@@ -504,6 +509,25 @@ export class GameManager {
   }
 
   // ─── UI Helpers ────────────────────────────────────────────
+
+  /** Walk all visible Card instances and re-render for new deck type */
+  private refreshAllCards(): void {
+    const visit = (container: Container) => {
+      for (const child of container.children) {
+        if (child instanceof Card) {
+          child.refresh();
+        } else if (child instanceof Container) {
+          visit(child);
+        }
+      }
+    };
+    // Refresh cards in all player slots
+    for (const slot of this.slotLayout.getAllSlots()) {
+      visit(slot);
+    }
+    // Refresh community cards
+    visit(this.communityCards);
+  }
 
   private getSlotForPlayer(playerId: string): PlayerSlot | null {
     const seat = this.seatByPlayerId.get(playerId);
