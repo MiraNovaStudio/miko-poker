@@ -95,6 +95,15 @@ Brief description of what was done and why.
 - No UI test suite currently exists
 - Manual testing via `npm run dev` (Vite dev server on port 3000)
 
+## Mandatory Post-Task Steps
+
+For **every** completed task, before moving on:
+
+1. **Changelog** — Write `nova/changelog/YYYYMMDD/YYYYMMDD_HHMM_CHANGELOG.md` (run `date +"%Y%m%d.%H%M"` first)
+2. **Commit** — Stage all changed files + the changelog, then commit. One commit per task.
+
+Never skip the changelog or commit. Do not batch multiple tasks into one commit.
+
 ## Git Conventions
 
 - One commit per completed task

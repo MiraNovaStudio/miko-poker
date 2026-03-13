@@ -6,6 +6,7 @@ import { FONTS } from '../utils/constants.js';
 export class StartScene extends Container {
   onStart: (() => void) | null = null;
   private audioManager: AudioManager;
+  private musicPlaying = false;
 
   constructor() {
     super();
@@ -35,25 +36,12 @@ export class StartScene extends Container {
       } as TextStyleOptions,
     });
     title.anchor.set(0.5);
-    title.y = -80;
+    title.y = -220;
     this.addChild(title);
-
-    // Subtitle
-    const subtitle = new Text({
-      text: 'Texas Hold\'em',
-      style: {
-        fontFamily: 'Arial',
-        fontSize: 22,
-        fill: 0x88ccff,
-      } as TextStyleOptions,
-    });
-    subtitle.anchor.set(0.5);
-    subtitle.y = -30;
-    this.addChild(subtitle);
 
     // Start button
     const btn = new Container();
-    btn.y = 60;
+    btn.y = 210;
 
     const btnBg = new Graphics();
     const drawBtn = (color: number) => {
@@ -82,19 +70,48 @@ export class StartScene extends Container {
     });
     this.addChild(btn);
 
-    // Initialize audio and start background music on first user interaction
-    this.audioManager = new AudioManager();
-    this.audioManager.initialize().then(() => {
-      // Try to start music immediately — will work if AudioContext is allowed
-      this.audioManager.playMusic(0.2);
-    });
+    // Music toggle button (top-right corner, muted by default)
+    const musicBtn = new Container();
+    musicBtn.x = 430;
+    musicBtn.y = -250;
 
-    // Also attempt to start music on any user click (browser autoplay workaround)
-    const resumeMusic = () => {
-      this.audioManager.playMusic(0.2);
-      document.removeEventListener('pointerdown', resumeMusic);
+    const musicBg = new Graphics();
+    const musicIcon = new Text({
+      text: '',
+      style: { fontFamily: 'Arial', fontSize: 28, fill: 0xffffff } as TextStyleOptions,
+    });
+    musicIcon.anchor.set(0.5);
+
+    const drawMusicBtn = (hovered: boolean) => {
+      musicBg.clear();
+      musicBg.roundRect(-22, -22, 44, 44, 8);
+      musicBg.fill({ color: hovered ? 0x445566 : 0x334455, alpha: 0.8 });
+      musicBg.stroke({ color: 0x5588aa, width: 2 });
+      musicIcon.text = this.musicPlaying ? '\u{1F50A}' : '\u{1F507}';
     };
-    document.addEventListener('pointerdown', resumeMusic, { once: true });
+    drawMusicBtn(false);
+
+    musicBtn.addChild(musicBg);
+    musicBtn.addChild(musicIcon);
+    musicBtn.eventMode = 'static';
+    musicBtn.cursor = 'pointer';
+    musicBtn.on('pointerover', () => drawMusicBtn(true));
+    musicBtn.on('pointerout', () => drawMusicBtn(false));
+    musicBtn.on('pointerdown', () => {
+      if (this.musicPlaying) {
+        this.audioManager.stopMusic();
+        this.musicPlaying = false;
+      } else {
+        this.audioManager.playMusic(0.2);
+        this.musicPlaying = true;
+      }
+      drawMusicBtn(true);
+    });
+    this.addChild(musicBtn);
+
+    // Initialize audio (muted by default — user clicks music button to enable)
+    this.audioManager = new AudioManager();
+    this.audioManager.initialize();
   }
 
   destroy(): void {
