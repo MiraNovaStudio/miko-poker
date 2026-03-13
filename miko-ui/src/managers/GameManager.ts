@@ -389,18 +389,23 @@ export class GameManager {
 
     const gameState = this.engine.getGameState();
 
-    // Check if all remaining players are all-in
+    // Check if all remaining players are all-in, or only one player can act
+    // (no point prompting if every opponent is all-in — board should auto-run)
     const activePlayers = gameState.players.filter((p: PlayerState) => !p.folded);
     const canActPlayers = activePlayers.filter((p: PlayerState) => !p.allIn);
 
-    if (canActPlayers.length === 0 && activePlayers.length > 1) {
-      // Engine normally auto-calls forceHandComplete() inside processAction,
-      // but if we reach here, trigger it manually with runout sequencing.
+    if (canActPlayers.length <= 1 && activePlayers.length > 1
+        && activePlayers.some((p: PlayerState) => p.allIn)) {
       if (!this.allInRunout) {
+        // Show ALL IN label on every all-in player's slot
+        for (const p of activePlayers) {
+          if (p.allIn) this.getSlotForPlayer(p.id)?.showAllIn();
+        }
         this.revealAllCardsAtShowdown();
         this.allInRunout = true;
         this.streetQueue = [];
         this.pendingHandResult = null;
+        this.actionBar.hide();
         this.engine.forceHandComplete();
       }
       return;
@@ -577,6 +582,13 @@ export class GameManager {
       slot.setBet(amount, label);
       slot.setBetColor(0xffff00); // yellow for blind amounts
     }
+
+    // If posting the blind put this player all-in, show the label
+    if (this.engine) {
+      const p = this.engine.getGameState().players.find(pl => pl.id === playerId);
+      if (p?.allIn) slot?.showAllIn();
+    }
+
     this.updatePotLabel();
   }
 
@@ -718,11 +730,16 @@ export class GameManager {
     // Detect all-in condition: engine will auto-call forceHandComplete() inside
     // processAction, so street_changed events are about to fire synchronously.
     // Set allInRunout BEFORE those events arrive.
+    // Trigger when no one (or only one player) can act and at least one is all-in.
     if (!this.allInRunout && this.engine) {
       const gs = this.engine.getGameState();
       const active = gs.players.filter((p: PlayerState) => !p.folded);
       const canAct = active.filter((p: PlayerState) => !p.allIn);
-      if (canAct.length === 0 && active.length > 1) {
+      if (canAct.length <= 1 && active.length > 1
+          && active.some((p: PlayerState) => p.allIn)) {
+        for (const p of active) {
+          if (p.allIn) this.getSlotForPlayer(p.id)?.showAllIn();
+        }
         this.revealAllCardsAtShowdown();
         this.allInRunout = true;
         this.streetQueue = [];
