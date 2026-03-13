@@ -62,17 +62,19 @@ export class ActionBar extends Container {
     super();
 
     this.leftBtn = new Button('Check', 120, 44);
-    this.leftBtn.x = -140;
+    this.leftBtn.x = -200;
     this.leftBtn.on('pointerdown', () => this.onLeftClick?.());
     this.addChild(this.leftBtn);
 
     this.middleBtn = new Button('Bet', 120, 44);
-    this.middleBtn.x = 0;
+    this.middleBtn.x = -60;
     this.middleBtn.on('pointerdown', () => this.onMiddleClick?.());
     this.addChild(this.middleBtn);
 
+    // Bet input goes at x=80 (to the right of Bet/Raise button)
+
     this.rightBtn = new Button('Fold', 120, 44);
-    this.rightBtn.x = 140;
+    this.rightBtn.x = 200;
     this.rightBtn.on('pointerdown', () => this.onRightClick?.());
     this.addChild(this.rightBtn);
 
@@ -122,10 +124,16 @@ export class ActionBar extends Container {
   }
 
   /** Position the HTML bet input to overlay near the action bar */
-  updateInputPosition(screenX: number, screenY: number): void {
+  updateInputPosition(screenX: number, screenY: number, scale: number): void {
     if (this.betInputContainer) {
-      this.betInputContainer.style.left = `${screenX - 55}px`;
-      this.betInputContainer.style.top = `${screenY}px`;
+      // Position at x=80 in design space (right of Bet/Raise button), centered vertically
+      const inputX = screenX + 80 * scale;
+      const inputW = 120 * scale;
+      const inputH = 44 * scale;
+      this.betInputContainer.style.left = `${inputX - inputW / 2}px`;
+      this.betInputContainer.style.top = `${screenY - inputH / 2}px`;
+      this.betInputContainer.style.width = `${inputW}px`;
+      this.betInputContainer.style.height = `${inputH}px`;
     }
   }
 
@@ -144,17 +152,19 @@ export class ActionBar extends Container {
 
     this.betInputEl = document.createElement('input');
     this.betInputEl.type = 'number';
-    this.betInputEl.placeholder = 'Bet $';
+    this.betInputEl.placeholder = '$';
     this.betInputEl.style.cssText = `
-      width: 110px;
-      padding: 6px 10px;
-      font-size: 16px;
+      width: 100%;
+      height: 100%;
+      padding: 0;
+      font-size: 18px;
       background: #1a1a2e;
       color: #ffffff;
       border: 2px solid #5588aa;
-      border-radius: 6px;
+      border-radius: 8px;
       text-align: center;
       outline: none;
+      box-sizing: border-box;
     `;
     this.betInputEl.addEventListener('focus', () => {
       this.betInputEl!.style.borderColor = '#88ccff';

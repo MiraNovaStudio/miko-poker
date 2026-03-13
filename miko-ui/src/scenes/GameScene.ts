@@ -77,8 +77,8 @@ export class GameScene extends Container {
     // The action bar is at y=320 in design space, centered.
     // Convert to screen coords for the HTML input overlay.
     const inputScreenX = screenWidth / 2;
-    const inputScreenY = screenHeight / 2 + 320 * scale - 50 * scale;
-    this.actionBar.updateInputPosition(inputScreenX, inputScreenY);
+    const inputScreenY = screenHeight / 2 + 320 * scale;
+    this.actionBar.updateInputPosition(inputScreenX, inputScreenY, scale);
   }
 
   private createNewGameButton(): Container {
