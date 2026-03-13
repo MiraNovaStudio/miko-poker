@@ -23,6 +23,8 @@ export class PlayerSlot extends Container {
   private winnerTimer: ReturnType<typeof setTimeout> | null = null;
 
   private _isHighlighted = false;
+  private _folded = false;
+  private _foldedCards: CardData[] = [];
 
   constructor(seatIndex: number, seatPos: { x: number; y: number }) {
     super();
@@ -130,6 +132,7 @@ export class PlayerSlot extends Container {
   /** Deal hole cards. faceUp = true only for human player. */
   dealCards(cards: CardData[], faceUp: boolean): void {
     this.clearCards();
+    this._foldedCards = cards.slice();
     this.cardsContainer.visible = true;
 
     cards.forEach((cardData, index) => {
@@ -160,8 +163,10 @@ export class PlayerSlot extends Container {
 
   /** Animate cards flying to a target position (scene coords), then hide */
   foldCardsTo(targetX: number, targetY: number): void {
+    this._folded = true;
     if (this.cardsContainer.children.length === 0) {
       this.cardsContainer.visible = false;
+      this.setupFoldHover();
       return;
     }
 
@@ -196,6 +201,7 @@ export class PlayerSlot extends Container {
           card.alpha = 1;
           card.scale.set(1);
         });
+        this.setupFoldHover();
       }
     };
     requestAnimationFrame(animate);
@@ -267,7 +273,51 @@ export class PlayerSlot extends Container {
     this.clearStatus();
     this.highlight(false);
     this.hideWinnerLabel();
+    this._folded = false;
+    this._foldedCards = [];
+    this.cardsContainer.eventMode = 'none';
+    this.cardsContainer.cursor = 'default';
+    this.cardsContainer.removeAllListeners();
     this.cardsContainer.visible = true;
+  }
+
+  /** For human player only: show folded cards at 80% opacity on hover */
+  private setupFoldHover(): void {
+    if (this.seatIndex !== 0 || !this._folded || this._foldedCards.length === 0) return;
+
+    // Re-deal the cards face-up but hidden, ready for hover
+    this.clearCards();
+    this._foldedCards.forEach((cardData, index) => {
+      const xOffset = index * CARD_SPACING_HOLE - (CARD_SPACING_HOLE / 2);
+      const card = new Card(HOLE_CARD_WIDTH, HOLE_CARD_HEIGHT);
+      card.x = xOffset;
+      card.setCard(cardData, true);
+      this.cardsContainer.addChild(card);
+    });
+    this.cardsContainer.visible = false;
+
+    // Make the slot area interactive for hover
+    this.cardsContainer.eventMode = 'static';
+    this.cardsContainer.cursor = 'pointer';
+    // Expand hit area so hover works even when cards are hidden
+    this.cardsContainer.hitArea = {
+      contains: (x: number, y: number) => {
+        const halfW = HOLE_CARD_WIDTH;
+        const halfH = HOLE_CARD_HEIGHT / 2;
+        return x >= -halfW && x <= halfW && y >= -halfH && y <= halfH;
+      },
+    };
+
+    this.cardsContainer.on('pointerover', () => {
+      if (!this._folded) return;
+      this.cardsContainer.visible = true;
+      this.cardsContainer.alpha = 0.5;
+    });
+    this.cardsContainer.on('pointerout', () => {
+      if (!this._folded) return;
+      this.cardsContainer.visible = false;
+      this.cardsContainer.alpha = 1;
+    });
   }
 
   /** Animate the chip count spinning from one value to another */
