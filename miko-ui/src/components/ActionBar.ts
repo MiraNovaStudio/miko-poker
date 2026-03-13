@@ -1,12 +1,14 @@
 // (c) 2026 MiraNova Studios
 import { Container, Graphics, Text, type TextStyleOptions } from 'pixi.js';
 import { FONTS } from '../utils/constants.js';
+import { SettingsManager, formatChips } from '../managers/SettingsManager.js';
 
 type ActionCallback = () => void;
 
 const BTN_NORMAL = 0x334455;
 const BTN_HOVER = 0x445566;
 const BTN_BORDER = 0x5588aa;
+const BIG_BLIND = 10;
 
 class Button extends Container {
   private bg: Graphics;
@@ -105,15 +107,25 @@ export class ActionBar extends Container {
     }
   }
 
+  /** Get bet amount in dollars. In BB mode, converts BB input to dollars. */
   getBetAmount(defaultBet: number): number {
     if (!this.betInputEl || !this.betInputEl.value) return defaultBet;
-    const val = parseInt(this.betInputEl.value, 10);
+    const raw = this.betInputEl.value;
+
+    if (SettingsManager.instance.chipDisplay === 'bb') {
+      const bbVal = parseFloat(raw);
+      if (isNaN(bbVal) || bbVal <= 0) return defaultBet;
+      return Math.round(bbVal * BIG_BLIND);
+    }
+
+    const val = parseInt(raw, 10);
     return isNaN(val) || val <= 0 ? defaultBet : val;
   }
 
+  /** Set the placeholder to show the minimum bet/raise amount. */
   setMinBet(amount: number): void {
     if (this.betInputEl) {
-      this.betInputEl.placeholder = `$${amount}`;
+      this.betInputEl.placeholder = formatChips(amount);
     }
   }
 
@@ -122,6 +134,9 @@ export class ActionBar extends Container {
     // Reset bet input to empty each turn
     if (this.betInputEl) {
       this.betInputEl.value = '';
+      // Update inputMode based on chip display setting
+      this.betInputEl.inputMode =
+        SettingsManager.instance.chipDisplay === 'bb' ? 'decimal' : 'numeric';
     }
     if (this.betInputContainer) {
       this.betInputContainer.style.display = 'block';
@@ -180,9 +195,18 @@ export class ActionBar extends Container {
       box-sizing: border-box;
       -moz-appearance: textfield;
     `;
-    // Only allow digits
+    // Allow digits, and decimal point in BB mode
     this.betInputEl.addEventListener('input', () => {
-      this.betInputEl!.value = this.betInputEl!.value.replace(/[^0-9]/g, '');
+      if (SettingsManager.instance.chipDisplay === 'bb') {
+        this.betInputEl!.value = this.betInputEl!.value.replace(/[^0-9.]/g, '');
+        // Only allow one decimal point
+        const parts = this.betInputEl!.value.split('.');
+        if (parts.length > 2) {
+          this.betInputEl!.value = parts[0] + '.' + parts.slice(1).join('');
+        }
+      } else {
+        this.betInputEl!.value = this.betInputEl!.value.replace(/[^0-9]/g, '');
+      }
     });
     this.betInputEl.addEventListener('focus', () => {
       this.betInputEl!.style.borderColor = '#88ccff';
