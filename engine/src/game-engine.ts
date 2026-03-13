@@ -10,6 +10,7 @@ import { PotManager } from './pot.js';
 import { BettingRound } from './betting.js';
 import { evaluateHand, compareHands, getHandName } from './hand-evaluator.js';
 import { PokerAI } from './ai/PokerAI.js';
+import type { AIConfig } from './ai/ai-config.js';
 import { GameModeManager, STANDARD_STRUCTURES, type BlindStructure } from './game-mode.js';
 import { debugLog, debugBettingState } from './debug.js';
 import type { Card, Street, PlayerAction, GameConfig, PlayerState } from './types.js';
@@ -825,6 +826,36 @@ export class PokerGameEngine {
    */
   getGameMode(): GameModeManager {
     return this.gameMode;
+  }
+
+  /**
+   * Replace a player at the given seat index with a new player (buy-in).
+   * Only allowed between hands. The new player gets startingChips.
+   */
+  replacePlayer(seatIndex: number, newId: string, aiConfig?: AIConfig | 'easy' | 'normal' | 'hard' | 'pro'): void {
+    if (this.handInProgress) {
+      throw new Error('Cannot replace player during a hand');
+    }
+    const startingChips = this.gameMode.isTournament()
+      ? (this.gameMode.getConfig().blindStructure?.startingChips ?? this.config.startingChips)
+      : this.config.startingChips;
+
+    const oldPlayer = this.players[seatIndex];
+
+    // Remove old AI instance if any
+    if (oldPlayer) {
+      this.aiInstances.delete(oldPlayer.id);
+    }
+
+    // Create new player
+    const newPlayer = new Player(newId, startingChips);
+    this.players[seatIndex] = newPlayer;
+
+    // Create AI instance for new player
+    if (newId !== 'player') {
+      const config = aiConfig ?? 'normal';
+      this.aiInstances.set(newId, new PokerAI(config, newId));
+    }
   }
 
   /**

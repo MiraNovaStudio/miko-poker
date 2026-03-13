@@ -16,6 +16,7 @@ import { ActionBar } from '../components/ActionBar.js';
 import { AudioManager } from './AudioManager.js';
 import { SettingsManager } from './SettingsManager.js';
 import { Card } from '../components/Card.js';
+import { PLAYER_ROSTER, pickNewPlayer, type RosterEntry } from '../data/player-roster.js';
 import { Text, Container, type TextStyleOptions } from 'pixi.js';
 import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS } from '../utils/constants.js';
 
@@ -36,8 +37,12 @@ export class GameManager {
   // State
   private playerIdBySeat: string[] = [];
   private seatByPlayerId: Map<string, number> = new Map();
+  private displayNameById: Map<string, string> = new Map();
   private eliminatedPlayers: Set<string> = new Set();
+  private usedRosterNames: Set<string> = new Set();
+  private totalKnockouts = 0;
   private currentActivePlayer: string | null = null;
+  private pendingReplacements: { seatIndex: number; engineId: string; entry: RosterEntry }[] = [];
   private handCounter = 0;
   private handPhase: HandPhase = 'idle';
 
@@ -89,6 +94,10 @@ export class GameManager {
   /** Restart the game from scratch (New Game button) */
   restart(): void {
     this.eliminatedPlayers.clear();
+    this.usedRosterNames.clear();
+    this.displayNameById.clear();
+    this.totalKnockouts = 0;
+    this.pendingReplacements = [];
     this.handCounter = 0;
     this.handPhase = 'idle';
     this.currentActivePlayer = null;
@@ -120,19 +129,39 @@ export class GameManager {
       maxPlayers: GAME_CONFIG.maxPlayers,
     });
 
-    this.playerIdBySeat = ['player', 'ai1', 'ai2', 'ai3', 'ai4', 'ai5', 'ai6', 'ai7'];
+    // Pick 7 roster players for the initial table
+    const shuffled = [...PLAYER_ROSTER].sort(() => Math.random() - 0.5);
+    const initialRoster = shuffled.slice(0, 7);
+
+    this.playerIdBySeat = ['player'];
+    this.displayNameById.set('player', 'You');
+    this.usedRosterNames.clear();
+
+    for (let i = 0; i < 7; i++) {
+      const entry = initialRoster[i];
+      const engineId = `ai${i + 1}`;
+      this.playerIdBySeat.push(engineId);
+      this.displayNameById.set(engineId, entry.name);
+      this.usedRosterNames.add(entry.name);
+    }
+
     this.seatByPlayerId.clear();
     this.playerIdBySeat.forEach((id, i) => this.seatByPlayerId.set(id, i));
 
-    const aiDifficulties = new Map<string, 'easy' | 'normal' | 'hard' | 'pro'>([
-      ['ai1', 'normal'], ['ai2', 'normal'], ['ai3', 'normal'], ['ai4', 'normal'],
-      ['ai5', 'normal'], ['ai6', 'normal'], ['ai7', 'normal'],
-    ]);
+    // Init engine with placeholder AI difficulties (we'll override with custom configs)
+    this.engine.initGame(this.playerIdBySeat);
 
-    this.engine.initGame(this.playerIdBySeat, aiDifficulties);
+    // Now replace each AI with custom config from roster
+    for (let i = 1; i <= 7; i++) {
+      const engineId = this.playerIdBySeat[i];
+      const name = this.displayNameById.get(engineId)!;
+      const entry = PLAYER_ROSTER.find(p => p.name === name)!;
+      this.engine.replacePlayer(i, engineId, entry.config);
+    }
+
     this.engine.on((event: GameEvent) => this.handleGameEvent(event));
 
-    console.log('Engine initialized with 8 players');
+    console.log('Engine initialized with roster players:', initialRoster.map(r => r.name).join(', '));
   }
 
   private startFirstHand(): void {
@@ -199,7 +228,7 @@ export class GameManager {
       this.statusBar.setStatus('Your turn!');
     } else {
       // AI player's turn
-      this.statusBar.setStatus(`${currentPlayer.id} is thinking...`);
+      this.statusBar.setStatus(`${this.getDisplayName(currentPlayer.id)} is thinking...`);
 
       const delay = (GAME_CONFIG.aiThinkingDelayMin + Math.random() *
         (GAME_CONFIG.aiThinkingDelayMax - GAME_CONFIG.aiThinkingDelayMin)) * 1000;
@@ -276,7 +305,7 @@ export class GameManager {
       if (!slot) return;
 
       slot.resetForNewHand();
-      slot.setPlayerName(player.id);
+      slot.setPlayerName(this.getDisplayName(player.id));
       slot.setChips(player.chips);
       slot.visible = true;
     });
@@ -356,7 +385,8 @@ export class GameManager {
   }
 
   private onPlayerAction(playerId: string, action: { type: string; amount?: number }): void {
-    const actionText = `${playerId} ${action.type}${action.amount ? ` $${action.amount}` : ''}`;
+    const displayName = this.getDisplayName(playerId);
+    const actionText = `${displayName} ${action.type}${action.amount ? ` $${action.amount}` : ''}`;
     this.statusBar.setStatus(actionText);
 
     if (!this.engine) return;
@@ -437,7 +467,7 @@ export class GameManager {
     }
 
     // Display winner status with pot amount and full hand
-    const winners = result.winners.join(', ');
+    const winners = result.winners.map(id => this.getDisplayName(id)).join(', ');
     let statusMsg = `${winners} wins $${result.potAmount}!`;
     if (result.winningHand && this.engine) {
       const handDesc = this.getWinningHandDescription(result.winners[0]);
@@ -471,7 +501,11 @@ export class GameManager {
     // Schedule next hand
     setTimeout(() => {
       if (this.eliminatedPlayers.has('player')) return;
+      // Check win condition before starting next hand
+      if (this.totalKnockouts >= PLAYER_ROSTER.length) return;
+
       if (this.engine && !this.engine.isHandInProgress()) {
+        this.applyPendingReplacements();
         this.engine.startNewHand();
         setTimeout(() => this.advanceGame(), 500);
       }
@@ -527,6 +561,10 @@ export class GameManager {
     }
     // Refresh community cards
     visit(this.communityCards);
+  }
+
+  private getDisplayName(engineId: string): string {
+    return this.displayNameById.get(engineId) ?? engineId;
   }
 
   private getSlotForPlayer(playerId: string): PlayerSlot | null {
@@ -652,22 +690,91 @@ export class GameManager {
   private checkForEliminatedPlayers(): void {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
-    gameState.players.forEach(player => {
+    const newlyEliminated: { id: string; seatIndex: number }[] = [];
+
+    gameState.players.forEach((player, index) => {
       if (player.chips <= 0 && !this.eliminatedPlayers.has(player.id)) {
         this.eliminatedPlayers.add(player.id);
+        newlyEliminated.push({ id: player.id, seatIndex: index });
+
         const slot = this.getSlotForPlayer(player.id);
         if (slot) {
           slot.setStatus('ELIMINATED', true);
-          slot.visible = false;
         }
+
         if (player.id === 'player') {
           this.statusBar.setStatus('GAME OVER — You ran out of chips!');
           this.actionBar.hide();
           this.handPhase = 'idle';
           this.onGameOver?.();
+          return;
         }
+
+        this.totalKnockouts++;
       }
     });
+
+    // If human is eliminated, stop here
+    if (this.eliminatedPlayers.has('player')) return;
+
+    // Check win condition: all 32 roster players knocked out
+    if (this.totalKnockouts >= PLAYER_ROSTER.length) {
+      this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
+      this.actionBar.hide();
+      this.handPhase = 'idle';
+      this.onGameOver?.();
+      return;
+    }
+
+    // Replace eliminated AI players with new roster players
+    for (const { id, seatIndex } of newlyEliminated) {
+      if (id === 'player') continue;
+
+      const newEntry = pickNewPlayer(this.usedRosterNames);
+      if (!newEntry) {
+        // No more roster players — hide the seat
+        const slot = this.getSlotForPlayer(id);
+        if (slot) slot.visible = false;
+        continue;
+      }
+
+      this.usedRosterNames.add(newEntry.name);
+      const engineId = id; // reuse same engine slot ID (ai1, ai2, etc.)
+
+      // Schedule replacement for next hand
+      this.pendingReplacements.push({ seatIndex, engineId, entry: newEntry });
+    }
+  }
+
+  /** Apply pending player replacements before the next hand starts */
+  private applyPendingReplacements(): void {
+    if (!this.engine || this.pendingReplacements.length === 0) return;
+
+    for (const { seatIndex, engineId, entry } of this.pendingReplacements) {
+      // Replace in engine
+      this.engine.replacePlayer(seatIndex, engineId, entry.config);
+
+      // Update display name mapping
+      this.displayNameById.set(engineId, entry.name);
+
+      // Update UI slot
+      const slot = this.slotLayout.getSlot(seatIndex);
+      if (slot) {
+        slot.resetForNewHand();
+        slot.setPlayerName(entry.name);
+        slot.setChips(GAME_CONFIG.startingChips);
+        slot.visible = true;
+        slot.clearStatus();
+      }
+
+      // Remove from eliminated set so they can play
+      this.eliminatedPlayers.delete(engineId);
+
+      this.statusBar.setStatus(`${entry.name} has joined the table!`);
+      console.log(`New player joined: ${entry.name} at seat ${seatIndex}`);
+    }
+
+    this.pendingReplacements = [];
   }
 
   private revealAllCardsAtShowdown(): void {
