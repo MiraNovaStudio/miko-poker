@@ -36,23 +36,39 @@ The engine is stable and tested. UI work should only import from `@engine` — n
 
 Write a changelog entry for **every** completed task (feature, fix, refactor, or ad hoc work).
 
+### Location
+
+One file per change: `nova/changelog/YYYYMMDD/TIME_HHMM-CHANGELOG.md`
+
+Always run `date +"%Y%m%d.%H%M"` before writing to get the correct timestamp. If a timestamp conflicts, append `.1`, `.2`, etc.
+
 ### Format
 
-Append to `CHANGELOG.md` at the top (below the header), using this format:
+Each changelog file should contain:
 
 ```markdown
-## [Component Version] - YYYY-MM-DD
+# Title — YYYYMMDD.HHMM
 
-### Added / Changed / Fixed / Removed
-- Description of change
+## Summary
+Brief description of what was done and why.
+
+## Files Changed
+
+### Modified
+- **path/to/file** — what changed
+
+### Added (if any)
+- **path/to/new/file** — what it is
+
+## Test results
+- `npm test`: X suites, Y tests passed.
+
+## Git Commit Hash
+`TBD`
+
+## Status
+✅ Completed
 ```
-
-Component prefixes: `UI`, `Engine`, or version number for combined releases.
-
-Include:
-- What changed and why
-- Files affected (if non-obvious)
-- Any breaking changes
 
 ### Versioning
 
