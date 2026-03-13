@@ -18,6 +18,8 @@ export class PlayerSlot extends Container {
   private statusLabel: Text;
   private chipOverlay: Graphics;
   private cardsContainer: Container;
+  private winnerLabel: Text | null = null;
+  private winnerTimer: ReturnType<typeof setTimeout> | null = null;
 
   private _isHighlighted = false;
 
@@ -144,12 +146,63 @@ export class PlayerSlot extends Container {
     this.drawChipOverlay(active ? COLORS.activeGreen : COLORS.darkGray);
   }
 
+  /** Show an animated "WINNER!" label over the cards area */
+  showWinnerLabel(duration = 8000): void {
+    this.hideWinnerLabel();
+
+    this.winnerLabel = new Text({
+      text: 'WINNER!',
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 28,
+        fontWeight: 'bold',
+        fill: COLORS.yellow,
+        stroke: { color: COLORS.black, width: 3 },
+      } as TextStyleOptions,
+    });
+    this.winnerLabel.anchor.set(0.5);
+    this.winnerLabel.y = -20; // centered on cards area
+    this.winnerLabel.scale.set(0);
+    this.winnerLabel.alpha = 0;
+    this.addChild(this.winnerLabel);
+
+    // Animate: scale up + fade in over ~300ms using requestAnimationFrame
+    const startTime = performance.now();
+    const animDuration = 300;
+    const label = this.winnerLabel;
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / animDuration, 1);
+      // Ease-out back for a slight overshoot bounce
+      const ease = 1 - Math.pow(1 - t, 3);
+      const overshoot = t < 1 ? 1 + 0.3 * Math.sin(t * Math.PI) : 1;
+      label.scale.set(ease * overshoot);
+      label.alpha = ease;
+      if (t < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+
+    this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
+  }
+
+  hideWinnerLabel(): void {
+    if (this.winnerTimer) {
+      clearTimeout(this.winnerTimer);
+      this.winnerTimer = null;
+    }
+    if (this.winnerLabel) {
+      this.removeChild(this.winnerLabel);
+      this.winnerLabel.destroy();
+      this.winnerLabel = null;
+    }
+  }
+
   /** Reset slot for a new hand (clear cards, bets, status) */
   resetForNewHand(): void {
     this.clearCards();
     this.clearBet();
     this.clearStatus();
     this.highlight(false);
+    this.hideWinnerLabel();
     this.cardsContainer.visible = true;
   }
 

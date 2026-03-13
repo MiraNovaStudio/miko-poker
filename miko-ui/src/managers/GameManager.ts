@@ -582,9 +582,7 @@ export class GameManager {
     winnerIds.forEach(pid => {
       const slot = this.getSlotForPlayer(pid);
       if (!slot) return;
-      const originalName = pid;
-      slot.setPlayerName('* Winner *');
-      setTimeout(() => slot.setPlayerName(originalName), 8000);
+      slot.showWinnerLabel(8000);
     });
   }
 
