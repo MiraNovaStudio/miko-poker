@@ -50,17 +50,21 @@ async function init() {
   function layoutScene() {
     if (!currentScene) return;
 
-    const scaleX = app.screen.width / DESIGN_WIDTH;
-    const scaleY = app.screen.height / DESIGN_HEIGHT;
+    // Use window dimensions directly as fallback in case app.screen hasn't updated yet
+    const w = app.screen.width || window.innerWidth;
+    const h = app.screen.height || window.innerHeight;
+
+    const scaleX = w / DESIGN_WIDTH;
+    const scaleY = h / DESIGN_HEIGHT;
     const scale = Math.min(scaleX, scaleY);
 
     currentScene.scale.set(scale);
-    currentScene.x = app.screen.width / 2;
-    currentScene.y = app.screen.height / 2;
+    currentScene.x = w / 2;
+    currentScene.y = h / 2;
 
     // Notify the game scene so the HTML bet input can reposition
     if (currentScene instanceof GameScene) {
-      currentScene.onResize(app.screen.width, app.screen.height, scale);
+      currentScene.onResize(w, h, scale);
     }
   }
 
@@ -89,6 +93,7 @@ async function init() {
   }
 
   window.addEventListener('resize', layoutScene);
+  app.renderer.on('resize', layoutScene);
 
   // Start with the start screen
   showStartScene();
