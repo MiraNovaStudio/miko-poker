@@ -61,20 +61,21 @@ export class ActionBar extends Container {
   constructor() {
     super();
 
+    // Evenly spaced: -150, -50, +50 (input), +150
     this.leftBtn = new Button('Check', 120, 44);
-    this.leftBtn.x = -200;
+    this.leftBtn.x = -150;
     this.leftBtn.on('pointerdown', () => this.onLeftClick?.());
     this.addChild(this.leftBtn);
 
     this.middleBtn = new Button('Bet', 120, 44);
-    this.middleBtn.x = -60;
+    this.middleBtn.x = -20;
     this.middleBtn.on('pointerdown', () => this.onMiddleClick?.());
     this.addChild(this.middleBtn);
 
-    // Bet input goes at x=80 (to the right of Bet/Raise button)
+    // Bet input at x=110 (to the right of Bet/Raise)
 
     this.rightBtn = new Button('Fold', 120, 44);
-    this.rightBtn.x = 200;
+    this.rightBtn.x = 240;
     this.rightBtn.on('pointerdown', () => this.onRightClick?.());
     this.addChild(this.rightBtn);
 
@@ -111,6 +112,10 @@ export class ActionBar extends Container {
 
   show(): void {
     this.visible = true;
+    // Reset bet input to empty each turn
+    if (this.betInputEl) {
+      this.betInputEl.value = '';
+    }
     if (this.betInputContainer) {
       this.betInputContainer.style.display = 'block';
     }
@@ -126,8 +131,8 @@ export class ActionBar extends Container {
   /** Position the HTML bet input to overlay near the action bar */
   updateInputPosition(screenX: number, screenY: number, scale: number): void {
     if (this.betInputContainer) {
-      // Position at x=80 in design space (right of Bet/Raise button), centered vertically
-      const inputX = screenX + 80 * scale;
+      // Position at x=110 in design space (right of Bet/Raise button), centered vertically
+      const inputX = screenX + 110 * scale;
       const inputW = 120 * scale;
       const inputH = 44 * scale;
       this.betInputContainer.style.left = `${inputX - inputW / 2}px`;
@@ -151,7 +156,8 @@ export class ActionBar extends Container {
     `;
 
     this.betInputEl = document.createElement('input');
-    this.betInputEl.type = 'number';
+    this.betInputEl.type = 'text';
+    this.betInputEl.inputMode = 'numeric';
     this.betInputEl.placeholder = '$';
     this.betInputEl.style.cssText = `
       width: 100%;
@@ -165,7 +171,12 @@ export class ActionBar extends Container {
       text-align: center;
       outline: none;
       box-sizing: border-box;
+      -moz-appearance: textfield;
     `;
+    // Only allow digits
+    this.betInputEl.addEventListener('input', () => {
+      this.betInputEl!.value = this.betInputEl!.value.replace(/[^0-9]/g, '');
+    });
     this.betInputEl.addEventListener('focus', () => {
       this.betInputEl!.style.borderColor = '#88ccff';
     });
