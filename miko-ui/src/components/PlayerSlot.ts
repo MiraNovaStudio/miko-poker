@@ -63,7 +63,7 @@ export class PlayerSlot extends Container {
     // Status label (ALL-IN, ELIMINATED)
     this.statusLabel = new Text({ text: '', style: FONTS.statusLabel as TextStyleOptions });
     this.statusLabel.anchor.set(0.5);
-    this.statusLabel.y = 90;
+    this.statusLabel.y = isTopRow ? 110 : 90;
     this.statusLabel.visible = false;
     this.addChild(this.statusLabel);
   }
