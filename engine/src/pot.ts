@@ -50,65 +50,11 @@ export class PotManager {
   }
 
   /**
-   * Collect bets from all players and create side pots if needed
+   * Collect bets from all players into the pot.
+   * Accumulates into mainPot each street; layered side-pot splitting
+   * happens at award time using totalBet.
    */
   collectBets(players: Player[]): void {
-    // Get all players with bets
-    const playersWithBets = players.filter(p => p.bet > 0);
-    if (playersWithBets.length === 0) return;
-
-    // Sort by bet amount
-    playersWithBets.sort((a, b) => a.bet - b.bet);
-
-    let previousBetLevel = 0;
-
-    for (let i = 0; i < playersWithBets.length; i++) {
-      const currentPlayer = playersWithBets[i];
-      const currentBetLevel = currentPlayer.bet;
-      const betIncrement = currentBetLevel - previousBetLevel;
-
-      if (betIncrement > 0) {
-        // Calculate eligible players (those who bet at least this much and haven't folded)
-        const eligiblePlayers = players
-          .filter(p => !p.folded && p.totalBet >= currentBetLevel)
-          .map(p => p.id);
-
-        // Collect this level from all remaining players
-        let potAmount = 0;
-        for (const player of playersWithBets) {
-          if (player.bet >= currentBetLevel) {
-            potAmount += betIncrement;
-          }
-        }
-
-        // If this is the first pot and no all-ins involved, add to main pot
-        if (this.sidePots.length === 0 && !currentPlayer.allIn) {
-          this.mainPot += potAmount;
-        } else {
-          // Create side pot
-          if (potAmount > 0) {
-            this.sidePots.push({
-              amount: potAmount,
-              eligiblePlayers
-            });
-          }
-        }
-      }
-
-      previousBetLevel = currentBetLevel;
-    }
-
-    // Reset all player bets for next street
-    for (const player of players) {
-      player.resetBetForStreet();
-    }
-  }
-
-  /**
-   * Simple version: just add all bets to main pot
-   * (For basic implementation without side pot complexity)
-   */
-  collectBetsSimple(players: Player[]): void {
     let total = 0;
     for (const player of players) {
       total += player.bet;
@@ -139,33 +85,77 @@ export class PotManager {
   }
 
   /**
-   * Award main pot and side pots to appropriate winners
+   * Award pot(s) to winner(s), building layered side pots from totalBet.
+   *
+   * Algorithm: sort contributors by totalBet ascending, then for each
+   * contribution level create a pot = increment × number of players who
+   * contributed at least that much. Each pot is eligible only to non-folded
+   * players at that level. Best hand among eligible wins the pot.
    */
   awardPots(players: Player[], getWinners: (eligiblePlayers: Player[]) => Player[]): void {
-    // Award main pot
-    if (this.mainPot > 0) {
-      const activePlayers = players.filter(p => !p.folded);
-      const winners = getWinners(activePlayers);
-      
-      if (winners.length > 0) {
-        const shareAmount = Math.floor(this.mainPot / winners.length);
-        winners.forEach(w => w.addChips(shareAmount));
+    // Build layered pots from totalBet
+    const contributors = players
+      .filter(p => p.totalBet > 0)
+      .sort((a, b) => a.totalBet - b.totalBet);
+
+    if (contributors.length === 0) {
+      this.reset();
+      return;
+    }
+
+    // Deduplicate contribution levels
+    const levels: number[] = [];
+    for (const p of contributors) {
+      if (levels.length === 0 || levels[levels.length - 1] !== p.totalBet) {
+        levels.push(p.totalBet);
       }
     }
 
-    // Award each side pot
-    for (const sidePot of this.sidePots) {
-      const eligiblePlayers = players.filter(p => 
-        sidePot.eligiblePlayers.includes(p.id) && !p.folded
-      );
-      
-      if (eligiblePlayers.length > 0) {
-        const winners = getWinners(eligiblePlayers);
+    let previousLevel = 0;
+    let awarded = 0;
+
+    for (const level of levels) {
+      const increment = level - previousLevel;
+      if (increment <= 0) continue;
+
+      // Every contributor who put in at least this level contributes 'increment'
+      const numContributors = contributors.filter(p => p.totalBet >= level).length;
+      const potAmount = increment * numContributors;
+
+      // Eligible to win = contributed at this level AND not folded
+      const eligible = contributors.filter(p => p.totalBet >= level && !p.folded);
+
+      if (eligible.length > 0) {
+        const winners = getWinners(eligible);
         if (winners.length > 0) {
-          const shareAmount = Math.floor(sidePot.amount / winners.length);
-          winners.forEach(w => w.addChips(shareAmount));
+          const share = Math.floor(potAmount / winners.length);
+          let remainder = potAmount % winners.length;
+          for (const w of winners) {
+            let amount = share;
+            if (remainder > 0) { amount += 1; remainder--; }
+            w.addChips(amount);
+          }
+          awarded += potAmount;
+        }
+      } else {
+        // All eligible players folded — give to any non-folded player
+        const nonFolded = players.filter(p => !p.folded);
+        if (nonFolded.length > 0) {
+          const winners = getWinners(nonFolded);
+          if (winners.length > 0) {
+            const share = Math.floor(potAmount / winners.length);
+            let remainder = potAmount % winners.length;
+            for (const w of winners) {
+              let amount = share;
+              if (remainder > 0) { amount += 1; remainder--; }
+              w.addChips(amount);
+            }
+            awarded += potAmount;
+          }
         }
       }
+
+      previousLevel = level;
     }
 
     this.reset();
