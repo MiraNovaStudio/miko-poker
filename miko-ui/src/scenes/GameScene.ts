@@ -12,6 +12,7 @@ import { ActionBar } from '../components/ActionBar.js';
 export class GameScene extends Container {
   private gameManager: GameManager | null = null;
   private actionBar: ActionBar;
+  onQuit: (() => void) | null = null;
 
   constructor() {
     super();
@@ -62,16 +63,35 @@ export class GameScene extends Container {
     const gameoverModal = document.getElementById('gameover-modal');
     const gameoverMessage = document.getElementById('gameover-message');
     const newGameBtn = document.getElementById('new-game-btn');
+    const rebuyBtn = document.getElementById('rebuy-btn');
+    const quitBtn = document.getElementById('quit-btn');
 
     this.gameManager.onGameOver = (message?: string) => {
       if (gameoverMessage && message) gameoverMessage.textContent = message;
+
+      // Player eliminated → show Rebuy + Quit; player won → show New Game
+      const eliminated = message?.includes('ran out of chips');
+      if (rebuyBtn) rebuyBtn.style.display = eliminated ? 'inline-block' : 'none';
+      if (quitBtn) quitBtn.style.display = eliminated ? 'inline-block' : 'none';
+      if (newGameBtn) newGameBtn.style.display = eliminated ? 'none' : 'inline-block';
+
       gameoverModal?.classList.add('open');
     };
 
-    if (newGameBtn && gameoverModal) {
-      newGameBtn.addEventListener('click', () => {
+    if (gameoverModal) {
+      newGameBtn?.addEventListener('click', () => {
         gameoverModal.classList.remove('open');
         this.gameManager?.restart();
+      });
+
+      rebuyBtn?.addEventListener('click', () => {
+        gameoverModal.classList.remove('open');
+        this.gameManager?.rebuy();
+      });
+
+      quitBtn?.addEventListener('click', () => {
+        gameoverModal.classList.remove('open');
+        this.onQuit?.();
       });
     }
 

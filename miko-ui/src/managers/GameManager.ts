@@ -162,6 +162,36 @@ export class GameManager {
     }, 500);
   }
 
+  /** Rebuy: give the human player $1000 and continue the current game */
+  rebuy(): void {
+    if (!this.engine) return;
+
+    // Replace player at seat 0 with a fresh 'player' entry (resets chips to startingChips)
+    this.engine.replacePlayer(0, 'player');
+    this.eliminatedPlayers.delete('player');
+    this.humanFolded = false;
+    this.handPhase = 'idle';
+
+    // Re-show the player slot with new chips
+    const slot = this.slotLayout.getSlot(0);
+    if (slot) {
+      slot.resetForNewHand();
+      slot.setPlayerName(this.getDisplayName('player'));
+      slot.setChips(GAME_CONFIG.startingChips);
+      slot.visible = true;
+    }
+
+    this.statusBar.setStatus('Rebuy! Back in the game.');
+
+    // Start the next hand after a brief pause
+    const gen = this.generation;
+    setTimeout(() => {
+      if (this.generation !== gen) return;
+      this.engine!.startNewHand();
+      this.delayed(() => this.advanceGame(), 500);
+    }, 1500);
+  }
+
   /** Schedule a callback that auto-cancels if the game restarts */
   private delayed(fn: () => void, ms: number): void {
     const gen = this.generation;

@@ -191,6 +191,7 @@ async function init() {
     if (pageTitle) pageTitle.style.display = 'block';
     if (copyrightEl) copyrightEl.style.display = 'none';
     const game = new GameScene();
+    game.onQuit = () => showStartScene();
     currentScene = game;
     app.stage.addChild(game);
     layoutScene();

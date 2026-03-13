@@ -154,7 +154,7 @@
       color: #aac;
       margin-bottom: 24px;
     }
-    #new-game-btn {
+    .gameover-btn {
       padding: 12px 40px;
       border: 2px solid #4ade80;
       border-radius: 8px;
@@ -164,9 +164,23 @@
       font-weight: bold;
       cursor: pointer;
       transition: background 0.15s;
+      margin: 6px 8px;
     }
-    #new-game-btn:hover {
+    .gameover-btn:hover {
       background: #3a8e5f;
+    }
+    #quit-btn {
+      border-color: #aa5555;
+      background: #6e2a2a;
+      color: #ff8888;
+    }
+    #quit-btn:hover {
+      background: #8e3a3a;
+    }
+    .gameover-buttons {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
     }
     #copyright {
       position: fixed;
@@ -244,7 +258,11 @@
     <div id="gameover-panel">
       <h2>Game Over</h2>
       <p id="gameover-message">You ran out of chips!</p>
-      <button id="new-game-btn">New Game</button>
+      <div class="gameover-buttons">
+        <button id="rebuy-btn" class="gameover-btn" style="display:none;">Rebuy ($1000)</button>
+        <button id="quit-btn" class="gameover-btn" style="display:none;">Quit</button>
+        <button id="new-game-btn" class="gameover-btn" style="display:none;">New Game</button>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

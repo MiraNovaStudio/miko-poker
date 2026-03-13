@@ -62,6 +62,7 @@ const ROSTER_DATA: [string, Playstyle][] = [
   ['StackOverflow',   'shark'],
   ['FlopDonkey76',    'shark'],
   ['crypt0zenith',   'shark'],
+  ['Phil H377muth', 'shark'],
 
   // --- Maniac (4 = 12.5%) ---
   ['MaxDegenMad',  'maniac'],

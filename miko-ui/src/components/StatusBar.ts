@@ -27,9 +27,9 @@ export class StatusBar extends Container {
 
     // Hand label (hand ranking) — bottom-right, aligned with action bar
     this.handLabel = new Text({ text: '', style: FONTS.handLabel as TextStyleOptions });
-    this.handLabel.anchor.set(1, 0.5);
-    this.handLabel.x = 460;
-    this.handLabel.y = 460;
+    this.handLabel.anchor.set(0, 0.5);
+    this.handLabel.x = -460;
+    this.handLabel.y = 430;
     this.addChild(this.handLabel);
   }
 
