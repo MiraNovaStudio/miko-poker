@@ -185,17 +185,23 @@ async function init() {
 
   // About modal (click page title to open)
   const aboutModal = document.getElementById('about-modal');
+  const aboutClose = document.getElementById('about-close');
+  const aboutVersion = document.getElementById('about-version-number');
   const pageTitle = document.getElementById('page-title');
   const copyrightEl = document.getElementById('copyright');
   const mobileGate = document.getElementById('mobile-gate');
   const gameCanvas = document.getElementById('game-canvas');
 
+  if (aboutVersion) {
+    aboutVersion.textContent = __APP_VERSION__;
+  }
+
   if (pageTitle && aboutModal) {
     pageTitle.addEventListener('click', () => {
       aboutModal.classList.add('open');
     });
-    aboutModal.addEventListener('click', (e) => {
-      if (e.target === aboutModal) aboutModal.classList.remove('open');
+    aboutClose?.addEventListener('click', () => {
+      aboutModal.classList.remove('open');
     });
   }
 

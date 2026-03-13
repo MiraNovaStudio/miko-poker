@@ -130,13 +130,13 @@
       z-index: 200;
       align-items: center;
       justify-content: center;
-      background: rgba(26, 26, 46, 0.85);
+      background: rgba(0, 0, 0, 0.75);
     }
     #about-modal.open {
       display: flex;
     }
     #about-panel {
-      background: #1e2a3a;
+      background: #1a1a2e;
       border: 2px solid #5588aa;
       border-radius: 12px;
       padding: 36px 48px;
@@ -153,13 +153,28 @@
     #about-panel .about-version {
       font-size: 16px;
       color: #aac;
-      margin: 0 0 20px;
+      margin: 0 0 24px;
     }
     #about-panel .about-copyright {
       font-size: 14px;
       color: #888;
       font-style: italic;
-      margin: 0;
+      margin: 0 0 28px;
+    }
+    #about-close {
+      display: block;
+      margin: 0 auto;
+      padding: 8px 40px;
+      border: 2px solid #5588aa;
+      border-radius: 8px;
+      background: rgba(51, 68, 85, 0.85);
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #about-close:hover {
+      background: rgba(68, 85, 102, 0.9);
     }
     #page-title {
       cursor: pointer;
@@ -292,8 +307,9 @@
   <div id="about-modal">
     <div id="about-panel">
       <h2>Miko Poker (Demo)</h2>
-      <p class="about-version">Version 0.1.0</p>
+      <p class="about-version">Version <span id="about-version-number"></span></p>
       <p class="about-copyright">&copy; 2026 MiraNova Studios</p>
+      <button id="about-close">OK</button>
     </div>
   </div>
   <!-- Settings modal -->
