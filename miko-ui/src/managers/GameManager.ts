@@ -368,7 +368,7 @@ export class GameManager {
     // Update bet label and play sound
     if (action.type === 'fold') {
       slot.setBet(0, 'Fold');
-      slot.setBetColor(0x333333);
+      slot.setBetColor(0x888888);
       slot.foldCardsTo(this.communityCards.x, this.communityCards.y);
       this.audioManager.playFoldSound();
       if (playerId === 'player') {
