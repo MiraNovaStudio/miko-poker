@@ -58,9 +58,12 @@ async function init() {
     const scaleY = h / DESIGN_HEIGHT;
     const scale = Math.min(scaleX, scaleY);
 
+    const scaledH = DESIGN_HEIGHT * scale;
+
     currentScene.scale.set(scale);
     currentScene.x = w / 2;
-    currentScene.y = h / 2;
+    // Center horizontally, but anchor to top when viewport is taller than needed
+    currentScene.y = h > scaledH ? scaledH / 2 : h / 2;
 
     // Notify the game scene so the HTML bet input can reposition
     if (currentScene instanceof GameScene) {
