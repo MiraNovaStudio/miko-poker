@@ -84,6 +84,7 @@ async function init() {
   }
 
   const pageTitle = document.getElementById('page-title');
+  const copyrightEl = document.getElementById('copyright');
 
   let currentScene: StartScene | GameScene | null = null;
 
@@ -120,6 +121,7 @@ async function init() {
     if (soundBtn) soundBtn.style.display = 'none';
     if (settingsBtn) settingsBtn.style.display = 'none';
     if (pageTitle) pageTitle.style.display = 'none';
+    if (copyrightEl) copyrightEl.style.display = 'block';
     const start = new StartScene();
     currentScene = start;
     app.stage.addChild(start);
@@ -136,6 +138,7 @@ async function init() {
     if (soundBtn) soundBtn.style.display = 'flex';
     if (settingsBtn) settingsBtn.style.display = 'flex';
     if (pageTitle) pageTitle.style.display = 'block';
+    if (copyrightEl) copyrightEl.style.display = 'none';
     const game = new GameScene();
     currentScene = game;
     app.stage.addChild(game);

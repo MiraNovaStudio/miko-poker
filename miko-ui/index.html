@@ -121,6 +121,20 @@
     #settings-close:hover {
       background: rgba(68, 85, 102, 0.9);
     }
+    #copyright {
+      position: fixed;
+      bottom: 12px;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      font-style: italic;
+      color: #888;
+      user-select: none;
+      display: none;
+    }
     #page-title {
       position: fixed;
       top: 14px;
@@ -139,6 +153,7 @@
 <body>
   <div id="game-canvas"></div>
   <div id="page-title">MikoPoker</div>
+  <div id="copyright">© 2026 MiraNova Studios</div>
   <button id="settings-toggle" class="top-btn" title="Settings">&#x2699;</button>
   <button id="sound-toggle" class="top-btn" title="Toggle sound">&#x1F50A;</button>
 
