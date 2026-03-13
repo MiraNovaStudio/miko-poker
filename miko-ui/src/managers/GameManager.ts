@@ -43,8 +43,8 @@ export class GameManager {
   private totalKnockouts = 0;
   private currentActivePlayer: string | null = null;
   private pendingReplacements: { seatIndex: number; engineId: string; entry: RosterEntry }[] = [];
-  /** Replacements waiting one extra hand before joining */
-  private deferredReplacements: { seatIndex: number; engineId: string; entry: RosterEntry }[] = [];
+  /** Replacements waiting 1-3 hands before joining */
+  private deferredReplacements: { seatIndex: number; engineId: string; entry: RosterEntry; handsRemaining: number }[] = [];
   private handCounter = 0;
   private handPhase: HandPhase = 'idle';
 
@@ -745,10 +745,18 @@ export class GameManager {
       if (this.totalKnockouts >= PLAYER_ROSTER.length) return;
 
       if (this.engine && !this.engine.isHandInProgress()) {
-        // Promote deferred replacements → pending (they waited one hand)
+        // Tick down deferred replacements; promote those that have waited enough hands
         if (this.deferredReplacements.length > 0) {
-          this.pendingReplacements.push(...this.deferredReplacements);
-          this.deferredReplacements = [];
+          const stillWaiting: typeof this.deferredReplacements = [];
+          for (const dr of this.deferredReplacements) {
+            dr.handsRemaining--;
+            if (dr.handsRemaining <= 0) {
+              this.pendingReplacements.push(dr);
+            } else {
+              stillWaiting.push(dr);
+            }
+          }
+          this.deferredReplacements = stillWaiting;
         }
 
         // Apply pending with slide-in animation, then start hand
@@ -996,8 +1004,9 @@ export class GameManager {
       this.usedRosterNames.add(newEntry.name);
       const engineId = id; // reuse same engine slot ID (ai1, ai2, etc.)
 
-      // Defer replacement: play one hand empty, then join with animation
-      this.deferredReplacements.push({ seatIndex, engineId, entry: newEntry });
+      // Defer replacement: wait 1-3 hands before new player joins
+      const handsRemaining = 1 + Math.floor(Math.random() * 3); // 1, 2, or 3
+      this.deferredReplacements.push({ seatIndex, engineId, entry: newEntry, handsRemaining });
     }
   }
 
