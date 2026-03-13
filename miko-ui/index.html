@@ -209,9 +209,37 @@
       user-select: none;
       display: none;
     }
+    #mobile-gate {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #1a1a2e;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      flex-direction: column;
+      gap: 16px;
+      padding: 32px;
+    }
+    #mobile-gate h2 {
+      font-size: 28px;
+      margin: 0;
+    }
+    #mobile-gate p {
+      font-size: 16px;
+      color: #aac;
+      margin: 0;
+    }
   </style>
 </head>
 <body>
+  <div id="mobile-gate">
+    <h2>MikoPoker</h2>
+    <p>Not yet supported on mobile.<br>Please use a desktop browser.</p>
+  </div>
   <div id="game-canvas"></div>
   <div id="page-title">MikoPoker</div>
   <div id="copyright">© 2026 MiraNova Studios</div>

@@ -198,16 +198,20 @@ export class ActionBar extends Container {
       this.betInputContainer.style.top = `${screenY - inputH / 2}px`;
       this.betInputContainer.style.width = `${inputW}px`;
       this.betInputContainer.style.height = `${inputH}px`;
+      if (this.betInputEl) {
+        this.betInputEl.style.fontSize = `${Math.max(11, 18 * scale)}px`;
+      }
     }
 
-    // Position slider panel beneath seat 6 (right side of table, design x=380, y=0)
-    // In screen coords: center + 380*scale, center + 0*scale → then offset down
+    // Position slider panel to the right of the bet input, scaled with the scene
     if (this.sliderPanel) {
       const panelX = screenX + 340 * scale;
-      const panelY = screenY - 200 * scale;
+      const panelY = screenY - 160 * scale;
       this.sliderPanel.style.left = `${panelX}px`;
       this.sliderPanel.style.top = `${panelY}px`;
       this.sliderPanel.style.right = '';
+      this.sliderPanel.style.transform = `scale(${scale})`;
+      this.sliderPanel.style.transformOrigin = 'top left';
     }
   }
 

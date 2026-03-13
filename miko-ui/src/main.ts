@@ -166,12 +166,33 @@ async function init() {
 
   const pageTitle = document.getElementById('page-title');
   const copyrightEl = document.getElementById('copyright');
+  const mobileGate = document.getElementById('mobile-gate');
+  const gameCanvas = document.getElementById('game-canvas');
+
+  const MOBILE_BREAKPOINT = 500;
 
   let currentScene: StartScene | GameScene | null = null;
 
+  /** Show mobile gate and hide everything else when viewport is too narrow. */
+  function updateMobileGate() {
+    const isMobile = window.innerWidth < MOBILE_BREAKPOINT;
+    if (mobileGate) mobileGate.style.display = isMobile ? 'flex' : 'none';
+    if (gameCanvas) gameCanvas.style.display = isMobile ? 'none' : 'block';
+    if (isMobile) {
+      if (pageTitle) pageTitle.style.display = 'none';
+      if (copyrightEl) copyrightEl.style.display = 'none';
+      if (soundBtn) soundBtn.style.display = 'none';
+      if (settingsBtn) settingsBtn.style.display = 'none';
+    } else {
+      restoreUIForScreen();
+    }
+  }
+
   /** Center the scene and scale it to fit the viewport while preserving aspect ratio. */
   function layoutScene() {
+    updateMobileGate();
     if (!currentScene) return;
+    if (window.innerWidth < MOBILE_BREAKPOINT) return;
 
     // Use window dimensions directly as fallback in case app.screen hasn't updated yet
     const w = app.screen.width || window.innerWidth;
@@ -194,11 +215,30 @@ async function init() {
     }
   }
 
+  let activeScreen: 'start' | 'game' = 'start';
+
+  /** Restore UI element visibility for the active screen (after mobile gate hides them). */
+  function restoreUIForScreen() {
+    if (window.innerWidth < MOBILE_BREAKPOINT) return;
+    if (activeScreen === 'start') {
+      if (soundBtn) soundBtn.style.display = 'none';
+      if (settingsBtn) settingsBtn.style.display = 'none';
+      if (pageTitle) pageTitle.style.display = 'none';
+      if (copyrightEl) copyrightEl.style.display = 'block';
+    } else {
+      if (soundBtn) soundBtn.style.display = 'flex';
+      if (settingsBtn) settingsBtn.style.display = 'flex';
+      if (pageTitle) pageTitle.style.display = 'block';
+      if (copyrightEl) copyrightEl.style.display = 'none';
+    }
+  }
+
   function showStartScene() {
     if (currentScene) {
       app.stage.removeChild(currentScene);
       currentScene.destroy();
     }
+    activeScreen = 'start';
     if (soundBtn) soundBtn.style.display = 'none';
     if (settingsBtn) settingsBtn.style.display = 'none';
     if (pageTitle) pageTitle.style.display = 'none';
@@ -216,6 +256,7 @@ async function init() {
       app.stage.removeChild(currentScene);
       currentScene.destroy();
     }
+    activeScreen = 'game';
     if (soundBtn) soundBtn.style.display = 'flex';
     if (settingsBtn) settingsBtn.style.display = 'flex';
     if (pageTitle) pageTitle.style.display = 'block';
