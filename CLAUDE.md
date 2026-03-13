@@ -38,7 +38,7 @@ Write a changelog entry for **every** completed task (feature, fix, refactor, or
 
 ### Location
 
-One file per change: `nova/changelog/YYYYMMDD/TIME_HHMM-CHANGELOG.md`
+One file per change: `nova/changelog/YYYYMMDD/YYYYMMDD_HHMM_CHANGELOG.md`
 
 Always run `date +"%Y%m%d.%H%M"` before writing to get the correct timestamp. If a timestamp conflicts, append `.1`, `.2`, etc.
 
