@@ -262,10 +262,34 @@ export class GameManager {
       slot.visible = true;
     });
 
-    // Skip the dealing animation if card animations are off
+    // No animation: show cards instantly, display winner, then start hand
     if (!SettingsManager.instance.cardAnimations) {
-      this.engine!.startNewHand();
-      this.delayed(() => this.advanceGame(), 500);
+      this.statusBar.setStatus('Dealing for the button...');
+      this.statusBar.setPot('');
+      this.statusBar.setHand('');
+
+      // Show all dealt cards face-up instantly (no animation)
+      dealtCards.forEach((card, idx) => {
+        const slot = this.slotLayout.getSlot(idx);
+        if (!slot) return;
+        slot.dealCards([{ rank: card.rank, suit: card.suit }], true, true);
+      });
+
+      // Show winner status and BUTTON label
+      const winnerName = this.getDisplayName(this.playerIdBySeat[winnerIdx]);
+      const winCard = dealtCards[winnerIdx];
+      this.statusBar.setStatus(
+        `${winnerName} has the high card (${winCard.rank} of ${winCard.suit}) — dealing!`
+      );
+      const winnerSlot = this.slotLayout.getSlot(winnerIdx);
+      if (winnerSlot) winnerSlot.showButtonLabel(3000);
+
+      // After a brief pause, clear and start the real hand
+      this.delayed(() => {
+        this.slotLayout.getAllSlots().forEach(s => s.resetForNewHand());
+        this.engine!.startNewHand();
+        this.delayed(() => this.advanceGame(), 500);
+      }, 3000);
       return;
     }
 
