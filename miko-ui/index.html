@@ -122,6 +122,52 @@
     #settings-close:hover {
       background: rgba(68, 85, 102, 0.9);
     }
+    /* Game Over modal */
+    #gameover-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.7);
+    }
+    #gameover-modal.open {
+      display: flex;
+    }
+    #gameover-panel {
+      background: #1e2a3a;
+      border: 2px solid #5588aa;
+      border-radius: 12px;
+      padding: 32px 48px;
+      min-width: 300px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    #gameover-panel h2 {
+      margin: 0 0 12px;
+      font-size: 24px;
+    }
+    #gameover-message {
+      font-size: 16px;
+      color: #aac;
+      margin-bottom: 24px;
+    }
+    #new-game-btn {
+      padding: 12px 40px;
+      border: 2px solid #4ade80;
+      border-radius: 8px;
+      background: #2a6e3f;
+      color: #4ade80;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #new-game-btn:hover {
+      background: #3a8e5f;
+    }
     #copyright {
       position: fixed;
       bottom: 12px;
@@ -191,6 +237,14 @@
         </div>
       </div>
       <button id="settings-close">Close</button>
+    </div>
+  </div>
+  <!-- Game Over modal -->
+  <div id="gameover-modal">
+    <div id="gameover-panel">
+      <h2>Game Over</h2>
+      <p id="gameover-message">You ran out of chips!</p>
+      <button id="new-game-btn">New Game</button>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

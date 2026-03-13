@@ -59,9 +59,11 @@ export class GameManager {
   private streetQueue: { street: string; cards: EngineCard[] }[] = [];
   private pendingHandResult: GameResult | null = null;
 
-  // New Game callback (set externally to show/hide new game button)
-  onGameOver: (() => void) | null = null;
-  onNewGameReady: (() => void) | null = null;
+  // New Game callback (set externally to show/hide game-over modal)
+  onGameOver: ((message?: string) => void) | null = null;
+
+  // Generation counter — incremented on restart to cancel stale timer callbacks
+  private generation = 0;
 
   constructor(
     slotLayout: SlotLayout,
@@ -109,29 +111,54 @@ export class GameManager {
 
   /** Restart the game from scratch (New Game button) */
   restart(): void {
+    // Bump generation so any in-flight setTimeout callbacks become no-ops
+    this.generation++;
+
     this.eliminatedPlayers.clear();
     this.usedRosterNames.clear();
     this.displayNameById.clear();
     this.totalKnockouts = 0;
     this.pendingReplacements = [];
+    this.deferredReplacements = [];
     this.handCounter = 0;
     this.handPhase = 'idle';
     this.currentActivePlayer = null;
     this.playerHoleCards.clear();
     this.currentCommunityCards = [];
     this.humanFolded = false;
+    this.allInRunout = false;
+    this.streetQueue = [];
+    this.pendingHandResult = null;
 
-    // Reset all UI slots
-    this.slotLayout.getAllSlots().forEach(slot => slot.resetForNewHand());
+    // Clear all UI
+    this.slotLayout.getAllSlots().forEach(slot => {
+      slot.resetForNewHand();
+      slot.clearBet();
+      slot.visible = false;
+    });
     this.communityCards.clear();
     this.dealerButton.hide();
     this.actionBar.hide();
-    this.statusBar.setStatus('New Game Starting...');
-    this.statusBar.setPot('Pot: $0');
+    this.statusBar.setStatus('');
+    this.statusBar.setPot('');
     this.statusBar.setHand('');
 
     this.initializeEngine();
-    setTimeout(() => this.startFirstHand(), 500);
+
+    const gen = this.generation;
+    setTimeout(() => {
+      if (this.generation !== gen) return;
+      this.startFirstHand();
+    }, 500);
+  }
+
+  /** Schedule a callback that auto-cancels if the game restarts */
+  private delayed(fn: () => void, ms: number): void {
+    const gen = this.generation;
+    setTimeout(() => {
+      if (this.generation !== gen) return;
+      fn();
+    }, ms);
   }
 
   // ─── Engine Init ───────────────────────────────────────────
@@ -238,7 +265,7 @@ export class GameManager {
     // Skip the dealing animation if card animations are off
     if (!SettingsManager.instance.cardAnimations) {
       this.engine!.startNewHand();
-      setTimeout(() => this.advanceGame(), 500);
+      this.delayed(() => this.advanceGame(), 500);
       return;
     }
 
@@ -249,7 +276,7 @@ export class GameManager {
     // Stagger dealing: show each card with a small delay
     const dealDelay = 300; // ms between each player's card
     dealtCards.forEach((card, idx) => {
-      setTimeout(() => {
+      this.delayed(() => {
         const slot = this.slotLayout.getSlot(idx);
         if (!slot) return;
         slot.dealCards([{ rank: card.rank, suit: card.suit }], true);
@@ -259,7 +286,7 @@ export class GameManager {
 
     // After all cards are dealt, show the winner
     const revealTime = numPlayers * dealDelay + 1500;
-    setTimeout(() => {
+    this.delayed(() => {
       const winnerName = this.getDisplayName(this.playerIdBySeat[winnerIdx]);
       const winCard = dealtCards[winnerIdx];
       this.statusBar.setStatus(
@@ -271,10 +298,10 @@ export class GameManager {
       if (winnerSlot) winnerSlot.showButtonLabel(3000);
 
       // After the BUTTON label has shown, clear and start the real hand
-      setTimeout(() => {
+      this.delayed(() => {
         this.slotLayout.getAllSlots().forEach(s => s.resetForNewHand());
         this.engine!.startNewHand();
-        setTimeout(() => this.advanceGame(), 500);
+        this.delayed(() => this.advanceGame(), 500);
       }, 3000);
     }, revealTime);
   }
@@ -288,7 +315,7 @@ export class GameManager {
     // After a street change, wait an extra second so the last action label is visible
     if (this.streetJustChanged) {
       this.streetJustChanged = false;
-      setTimeout(() => this.advanceGame(), 1000);
+      this.delayed(() => this.advanceGame(), 1000);
       return;
     }
 
@@ -319,12 +346,12 @@ export class GameManager {
     if (!currentPlayer) return;
 
     if (currentPlayer.folded) {
-      setTimeout(() => this.advanceGame(), 100);
+      this.delayed(() => this.advanceGame(), 100);
       return;
     }
     if (currentPlayer.allIn) {
       this.getSlotForPlayer(currentPlayer.id)?.showAllIn();
-      setTimeout(() => this.advanceGame(), 500);
+      this.delayed(() => this.advanceGame(), 500);
       return;
     }
 
@@ -354,11 +381,11 @@ export class GameManager {
       const delay = (GAME_CONFIG.aiThinkingDelayMin + Math.random() *
         (GAME_CONFIG.aiThinkingDelayMax - GAME_CONFIG.aiThinkingDelayMin)) * 1000;
 
-      setTimeout(() => {
+      this.delayed(() => {
         try {
           const action = this.engine!.getAIAction(currentPlayer.id);
           this.engine!.processAction(currentPlayer.id, action);
-          setTimeout(() => this.advanceGame(), 500);
+          this.delayed(() => this.advanceGame(), 500);
         } catch (error) {
           console.error('Error processing AI action:', error);
         }
@@ -455,13 +482,13 @@ export class GameManager {
 
   private onCardsDealt(playerId: string, cards: EngineCard[]): void {
     if (this.handPhase !== 'dealing') {
-      setTimeout(() => this.onCardsDealt(playerId, cards), 50);
+      this.delayed(() => this.onCardsDealt(playerId, cards), 50);
       return;
     }
 
     const slot = this.getSlotForPlayer(playerId);
     if (!slot) {
-      setTimeout(() => this.onCardsDealt(playerId, cards), 50);
+      this.delayed(() => this.onCardsDealt(playerId, cards), 50);
       return;
     }
 
@@ -489,12 +516,12 @@ export class GameManager {
     this.updatePotLabel();
 
     // Delay clearing previous round's bets so the last action label stays visible for 1s
-    setTimeout(() => {
+    this.delayed(() => {
       this.slotLayout.getAllSlots().forEach(s => s.clearBet());
     }, 1000);
 
     // Delay showing community cards to give a brief pause between streets
-    setTimeout(() => {
+    this.delayed(() => {
       this.statusBar.setStatus(street.toUpperCase());
       this.currentCommunityCards = cards.slice();
       this.communityCards.display(
@@ -524,7 +551,7 @@ export class GameManager {
     this.slotLayout.getAllSlots().forEach(s => s.clearBet());
 
     queue.forEach((item, idx) => {
-      setTimeout(() => {
+      this.delayed(() => {
         this.statusBar.setStatus(item.street.toUpperCase());
         this.currentCommunityCards = item.cards.slice();
         this.communityCards.display(
@@ -534,7 +561,7 @@ export class GameManager {
 
         // After the last street is revealed, process hand completion
         if (idx === queue.length - 1 && this.pendingHandResult) {
-          setTimeout(() => {
+          this.delayed(() => {
             const result = this.pendingHandResult!;
             this.allInRunout = false;
             this.pendingHandResult = null;
@@ -609,7 +636,7 @@ export class GameManager {
     if (this.allInRunout && !this.pendingHandResult) {
       this.pendingHandResult = result;
       // Kick off sequential board reveal (called once, after all events are queued)
-      setTimeout(() => this.processStreetQueue(), 0);
+      this.delayed(() => this.processStreetQueue(), 0);
       return;
     }
 
@@ -688,7 +715,7 @@ export class GameManager {
     this.playerHoleCards.clear();
 
     // Schedule next hand
-    setTimeout(() => {
+    this.delayed(() => {
       if (this.eliminatedPlayers.has('player')) return;
       // Check win condition before starting next hand
       if (this.totalKnockouts >= PLAYER_ROSTER.length) return;
@@ -704,11 +731,11 @@ export class GameManager {
         if (this.pendingReplacements.length > 0) {
           this.applyPendingReplacementsAnimated(() => {
             this.engine!.startNewHand();
-            setTimeout(() => this.advanceGame(), 500);
+            this.delayed(() => this.advanceGame(), 500);
           });
         } else {
           this.engine.startNewHand();
-          setTimeout(() => this.advanceGame(), 500);
+          this.delayed(() => this.advanceGame(), 500);
         }
       }
     }, 8000);
@@ -722,7 +749,7 @@ export class GameManager {
     const actionType = gameState.canCheck ? 'check' : 'call';
     this.engine.processAction('player', { type: actionType as 'check' | 'call' });
     this.actionBar.hide();
-    setTimeout(() => this.advanceGame(), 500);
+    this.delayed(() => this.advanceGame(), 500);
   }
 
   private onBetOrRaise(): void {
@@ -737,14 +764,14 @@ export class GameManager {
     const amount = this.actionBar.getBetAmount(defaultAmount);
     this.engine.processAction('player', { type: actionType as 'bet' | 'raise', amount });
     this.actionBar.hide();
-    setTimeout(() => this.advanceGame(), 500);
+    this.delayed(() => this.advanceGame(), 500);
   }
 
   private onFold(): void {
     if (!this.engine) return;
     this.engine.processAction('player', { type: 'fold' });
     this.actionBar.hide();
-    setTimeout(() => this.advanceGame(), 500);
+    this.delayed(() => this.advanceGame(), 500);
   }
 
   // ─── UI Helpers ────────────────────────────────────────────
@@ -910,7 +937,7 @@ export class GameManager {
           this.statusBar.setStatus('GAME OVER — You ran out of chips!');
           this.actionBar.hide();
           this.handPhase = 'idle';
-          this.onGameOver?.();
+          this.onGameOver?.('You ran out of chips!');
           return;
         }
 
@@ -926,7 +953,7 @@ export class GameManager {
       this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
       this.actionBar.hide();
       this.handPhase = 'idle';
-      this.onGameOver?.();
+      this.onGameOver?.('You eliminated all opponents!');
       return;
     }
 
@@ -1030,7 +1057,7 @@ export class GameManager {
     // Wait for all slide-in animations, then start the hand
     if (promises.length > 0) {
       Promise.all(promises).then(() => {
-        setTimeout(onComplete, 500); // brief pause after animation
+        this.delayed(onComplete, 500); // brief pause after animation
       });
     } else {
       onComplete();

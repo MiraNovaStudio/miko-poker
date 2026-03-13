@@ -1,5 +1,5 @@
 // (c) 2026 MiraNova Studios
-import { Container, Sprite, Graphics, Text, type TextStyleOptions } from 'pixi.js';
+import { Container, Sprite } from 'pixi.js';
 import { AssetManager } from '../managers/AssetManager.js';
 import { GameManager } from '../managers/GameManager.js';
 import { AudioManager } from '../managers/AudioManager.js';
@@ -8,12 +8,10 @@ import { CommunityCards } from '../components/CommunityCards.js';
 import { DealerButton } from '../components/DealerButton.js';
 import { StatusBar } from '../components/StatusBar.js';
 import { ActionBar } from '../components/ActionBar.js';
-import { FONTS } from '../utils/constants.js';
 
 export class GameScene extends Container {
   private gameManager: GameManager | null = null;
   private actionBar: ActionBar;
-  private newGameBtn: Container | null = null;
 
   constructor() {
     super();
@@ -48,11 +46,6 @@ export class GameScene extends Container {
     this.actionBar.y = 320;
     this.addChild(this.actionBar);
 
-    // New Game button (hidden initially)
-    this.newGameBtn = this.createNewGameButton();
-    this.newGameBtn.visible = false;
-    this.addChild(this.newGameBtn);
-
     // Game manager (uses shared AudioManager singleton)
     const audioManager = AudioManager.instance;
 
@@ -65,9 +58,22 @@ export class GameScene extends Container {
       audioManager,
     );
 
-    this.gameManager.onGameOver = () => {
-      if (this.newGameBtn) this.newGameBtn.visible = true;
+    // Wire game-over to HTML modal
+    const gameoverModal = document.getElementById('gameover-modal');
+    const gameoverMessage = document.getElementById('gameover-message');
+    const newGameBtn = document.getElementById('new-game-btn');
+
+    this.gameManager.onGameOver = (message?: string) => {
+      if (gameoverMessage && message) gameoverMessage.textContent = message;
+      gameoverModal?.classList.add('open');
     };
+
+    if (newGameBtn && gameoverModal) {
+      newGameBtn.addEventListener('click', () => {
+        gameoverModal.classList.remove('open');
+        this.gameManager?.restart();
+      });
+    }
 
     // Audio is already initialized by main.ts — start the game
     this.gameManager.start();
@@ -82,46 +88,9 @@ export class GameScene extends Container {
     this.actionBar.updateInputPosition(inputScreenX, inputScreenY, scale);
   }
 
-  private createNewGameButton(): Container {
-    const btn = new Container();
-    btn.y = 320;
-
-    const bg = new Graphics();
-    bg.roundRect(-80, -24, 160, 48, 10);
-    bg.fill({ color: 0x2a6e3f, alpha: 1 });
-    bg.stroke({ color: 0x4ade80, width: 2 });
-    btn.addChild(bg);
-
-    const label = new Text({ text: 'New Game', style: { ...FONTS.button, fill: 0x4ade80 } as TextStyleOptions });
-    label.anchor.set(0.5);
-    btn.addChild(label);
-
-    btn.eventMode = 'static';
-    btn.cursor = 'pointer';
-
-    // Hover effects
-    btn.on('pointerover', () => {
-      bg.clear();
-      bg.roundRect(-80, -24, 160, 48, 10);
-      bg.fill({ color: 0x3a8e5f, alpha: 1 });
-      bg.stroke({ color: 0x4ade80, width: 2 });
-    });
-    btn.on('pointerout', () => {
-      bg.clear();
-      bg.roundRect(-80, -24, 160, 48, 10);
-      bg.fill({ color: 0x2a6e3f, alpha: 1 });
-      bg.stroke({ color: 0x4ade80, width: 2 });
-    });
-
-    btn.on('pointerdown', () => {
-      btn.visible = false;
-      this.gameManager?.restart();
-    });
-
-    return btn;
-  }
-
   destroy(): void {
+    // Close modal if open
+    document.getElementById('gameover-modal')?.classList.remove('open');
     this.actionBar.destroy();
     super.destroy();
   }
