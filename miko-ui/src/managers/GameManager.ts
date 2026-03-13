@@ -318,12 +318,13 @@ export class GameManager {
   }
 
   private onStreetChanged(street: string, cards: EngineCard[]): void {
-    // Finalize previous betting round: clear bet labels, update pot
-    this.slotLayout.getAllSlots().forEach(s => s.clearBet());
+    // Update pot immediately
     this.updatePotLabel();
 
-    // Delay showing community cards (gives time to read bets)
+    // Delay clearing bets so the last action's label is visible
     setTimeout(() => {
+      this.slotLayout.getAllSlots().forEach(s => s.clearBet());
+
       this.statusBar.setStatus(street.toUpperCase());
       this.currentCommunityCards = cards.slice();
       this.communityCards.display(

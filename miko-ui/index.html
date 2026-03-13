@@ -121,10 +121,24 @@
     #settings-close:hover {
       background: rgba(68, 85, 102, 0.9);
     }
+    #page-title {
+      position: fixed;
+      top: 14px;
+      left: 16px;
+      z-index: 100;
+      font-family: Arial, sans-serif;
+      font-size: 24px;
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+      user-select: none;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <div id="game-canvas"></div>
+  <div id="page-title">MikoPoker</div>
   <button id="settings-toggle" class="top-btn" title="Settings">&#x2699;</button>
   <button id="sound-toggle" class="top-btn" title="Toggle sound">&#x1F50A;</button>
 
