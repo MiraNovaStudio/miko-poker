@@ -42,6 +42,7 @@ export class GameManager {
   private playerHoleCards: Map<string, EngineCard[]> = new Map();
   private currentCommunityCards: EngineCard[] = [];
   private humanFolded = false;
+  private streetJustChanged = false;
 
   // New Game callback (set externally to show/hide new game button)
   onGameOver: (() => void) | null = null;
@@ -139,6 +140,13 @@ export class GameManager {
   private advanceGame(): void {
     if (this.eliminatedPlayers.has('player')) return;
     if (!this.engine || !this.engine.isHandInProgress()) return;
+
+    // After a street change, wait an extra second so the last action label is visible
+    if (this.streetJustChanged) {
+      this.streetJustChanged = false;
+      setTimeout(() => this.advanceGame(), 1000);
+      return;
+    }
 
     if (this.handPhase === 'dealing') {
       this.handPhase = 'betting';
@@ -317,9 +325,13 @@ export class GameManager {
   }
 
   private onStreetChanged(street: string, cards: EngineCard[]): void {
-    // Clear previous round's bets and update pot immediately
-    this.slotLayout.getAllSlots().forEach(s => s.clearBet());
+    this.streetJustChanged = true;
     this.updatePotLabel();
+
+    // Delay clearing previous round's bets so the last action label stays visible for 1s
+    setTimeout(() => {
+      this.slotLayout.getAllSlots().forEach(s => s.clearBet());
+    }, 1000);
 
     // Delay showing community cards to give a brief pause between streets
     setTimeout(() => {
