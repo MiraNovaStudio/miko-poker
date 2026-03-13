@@ -464,7 +464,8 @@ export class GameManager {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
     const actionType = gameState.canBet ? 'bet' : 'raise';
-    const amount = this.actionBar.getBetAmount(GAME_CONFIG.bigBlind);
+    const defaultAmount = gameState.canBet ? GAME_CONFIG.bigBlind : gameState.minRaiseAmount;
+    const amount = this.actionBar.getBetAmount(defaultAmount);
     this.engine.processAction('player', { type: actionType as 'bet' | 'raise', amount });
     this.actionBar.hide();
     setTimeout(() => this.advanceGame(), 500);
