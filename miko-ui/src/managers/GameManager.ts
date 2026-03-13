@@ -409,10 +409,13 @@ export class GameManager {
         this.streetQueue = [];
         this.pendingHandResult = null;
         this.actionBar.hide();
+        // Snapshot pot before forceHandComplete resets it
+        const potBeforeAward = this.engine.getCurrentPot();
         this.engine.forceHandComplete();
         // Refresh chip labels — uncalled bets have been returned by collectBets
         this.updateAllChipLabels();
-        this.updatePotLabel();
+        // Show the frozen pot total (engine pot is 0 after awardPots)
+        this.statusBar.setPot(`Pot: ${formatChips(potBeforeAward)}`);
       }
       return;
     }
@@ -1081,6 +1084,8 @@ export class GameManager {
 
   private updatePotLabel(): void {
     if (!this.engine) return;
+    // During all-in runout, the engine pot is already awarded — don't overwrite the frozen label
+    if (this.allInRunout) return;
     const totalPot = this.engine.getCurrentPot();
     const gameState = this.engine.getGameState();
 
