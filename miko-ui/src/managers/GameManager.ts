@@ -991,23 +991,30 @@ export class GameManager {
 
   /**
    * Compute layered side pots from player totalBet values.
+   * Only meaningful when at least one player is all-in — side pots form
+   * because an all-in player can't match further bets.
    * Returns array of pots: first is main pot, rest are side pots.
-   * Each pot has amount and list of eligible (non-folded) player IDs.
    */
   private computeSidePots(players: PlayerState[]): { amount: number; eligible: string[] }[] {
+    // Side pots only exist when someone is all-in
+    const hasAllIn = players.some(p => p.allIn);
+    if (!hasAllIn) return [];
+
     const contributors = players
       .filter(p => p.totalBet > 0)
       .sort((a, b) => a.totalBet - b.totalBet);
 
     if (contributors.length === 0) return [];
 
-    // Deduplicate contribution levels
-    const levels: number[] = [];
-    for (const p of contributors) {
-      if (levels.length === 0 || levels[levels.length - 1] !== p.totalBet) {
-        levels.push(p.totalBet);
-      }
-    }
+    // Only split at levels where an all-in player caps out
+    const allInLevels = new Set(
+      contributors.filter(p => p.allIn).map(p => p.totalBet)
+    );
+    // Always include the max level so the final pot layer is built
+    const maxBet = contributors[contributors.length - 1].totalBet;
+    allInLevels.add(maxBet);
+
+    const levels = Array.from(allInLevels).sort((a, b) => a - b);
 
     const pots: { amount: number; eligible: string[] }[] = [];
     let previousLevel = 0;
@@ -1034,15 +1041,15 @@ export class GameManager {
     const totalPot = this.engine.getCurrentPot();
     const gameState = this.engine.getGameState();
 
-    // Compute side pots from player totalBet + current street bets
+    // Compute side pots (only when someone is all-in)
     const pots = this.computeSidePots(gameState.players);
 
     if (pots.length > 1) {
       let text = `Pot: ${formatChips(totalPot)}`;
-      // First pot is main pot, rest are side pots
+      // First pot is main pot, rest are side pots — stack vertically
       pots.forEach((pot, i) => {
-        if (i === 0) return; // main pot already shown in total
-        text += `  SP${i}: ${formatChips(pot.amount)}`;
+        if (i === 0) return;
+        text += `\nSP${i}: ${formatChips(pot.amount)}`;
       });
       this.statusBar.setPot(text);
     } else {
