@@ -617,10 +617,8 @@ export class GameManager {
     const winnerSet = new Set(winnerIds);
     const gameState = this.engine.getGameState();
 
-    // Show losing hands in small italic on bet labels; skip winners
     gameState.players.forEach((p: PlayerState) => {
       if (!p.cards || p.cards.length === 0 || p.folded) return;
-      if (winnerSet.has(p.id)) return; // winners get the big animated label instead
       try {
         const combined = [...(p.cards as EngineCard[]), ...this.currentCommunityCards];
         if (combined.length < 5) return;
@@ -628,7 +626,13 @@ export class GameManager {
         const handName = getHandName(strength);
         const slot = this.getSlotForPlayer(p.id);
         if (!slot) return;
-        slot.setBetSmallItalic(handName);
+        if (winnerSet.has(p.id)) {
+          // Winners: show hand name on bet label position, bold gold
+          slot.setBet(0, handName);
+        } else {
+          // Losers: small italic
+          slot.setBetSmallItalic(handName);
+        }
       } catch (err) {
         console.warn('Failed to set showdown hand for', p.id, err);
       }
