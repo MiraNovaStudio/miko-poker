@@ -4,7 +4,7 @@
  */
 
 import { PokerGameEngine, evaluateHand, getHandName } from '@engine/index.js';
-import type { GameEvent, GameResult, Card as EngineCard, PlayerState, HandStrength } from '@engine/index.js';
+import type { GameEvent, GameResult, Card as EngineCard, PlayerState } from '@engine/index.js';
 
 import { SlotLayout } from '../components/SlotLayout.js';
 import { PlayerSlot } from '../components/PlayerSlot.js';
@@ -12,7 +12,6 @@ import { CommunityCards } from '../components/CommunityCards.js';
 import { DealerButton } from '../components/DealerButton.js';
 import { StatusBar } from '../components/StatusBar.js';
 import { ActionBar } from '../components/ActionBar.js';
-import { Card } from '../components/Card.js';
 import { AudioManager } from './AudioManager.js';
 import { Text, type TextStyleOptions } from 'pixi.js';
 import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS } from '../utils/constants.js';
@@ -63,11 +62,11 @@ export class GameManager {
     this.actionBar = actionBar;
     this.audioManager = audioManager;
 
-    // Wire action bar callbacks
+    // Wire action bar callbacks: Check/Call, Bet/Raise, Fold
     this.actionBar.setCallbacks(
-      () => this.onLeftButtonClick(),
-      () => this.onMiddleButtonClick(),
-      () => this.onRightButtonClick(),
+      () => this.onCheckOrCall(),
+      () => this.onBetOrRaise(),
+      () => this.onFold(),
     );
   }
 
@@ -455,9 +454,9 @@ export class GameManager {
     }, 8000);
   }
 
-  // ─── Button Handlers ───────────────────────────────────────
+  // ─── Player Actions ──────────────────────────────────────
 
-  private onLeftButtonClick(): void {
+  private onCheckOrCall(): void {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
     const actionType = gameState.canCheck ? 'check' : 'call';
@@ -466,7 +465,7 @@ export class GameManager {
     setTimeout(() => this.advanceGame(), 500);
   }
 
-  private onMiddleButtonClick(): void {
+  private onBetOrRaise(): void {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
     const actionType = gameState.canBet ? 'bet' : 'raise';
@@ -477,7 +476,7 @@ export class GameManager {
     setTimeout(() => this.advanceGame(), 500);
   }
 
-  private onRightButtonClick(): void {
+  private onFold(): void {
     if (!this.engine) return;
     this.engine.processAction('player', { type: 'fold' });
     this.actionBar.hide();
@@ -738,9 +737,6 @@ export class GameManager {
     const slot = this.slotLayout.getSlot(winnerIndex);
     if (!slot) return;
 
-    // Access the cards container inside the slot
-    const cardsContainer = slot.children.find(c => c.constructor.name === 'Container' && c !== slot);
-    // More reliable: get the first container child that holds Card instances
     const raiseBy = -25;
     hole.forEach((card, idx) => {
       if (!this.isHoleCardUsed(card, hand, combined)) return;
