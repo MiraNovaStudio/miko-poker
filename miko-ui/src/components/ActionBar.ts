@@ -158,17 +158,17 @@ export class ActionBar extends Container {
     this.betInputEl = document.createElement('input');
     this.betInputEl.type = 'text';
     this.betInputEl.inputMode = 'numeric';
-    this.betInputEl.placeholder = '$';
+    this.betInputEl.placeholder = '';
     this.betInputEl.style.cssText = `
       width: 100%;
       height: 100%;
-      padding: 0;
+      padding: 0 8px;
       font-size: 18px;
       background: #1a1a2e;
       color: #ffffff;
       border: 2px solid #5588aa;
       border-radius: 8px;
-      text-align: center;
+      text-align: left;
       outline: none;
       box-sizing: border-box;
       -moz-appearance: textfield;
