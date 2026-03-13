@@ -65,5 +65,19 @@ export class StartScene extends Container {
       this.onStart?.();
     });
     this.addChild(btn);
+
+    // Copyright notice
+    const copyright = new Text({
+      text: '© 2026 MiraNova Studios',
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 14,
+        fontStyle: 'italic',
+        fill: 0xaaaaaa,
+      } as TextStyleOptions,
+    });
+    copyright.anchor.set(0.5);
+    copyright.y = 260;
+    this.addChild(copyright);
   }
 }
