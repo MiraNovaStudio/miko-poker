@@ -183,10 +183,21 @@ async function init() {
     updateTableButtons();
   }
 
+  // About modal (click page title to open)
+  const aboutModal = document.getElementById('about-modal');
   const pageTitle = document.getElementById('page-title');
   const copyrightEl = document.getElementById('copyright');
   const mobileGate = document.getElementById('mobile-gate');
   const gameCanvas = document.getElementById('game-canvas');
+
+  if (pageTitle && aboutModal) {
+    pageTitle.addEventListener('click', () => {
+      aboutModal.classList.add('open');
+    });
+    aboutModal.addEventListener('click', (e) => {
+      if (e.target === aboutModal) aboutModal.classList.remove('open');
+    });
+  }
 
   const MOBILE_BREAKPOINT = 500;
 

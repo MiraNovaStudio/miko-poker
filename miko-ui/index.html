@@ -122,6 +122,48 @@
     #settings-close:hover {
       background: rgba(68, 85, 102, 0.9);
     }
+    /* About modal */
+    #about-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      background: rgba(26, 26, 46, 0.85);
+    }
+    #about-modal.open {
+      display: flex;
+    }
+    #about-panel {
+      background: #1e2a3a;
+      border: 2px solid #5588aa;
+      border-radius: 12px;
+      padding: 36px 48px;
+      min-width: 300px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    #about-panel h2 {
+      margin: 0 0 20px;
+      font-size: 26px;
+      font-weight: bold;
+    }
+    #about-panel .about-version {
+      font-size: 16px;
+      color: #aac;
+      margin: 0 0 20px;
+    }
+    #about-panel .about-copyright {
+      font-size: 14px;
+      color: #888;
+      font-style: italic;
+      margin: 0;
+    }
+    #page-title {
+      cursor: pointer;
+    }
     /* Game Over modal */
     #gameover-modal {
       display: none;
@@ -246,6 +288,14 @@
   <button id="settings-toggle" class="top-btn" title="Settings">&#x2699;</button>
   <button id="sound-toggle" class="top-btn" title="Toggle sound">&#x1F50A;</button>
 
+  <!-- About modal -->
+  <div id="about-modal">
+    <div id="about-panel">
+      <h2>Miko Poker (Demo)</h2>
+      <p class="about-version">Version 0.1.0</p>
+      <p class="about-copyright">&copy; 2026 MiraNova Studios</p>
+    </div>
+  </div>
   <!-- Settings modal -->
   <div id="settings-modal">
     <div id="settings-panel">
