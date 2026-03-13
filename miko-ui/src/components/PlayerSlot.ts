@@ -123,7 +123,6 @@ export class PlayerSlot extends Container {
   clearBet(): void {
     this.betLabel.text = '';
     this.betLabel.visible = false;
-    if (this.betLabelBg) this.betLabelBg.visible = false;
   }
 
   setStatus(status: string, show = true): void {
@@ -210,7 +209,9 @@ export class PlayerSlot extends Container {
   }
 
   hideCards(): void {
+    this._folded = true;
     this.cardsContainer.visible = false;
+    this.setupFoldHover();
   }
 
   /** Animate cards flying to a target position (scene coords), then hide */
