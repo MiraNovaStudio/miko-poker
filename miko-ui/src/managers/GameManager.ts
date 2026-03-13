@@ -317,20 +317,19 @@ export class GameManager {
   }
 
   private onStreetChanged(street: string, cards: EngineCard[]): void {
-    // Update pot immediately
+    // Clear previous round's bets and update pot immediately
+    this.slotLayout.getAllSlots().forEach(s => s.clearBet());
     this.updatePotLabel();
 
-    // Delay clearing bets so the last action's label is visible
+    // Delay showing community cards to give a brief pause between streets
     setTimeout(() => {
-      this.slotLayout.getAllSlots().forEach(s => s.clearBet());
-
       this.statusBar.setStatus(street.toUpperCase());
       this.currentCommunityCards = cards.slice();
       this.communityCards.display(
         cards.map(c => ({ rank: c.rank, suit: c.suit })),
       );
       this.updateHumanHandLabel();
-    }, 2000);
+    }, 1500);
   }
 
   private onPlayerAction(playerId: string, action: { type: string; amount?: number }): void {
