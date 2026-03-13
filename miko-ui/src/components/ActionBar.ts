@@ -200,19 +200,14 @@ export class ActionBar extends Container {
       this.betInputContainer.style.height = `${inputH}px`;
     }
 
-    // Position slider panel in the lower right of the viewport
+    // Position slider panel beneath seat 6 (right side of table, design x=380, y=0)
+    // In screen coords: center + 380*scale, center + 0*scale → then offset down
     if (this.sliderPanel) {
-      // Anchor: right edge of the viewport, vertically centered on the action bar area
-      const panelW = 76;  // fixed width in px
-      const panelH = 280; // approximate height
-      const margin = 12;
-
-      // Right edge, vertically aligned with action bar
-      const right = margin;
-      const top = screenY - panelH / 2;
-
-      this.sliderPanel.style.right = `${right}px`;
-      this.sliderPanel.style.top = `${Math.max(margin, top)}px`;
+      const panelX = screenX + 340 * scale;
+      const panelY = screenY - 200 * scale;
+      this.sliderPanel.style.left = `${panelX}px`;
+      this.sliderPanel.style.top = `${panelY}px`;
+      this.sliderPanel.style.right = '';
     }
   }
 
@@ -277,124 +272,73 @@ export class ActionBar extends Container {
   // ─── Bet Slider Panel ───────────────────────────────────────
 
   private createSliderPanel(): void {
+    // Inject slider thumb styles once
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+      .miko-bet-slider::-webkit-slider-thumb {
+        -webkit-appearance: none; appearance: none;
+        width: 18px; height: 18px; border-radius: 50%;
+        background: #fff; border: 2px solid #5588aa;
+        cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      }
+      .miko-bet-slider::-moz-range-thumb {
+        width: 18px; height: 18px; border-radius: 50%;
+        background: #fff; border: 2px solid #5588aa;
+        cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      }
+    `;
+    document.head.appendChild(styleEl);
+
+    // Outer panel: horizontal row — [buttons column] [slider column]
     this.sliderPanel = document.createElement('div');
     this.sliderPanel.style.cssText = `
       position: fixed;
       display: none;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 6px;
       z-index: 10;
-      padding: 8px 6px;
+      padding: 8px 8px;
       background: rgba(26, 26, 46, 0.92);
       border: 2px solid #5588aa;
       border-radius: 10px;
       user-select: none;
     `;
 
-    // Amount label at top
-    this.sliderAmountLabel = document.createElement('div');
-    this.sliderAmountLabel.style.cssText = `
-      color: #fff;
-      font-family: Arial, sans-serif;
-      font-size: 13px;
-      font-weight: bold;
-      text-align: center;
-      padding: 2px 0 4px;
-      min-width: 60px;
-    `;
-    this.sliderAmountLabel.textContent = '$0';
-    this.sliderPanel.appendChild(this.sliderAmountLabel);
-
-    // Vertical slider (range input rotated)
-    const sliderWrap = document.createElement('div');
-    sliderWrap.style.cssText = `
-      width: 30px;
-      height: 120px;
+    // ── Left: pot-fraction buttons stacked vertically ──
+    const btnColumn = document.createElement('div');
+    btnColumn.style.cssText = `
       display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
+      flex-direction: column;
+      gap: 3px;
+      justify-content: space-between;
     `;
 
-    this.sliderEl = document.createElement('input');
-    this.sliderEl.type = 'range';
-    this.sliderEl.min = '0';
-    this.sliderEl.max = '1000';
-    this.sliderEl.value = '0';
-    this.sliderEl.style.cssText = `
-      -webkit-appearance: none;
-      appearance: none;
-      width: 120px;
-      height: 6px;
-      background: linear-gradient(to right, #3a5a7a, #5588aa, #4ade80);
-      border-radius: 3px;
-      outline: none;
-      transform: rotate(-90deg);
-      transform-origin: center center;
-      cursor: pointer;
-    `;
-
-    // Slider thumb styling via a <style> tag
-    const styleEl = document.createElement('style');
-    styleEl.textContent = `
-      .miko-bet-slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: #fff;
-        border: 2px solid #5588aa;
-        cursor: pointer;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-      }
-      .miko-bet-slider::-moz-range-thumb {
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: #fff;
-        border: 2px solid #5588aa;
-        cursor: pointer;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-      }
-    `;
-    document.head.appendChild(styleEl);
-    this.sliderEl.classList.add('miko-bet-slider');
-
-    this.sliderEl.addEventListener('input', () => {
-      const val = parseInt(this.sliderEl!.value, 10);
-      this.setBetFromSlider(val);
-    });
-
-    sliderWrap.appendChild(this.sliderEl);
-    this.sliderPanel.appendChild(sliderWrap);
-
-    // Pot fraction buttons
     const fractions: { label: string; fraction: number | 'allin' }[] = [
-      { label: '1/4', fraction: 0.25 },
-      { label: '1/2', fraction: 0.5 },
-      { label: '3/4', fraction: 0.75 },
-      { label: 'Pot', fraction: 1.0 },
       { label: 'All In', fraction: 'allin' },
+      { label: 'Pot', fraction: 1.0 },
+      { label: '3/4', fraction: 0.75 },
+      { label: '1/2', fraction: 0.5 },
+      { label: '1/4', fraction: 0.25 },
     ];
 
     for (const { label, fraction } of fractions) {
       const btn = document.createElement('button');
       btn.textContent = label;
       btn.style.cssText = `
-        width: 62px;
-        padding: 5px 0;
+        width: 52px;
+        padding: 4px 0;
         border: 1px solid #5588aa;
-        border-radius: 5px;
+        border-radius: 4px;
         background: rgba(51, 68, 85, 0.85);
         color: #cde;
         font-family: Arial, sans-serif;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: bold;
         cursor: pointer;
         transition: background 0.12s, color 0.12s;
         text-align: center;
+        line-height: 1.2;
       `;
       btn.addEventListener('pointerover', () => {
         btn.style.background = 'rgba(85, 136, 170, 0.6)';
@@ -408,15 +352,76 @@ export class ActionBar extends Container {
         if (fraction === 'allin') {
           this.setBetFromSlider(this.sliderMax);
         } else {
-          // Pot-fraction raise = callAmount + fraction * (pot + callAmount)
-          const raiseTotal = this.sliderCallAmount + Math.floor(fraction * (this.sliderPot + this.sliderCallAmount));
+          const raiseTotal = this.sliderCallAmount
+            + Math.floor(fraction * (this.sliderPot + this.sliderCallAmount));
           const clamped = Math.min(Math.max(raiseTotal, this.sliderMin), this.sliderMax);
           this.setBetFromSlider(clamped);
         }
       });
-      this.sliderPanel.appendChild(btn);
+      btnColumn.appendChild(btn);
     }
 
+    this.sliderPanel.appendChild(btnColumn);
+
+    // ── Right: vertical slider + amount label ──
+    const sliderColumn = document.createElement('div');
+    sliderColumn.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    `;
+
+    // Amount label
+    this.sliderAmountLabel = document.createElement('div');
+    this.sliderAmountLabel.style.cssText = `
+      color: #fff;
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+      font-weight: bold;
+      text-align: center;
+      white-space: nowrap;
+    `;
+    this.sliderAmountLabel.textContent = '$0';
+    sliderColumn.appendChild(this.sliderAmountLabel);
+
+    // Vertical slider (rotated range input)
+    const sliderWrap = document.createElement('div');
+    sliderWrap.style.cssText = `
+      width: 24px;
+      height: 130px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    this.sliderEl = document.createElement('input');
+    this.sliderEl.type = 'range';
+    this.sliderEl.min = '0';
+    this.sliderEl.max = '1000';
+    this.sliderEl.value = '0';
+    this.sliderEl.classList.add('miko-bet-slider');
+    this.sliderEl.style.cssText = `
+      -webkit-appearance: none; appearance: none;
+      width: 130px;
+      height: 5px;
+      background: linear-gradient(to right, #3a5a7a, #5588aa, #4ade80);
+      border-radius: 3px;
+      outline: none;
+      transform: rotate(-90deg);
+      transform-origin: center center;
+      cursor: pointer;
+    `;
+
+    this.sliderEl.addEventListener('input', () => {
+      const val = parseInt(this.sliderEl!.value, 10);
+      this.setBetFromSlider(val);
+    });
+
+    sliderWrap.appendChild(this.sliderEl);
+    sliderColumn.appendChild(sliderWrap);
+
+    this.sliderPanel.appendChild(sliderColumn);
     document.body.appendChild(this.sliderPanel);
   }
 

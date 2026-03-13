@@ -731,15 +731,17 @@ export class GameManager {
     this.updatePotLabel();
 
     // Detect all-in condition: engine will auto-call forceHandComplete() inside
-    // processAction, so street_changed events are about to fire synchronously.
-    // Set allInRunout BEFORE those events arrive.
-    // Trigger when no one (or only one player) can act and at least one is all-in.
+    // processAction when canAct === 0, so street_changed events fire synchronously.
+    // Set allInRunout BEFORE those events arrive so they get queued.
+    // IMPORTANT: only trigger when canAct === 0 (not <= 1). The <= 1 case is
+    // handled by advanceGame() which explicitly calls forceHandComplete().
+    // Setting allInRunout here for canAct === 1 would block advanceGame without
+    // anyone ever completing the hand → freeze.
     if (!this.allInRunout && this.engine) {
       const gs = this.engine.getGameState();
       const active = gs.players.filter((p: PlayerState) => !p.folded);
       const canAct = active.filter((p: PlayerState) => !p.allIn);
-      if (canAct.length <= 1 && active.length > 1
-          && active.some((p: PlayerState) => p.allIn)) {
+      if (canAct.length === 0 && active.length > 1) {
         for (const p of active) {
           if (p.allIn) this.getSlotForPlayer(p.id)?.showAllIn();
         }
