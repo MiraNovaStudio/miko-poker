@@ -5,15 +5,37 @@ export class HandHistory {
   private entries: string[] = [];
   private containerEl: HTMLDivElement;
   private listEl: HTMLDivElement;
+  private toggleBtn: HTMLButtonElement;
+  private isOpen = false;
 
   constructor() {
+    // Toggle button — bottom-left corner
+    this.toggleBtn = document.createElement('button');
+    this.toggleBtn.textContent = 'History';
+    this.toggleBtn.style.cssText = `
+      position: absolute;
+      z-index: 6;
+      background: rgba(10, 10, 20, 0.8);
+      border: 1px solid #5588aa;
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      color: #88ccff;
+      cursor: pointer;
+      display: none;
+    `;
+    this.toggleBtn.addEventListener('click', () => this.toggle());
+    document.body.appendChild(this.toggleBtn);
+
+    // Scrollable panel — hidden by default
     this.containerEl = document.createElement('div');
     this.containerEl.id = 'hand-history';
     this.containerEl.style.cssText = `
       position: absolute;
       display: none;
       z-index: 5;
-      background: rgba(10, 10, 20, 0.85);
+      background: rgba(10, 10, 20, 0.9);
       border: 1px solid #5588aa;
       border-radius: 6px;
       padding: 6px 8px;
@@ -35,52 +57,72 @@ export class HandHistory {
     if (this.entries.length > MAX_ENTRIES) {
       this.entries.pop();
     }
-    this.render();
+    if (this.isOpen) this.render();
   }
 
   /** Clear all history (e.g. on restart). */
   clear(): void {
     this.entries = [];
-    this.render();
+    if (this.isOpen) this.render();
   }
 
-  show(): void {
-    this.containerEl.style.display = 'block';
+  /** Show the toggle button (call on game start). */
+  enable(): void {
+    this.toggleBtn.style.display = 'block';
   }
 
-  hide(): void {
-    this.containerEl.style.display = 'none';
+  private toggle(): void {
+    this.isOpen = !this.isOpen;
+    if (this.isOpen) {
+      this.render();
+      this.containerEl.style.display = 'block';
+      this.toggleBtn.textContent = 'History ▾';
+    } else {
+      this.containerEl.style.display = 'none';
+      this.toggleBtn.textContent = 'History';
+    }
   }
 
   /** Reposition/resize based on screen dimensions and scale factor. */
   updatePosition(screenWidth: number, screenHeight: number, scale: number): void {
-    // Position in the bottom-left, above the status messages
-    const designLeft = -460;
-    const designTop = 200;
-    const designWidth = 400;
-    const designHeight = 180;
-
     const cx = screenWidth / 2;
     const cy = screenHeight / 2;
 
-    const left = cx + designLeft * scale;
-    const top = cy + designTop * scale;
-    const width = designWidth * scale;
-    const height = designHeight * scale;
+    // Toggle button — bottom-left, just above the hand label area
+    const btnLeft = cx + -460 * scale;
+    const btnTop = cy + 260 * scale;
+    this.toggleBtn.style.left = `${btnLeft}px`;
+    this.toggleBtn.style.top = `${btnTop}px`;
+    this.toggleBtn.style.fontSize = `${Math.max(11, 12 * scale)}px`;
 
-    this.containerEl.style.left = `${left}px`;
-    this.containerEl.style.top = `${top}px`;
-    this.containerEl.style.width = `${width}px`;
-    this.containerEl.style.height = `${height}px`;
+    // Panel — above the toggle button, anchored bottom-left
+    const panelWidth = 420 * scale;
+    const panelHeight = 200 * scale;
+    const panelLeft = btnLeft;
+    const panelBottom = btnTop;
+    const panelTop = panelBottom - panelHeight;
+
+    this.containerEl.style.left = `${panelLeft}px`;
+    this.containerEl.style.top = `${panelTop}px`;
+    this.containerEl.style.width = `${panelWidth}px`;
+    this.containerEl.style.height = `${panelHeight}px`;
     this.containerEl.style.fontSize = `${Math.max(11, 13 * scale)}px`;
   }
 
   destroy(): void {
     this.containerEl.remove();
+    this.toggleBtn.remove();
   }
 
   private render(): void {
     this.listEl.innerHTML = '';
+    if (this.entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.textContent = 'No hands played yet';
+      empty.style.cssText = 'color: #666; font-style: italic; padding: 4px 0;';
+      this.listEl.appendChild(empty);
+      return;
+    }
     for (const entry of this.entries) {
       const line = document.createElement('div');
       line.textContent = entry;

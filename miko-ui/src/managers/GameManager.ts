@@ -109,7 +109,7 @@ export class GameManager {
   start(): void {
     this.initializeEngine();
     this.actionBar.hide();
-    this.handHistory.show();
+    this.handHistory.enable();
     this.startFirstHand();
   }
 
