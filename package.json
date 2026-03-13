@@ -2,10 +2,14 @@
   "name": "miko-poker",
   "version": "0.1.1",
   "private": true,
-  "workspaces": ["engine", "ui"],
+  "workspaces": ["engine", "miko-ui"],
   "scripts": {
     "clean": "npm -w @miko/engine run clean",
-    "build": "npm -w @miko/engine run build",
+    "build": "bash build.sh",
+    "build:engine": "npm -w @miko/engine run build",
+    "build:ui": "npm -w @miko/ui run build",
+    "dev": "npm -w @miko/ui run dev",
+    "serve": "npx serve public -l 9001",
     "test": "npm -w @miko/engine run test",
     "lint": "npm -w @miko/engine run lint"
   }

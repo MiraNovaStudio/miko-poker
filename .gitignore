@@ -8,6 +8,8 @@ coverage/
 
 # Build outputs
 engine/dist/
+miko-ui/dist/
+public/
 
 # OS cruft
 .DS_Store
