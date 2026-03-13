@@ -37,6 +37,7 @@ export const COLORS = {
   white: 0xffffff,
   yellow: 0xffff00,
   black: 0x000000,
+  darkGray: 0x333333,
   statusRed: 0xff6464,
   activeGreen: 0x3cb58f,
   bgDark: 0x1a1a2e,

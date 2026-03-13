@@ -6,6 +6,8 @@ import {
   COLORS, FONTS, TOP_ROW_SEATS, getBetLabelOffset,
 } from '../utils/constants.js';
 
+const CHIP_OVERLAY_RADIUS = 8;
+
 export class PlayerSlot extends Container {
   readonly seatIndex: number;
 
@@ -30,7 +32,7 @@ export class PlayerSlot extends Container {
 
     // Chip overlay bar (dark bg behind chip text, overlapping lower portion of cards)
     this.chipOverlay = new Graphics();
-    this.drawChipOverlay(COLORS.black);
+    this.drawChipOverlay(COLORS.darkGray);
     this.chipOverlay.y = CHIP_OVERLAY_Y;
     this.addChild(this.chipOverlay);
 
@@ -139,7 +141,7 @@ export class PlayerSlot extends Container {
 
   highlight(active: boolean): void {
     this._isHighlighted = active;
-    this.drawChipOverlay(active ? COLORS.activeGreen : COLORS.black);
+    this.drawChipOverlay(active ? COLORS.activeGreen : COLORS.darkGray);
   }
 
   /** Reset slot for a new hand (clear cards, bets, status) */
@@ -155,11 +157,12 @@ export class PlayerSlot extends Container {
 
   private drawChipOverlay(color: number): void {
     this.chipOverlay.clear();
-    this.chipOverlay.rect(
+    this.chipOverlay.roundRect(
       -CHIP_OVERLAY_WIDTH / 2,
       -CHIP_OVERLAY_HEIGHT / 2,
       CHIP_OVERLAY_WIDTH,
       CHIP_OVERLAY_HEIGHT,
+      CHIP_OVERLAY_RADIUS,
     );
     this.chipOverlay.fill({ color, alpha: 1 });
   }
