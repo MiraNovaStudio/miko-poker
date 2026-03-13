@@ -1023,7 +1023,7 @@ export class GameManager {
       const engineId = id; // reuse same engine slot ID (ai1, ai2, etc.)
 
       // Defer replacement: wait 1-3 hands before new player joins
-      const handsRemaining = 1 + Math.floor(Math.random() * 3); // 1, 2, or 3
+      const handsRemaining = 2 + Math.floor(Math.random() * 3); // 2, 3, or 4 (1-3 hands played short-handed)
       this.deferredReplacements.push({ seatIndex, engineId, entry: newEntry, handsRemaining });
     }
   }

@@ -4,7 +4,7 @@ import { Card, type CardData } from './Card.js';
 import {
   HOLE_CARD_WIDTH, HOLE_CARD_HEIGHT, CARD_SPACING_HOLE,
   CHIP_OVERLAY_WIDTH, CHIP_OVERLAY_HEIGHT, CHIP_OVERLAY_Y,
-  COLORS, FONTS, TOP_ROW_SEATS, SIDE_SEATS, getBetLabelOffset,
+  COLORS, FONTS, TOP_ROW_SEATS, getBetLabelOffset,
 } from '../utils/constants.js';
 import { SettingsManager, formatChips } from '../managers/SettingsManager.js';
 
@@ -19,7 +19,6 @@ export class PlayerSlot extends Container {
   private betLabel: Text;
   private statusLabel: Text;
   private chipOverlay: Graphics;
-  private betLabelBg: Graphics | null = null;
   private cardsContainer: Container;
   private winnerLabel: Text | null = null;
   private winnerTimer: ReturnType<typeof setTimeout> | null = null;
@@ -60,23 +59,6 @@ export class PlayerSlot extends Container {
     // Bet label (positioned based on seat region)
     const betOffset = getBetLabelOffset(seatIndex, seatPos);
 
-    // Side seats get a dark gray background behind the action label
-    if (SIDE_SEATS.includes(seatIndex)) {
-      this.betLabelBg = new Graphics();
-      this.betLabelBg.roundRect(
-        -CHIP_OVERLAY_WIDTH / 2,
-        -CHIP_OVERLAY_HEIGHT / 2,
-        CHIP_OVERLAY_WIDTH,
-        CHIP_OVERLAY_HEIGHT,
-        CHIP_OVERLAY_RADIUS,
-      );
-      this.betLabelBg.fill({ color: COLORS.darkGray, alpha: 1 });
-      this.betLabelBg.x = betOffset.x;
-      this.betLabelBg.y = betOffset.y;
-      this.betLabelBg.visible = false;
-      this.addChild(this.betLabelBg);
-    }
-
     this.betLabel = new Text({ text: '', style: FONTS.betLabel as TextStyleOptions });
     this.betLabel.anchor.set(0.5);
     this.betLabel.x = betOffset.x;
@@ -111,16 +93,15 @@ export class PlayerSlot extends Container {
     if (actionText) {
       this.betLabel.text = actionText;
       this.betLabel.visible = true;
-      if (this.betLabelBg) this.betLabelBg.visible = true;
+
     } else if (amount > 0) {
       this.betLabel.style.fill = COLORS.yellow;
       this.betLabel.text = formatChips(amount);
       this.betLabel.visible = true;
-      if (this.betLabelBg) this.betLabelBg.visible = true;
+
     } else {
       this.betLabel.text = '';
       this.betLabel.visible = false;
-      if (this.betLabelBg) this.betLabelBg.visible = false;
     }
   }
 
@@ -137,7 +118,6 @@ export class PlayerSlot extends Container {
     this.betLabel.style.fontStyle = 'italic';
     this.betLabel.text = text;
     this.betLabel.visible = true;
-    if (this.betLabelBg) this.betLabelBg.visible = true;
   }
 
   clearBet(): void {
