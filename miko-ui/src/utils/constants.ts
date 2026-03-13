@@ -81,14 +81,14 @@ export function getBetLabelOffset(seatIndex: number, seatPos: { x: number; y: nu
   }
   // Bottom players: above cards
   if (seatPos.y > 100) {
-    return { x: 0, y: -120 };
+    return { x: 0, y: -117 };
   }
-  // Side players — vertically aligned with stack box
+  // Side players — below stack box, clear of community cards
   if (seatPos.x < 0) {
-    return { x: 120, y: CHIP_OVERLAY_Y }; // left side → label to right
+    return { x: 120, y: CHIP_OVERLAY_Y + 43 }; // left side → label to right
   }
   if (seatPos.x > 0) {
-    return { x: -120, y: CHIP_OVERLAY_Y }; // right side → label to left
+    return { x: -120, y: CHIP_OVERLAY_Y + 43 }; // right side → label to left
   }
   return { x: 0, y: -120 };
 }

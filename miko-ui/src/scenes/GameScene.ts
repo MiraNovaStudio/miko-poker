@@ -29,7 +29,7 @@ export class GameScene extends Container {
 
     // Community cards
     const communityCards = new CommunityCards();
-    communityCards.y = -20;
+    communityCards.y = -30;
     this.addChild(communityCards);
 
     // Dealer button
@@ -79,13 +79,14 @@ export class GameScene extends Container {
     this.gameManager.start();
   }
 
-  /** Called from main.ts on window resize to reposition the HTML bet input */
+  /** Called from main.ts on window resize to reposition HTML overlays */
   onResize(screenWidth: number, screenHeight: number, scale: number): void {
     // The action bar is at y=320 in design space, centered.
     // Convert to screen coords for the HTML input overlay.
     const inputScreenX = screenWidth / 2;
     const inputScreenY = screenHeight / 2 + 320 * scale;
     this.actionBar.updateInputPosition(inputScreenX, inputScreenY, scale);
+    this.gameManager?.onResize(screenWidth, screenHeight, scale);
   }
 
   destroy(): void {

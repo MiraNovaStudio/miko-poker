@@ -15,6 +15,7 @@ import { StatusBar } from '../components/StatusBar.js';
 import { ActionBar } from '../components/ActionBar.js';
 import { AudioManager } from './AudioManager.js';
 import { SettingsManager, formatChips } from './SettingsManager.js';
+import { HandHistory } from '../components/HandHistory.js';
 import { Card } from '../components/Card.js';
 import { PLAYER_ROSTER, pickNewPlayer, type RosterEntry } from '../data/player-roster.js';
 import { Text, Container, type TextStyleOptions } from 'pixi.js';
@@ -30,6 +31,7 @@ export class GameManager {
   private statusBar: StatusBar;
   private actionBar: ActionBar;
   private audioManager: AudioManager;
+  private handHistory: HandHistory;
 
   // Engine
   private engine: PokerGameEngine | null = null;
@@ -79,6 +81,7 @@ export class GameManager {
     this.statusBar = statusBar;
     this.actionBar = actionBar;
     this.audioManager = audioManager;
+    this.handHistory = new HandHistory();
 
     // Wire action bar callbacks: Check/Call, Bet/Raise, Fold
     this.actionBar.setCallbacks(
@@ -106,7 +109,13 @@ export class GameManager {
   start(): void {
     this.initializeEngine();
     this.actionBar.hide();
+    this.handHistory.show();
     this.startFirstHand();
+  }
+
+  /** Reposition the hand history HTML overlay on resize */
+  onResize(screenWidth: number, screenHeight: number, scale: number): void {
+    this.handHistory.updatePosition(screenWidth, screenHeight, scale);
   }
 
   /** Restart the game from scratch (New Game button) */
@@ -117,6 +126,7 @@ export class GameManager {
     this.eliminatedPlayers.clear();
     this.usedRosterNames.clear();
     this.displayNameById.clear();
+    this.handHistory.clear();
     this.totalKnockouts = 0;
     this.pendingReplacements = [];
     this.deferredReplacements = [];
@@ -723,6 +733,7 @@ export class GameManager {
       statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
     }
     this.statusBar.setStatus(statusMsg);
+    this.handHistory.addEntry(statusMsg);
 
     // Show hand names on bet labels at showdown
     if (result.winningHand) {
