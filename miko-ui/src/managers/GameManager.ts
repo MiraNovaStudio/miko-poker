@@ -991,14 +991,17 @@ export class GameManager {
 
   /**
    * Compute layered side pots from player totalBet values.
-   * Only meaningful when at least one player is all-in — side pots form
-   * because an all-in player can't match further bets.
-   * Returns array of pots: first is main pot, rest are side pots.
+   * Side pots only form when a player is all-in and can't match further bets.
+   *
+   * Algorithm (peel the smallest contribution layer by layer):
+   *   1. Sort contributors by totalBet ascending
+   *   2. Take smallest contribution × number of contributors → main pot
+   *   3. Subtract, remove zeroed-out players, repeat → side pots
+   *   4. If only 1 contributor remains, those chips are unmatched (returned, not a pot)
    */
   private computeSidePots(players: PlayerState[]): { amount: number; eligible: string[] }[] {
     // Side pots only exist when someone is all-in
-    const hasAllIn = players.some(p => p.allIn);
-    if (!hasAllIn) return [];
+    if (!players.some(p => p.allIn)) return [];
 
     const contributors = players
       .filter(p => p.totalBet > 0)
@@ -1006,15 +1009,13 @@ export class GameManager {
 
     if (contributors.length === 0) return [];
 
-    // Only split at levels where an all-in player caps out
-    const allInLevels = new Set(
-      contributors.filter(p => p.allIn).map(p => p.totalBet)
-    );
-    // Always include the max level so the final pot layer is built
-    const maxBet = contributors[contributors.length - 1].totalBet;
-    allInLevels.add(maxBet);
-
-    const levels = Array.from(allInLevels).sort((a, b) => a - b);
+    // Deduplicate contribution levels
+    const levels: number[] = [];
+    for (const p of contributors) {
+      if (levels.length === 0 || levels[levels.length - 1] !== p.totalBet) {
+        levels.push(p.totalBet);
+      }
+    }
 
     const pots: { amount: number; eligible: string[] }[] = [];
     let previousLevel = 0;
@@ -1024,6 +1025,10 @@ export class GameManager {
       if (increment <= 0) continue;
 
       const numContributors = contributors.filter(p => p.totalBet >= level).length;
+
+      // Skip single-contributor pots — unmatched chips returned to that player
+      if (numContributors <= 1) continue;
+
       const potAmount = increment * numContributors;
       const eligible = contributors
         .filter(p => p.totalBet >= level && !p.folded)
@@ -1045,13 +1050,15 @@ export class GameManager {
     const pots = this.computeSidePots(gameState.players);
 
     if (pots.length > 1) {
-      let text = `Pot: ${formatChips(totalPot)}`;
-      // First pot is main pot, rest are side pots — stack vertically
-      pots.forEach((pot, i) => {
-        if (i === 0) return;
-        text += `\nSP${i}: ${formatChips(pot.amount)}`;
-      });
+      // Show main pot + side pots stacked vertically
+      let text = `Main: ${formatChips(pots[0].amount)}`;
+      for (let i = 1; i < pots.length; i++) {
+        text += `\nSP${i}: ${formatChips(pots[i].amount)}`;
+      }
       this.statusBar.setPot(text);
+    } else if (pots.length === 1) {
+      // Only one pot layer (all at same level) — show as normal pot
+      this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
     } else {
       this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
     }
