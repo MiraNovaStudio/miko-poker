@@ -471,7 +471,11 @@ export class GameManager {
 
     // Update all player slots
     gameState.players.forEach((player, index) => {
-      if (this.eliminatedPlayers.has(player.id)) return;
+      if (this.eliminatedPlayers.has(player.id)) {
+        const slot = this.slotLayout.getSlot(index);
+        if (slot) slot.visible = false;
+        return;
+      }
 
       const slot = this.slotLayout.getSlot(index);
       if (!slot) return;
