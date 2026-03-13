@@ -83,10 +83,12 @@ export class PlayerSlot extends Container {
     // Reset to default style
     this.betLabel.style.fontSize = (FONTS.betLabel as { fontSize: number }).fontSize;
     this.betLabel.style.fontStyle = 'normal';
+    this.betLabel.style.fill = COLORS.white;
     if (actionText) {
       this.betLabel.text = actionText;
       this.betLabel.visible = true;
     } else if (amount > 0) {
+      this.betLabel.style.fill = COLORS.yellow;
       this.betLabel.text = `$${amount}`;
       this.betLabel.visible = true;
     } else {

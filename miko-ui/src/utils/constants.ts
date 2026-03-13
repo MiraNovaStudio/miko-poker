@@ -64,7 +64,7 @@ export const FONTS = {
   chipStack: { fontFamily: 'Arial', fontSize: 24, fontWeight: 'bold' as const, fill: COLORS.yellow },
   betLabel: { fontFamily: 'Arial', fontSize: 24, fill: COLORS.white, stroke: { color: COLORS.black, width: 2 } },
   statusLabel: { fontFamily: 'Arial', fontSize: 14, fill: COLORS.statusRed, stroke: { color: COLORS.black, width: 1 } },
-  potLabel: { fontFamily: 'Arial', fontSize: 22, fill: COLORS.potText },
+  potLabel: { fontFamily: 'Arial', fontSize: 22, fontWeight: 'bold' as const, fill: COLORS.potText },
   statusBar: { fontFamily: 'Arial', fontSize: 20, fill: COLORS.white },
   handLabel: { fontFamily: 'Arial', fontSize: 18, fill: COLORS.handLabelBlue },
   button: { fontFamily: 'Arial', fontSize: 20, fill: COLORS.white },
