@@ -30,7 +30,18 @@ export const CHIP_OVERLAY_Y = 18;  // y-offset from slot center (below cards)
 
 /** Dealer button */
 export const DEALER_BUTTON_SIZE = 30;
-export const DEALER_BUTTON_OFFSET = { x: 50, y: -50 };
+
+/** Per-seat dealer button offsets — always positioned on the table toward center */
+export const DEALER_BUTTON_OFFSETS: { x: number; y: number }[] = [
+  { x: 50, y: -70 },   // Seat 0: bottom center → up-right
+  { x: 70, y: -70 },   // Seat 1: bottom left → up-right
+  { x: 80, y: -30 },   // Seat 2: left side → right
+  { x: 70, y: 60 },    // Seat 3: top left → down-right
+  { x: 50, y: 60 },    // Seat 4: top center → down
+  { x: -70, y: 60 },   // Seat 5: top right → down-left
+  { x: -80, y: -30 },  // Seat 6: right side → left
+  { x: -70, y: -70 },  // Seat 7: bottom right → up-left
+];
 
 /** Colors */
 export const COLORS = {

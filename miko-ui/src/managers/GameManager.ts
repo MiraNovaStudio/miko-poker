@@ -270,7 +270,7 @@ export class GameManager {
     // Position dealer button
     const dealerSeat = SEAT_POSITIONS[gameState.dealerIndex];
     if (dealerSeat) {
-      this.dealerButton.positionAt(dealerSeat.x, dealerSeat.y);
+      this.dealerButton.positionAt(dealerSeat.x, dealerSeat.y, gameState.dealerIndex);
     }
 
     this.updatePotLabel();
