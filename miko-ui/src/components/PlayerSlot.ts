@@ -6,7 +6,7 @@ import {
   CHIP_OVERLAY_WIDTH, CHIP_OVERLAY_HEIGHT, CHIP_OVERLAY_Y,
   COLORS, FONTS, TOP_ROW_SEATS, getBetLabelOffset,
 } from '../utils/constants.js';
-import { formatChips } from '../managers/SettingsManager.js';
+import { SettingsManager, formatChips } from '../managers/SettingsManager.js';
 
 const CHIP_OVERLAY_RADIUS = 8;
 
@@ -80,6 +80,7 @@ export class PlayerSlot extends Container {
   }
 
   setChips(amount: number): void {
+    if (this._allIn) return; // preserve "ALL IN" label
     this.chipsLabel.text = formatChips(amount);
   }
 
@@ -144,18 +145,50 @@ export class PlayerSlot extends Container {
     this.chipsLabel.style.fill = (FONTS.chipStack as { fill: number }).fill;
   }
 
-  /** Deal hole cards. faceUp = true only for human player. */
-  dealCards(cards: CardData[], faceUp: boolean): void {
+  /** Deal hole cards. faceUp = true only for human player.
+   *  When card animations are on, cards slide in from the table center (0,0 in scene coords).
+   *  Pass skipAnim=true to bypass animation (e.g. showdown reveal). */
+  dealCards(cards: CardData[], faceUp: boolean, skipAnim = false): void {
     this.clearCards();
     this._foldedCards = cards.slice();
     this.cardsContainer.visible = true;
 
+    const animate = !skipAnim && SettingsManager.instance.cardAnimations;
+
     cards.forEach((cardData, index) => {
-      const xOffset = index * CARD_SPACING_HOLE - (CARD_SPACING_HOLE / 2);
+      const targetX = index * CARD_SPACING_HOLE - (CARD_SPACING_HOLE / 2);
       const card = new Card(HOLE_CARD_WIDTH, HOLE_CARD_HEIGHT);
-      card.x = xOffset;
       card.setCard(cardData, faceUp);
       this.cardsContainer.addChild(card);
+
+      if (animate) {
+        // Start from table center in slot-local coords
+        const startX = -this.x - this.cardsContainer.x;
+        const startY = -this.y - this.cardsContainer.y;
+        card.x = startX;
+        card.y = startY;
+        card.scale.set(0.3);
+        card.alpha = 0;
+
+        const delay = index * 150;
+        const duration = 350;
+
+        setTimeout(() => {
+          const t0 = performance.now();
+          const anim = (now: number) => {
+            const t = Math.min((now - t0) / duration, 1);
+            const ease = 1 - (1 - t) * (1 - t); // ease-out quad
+            card.x = startX + (targetX - startX) * ease;
+            card.y = startY + (0 - startY) * ease;
+            card.scale.set(0.3 + 0.7 * ease);
+            card.alpha = Math.min(1, t * 2);
+            if (t < 1) requestAnimationFrame(anim);
+          };
+          requestAnimationFrame(anim);
+        }, delay);
+      } else {
+        card.x = targetX;
+      }
     });
   }
 
@@ -449,6 +482,41 @@ export class PlayerSlot extends Container {
       }
     };
     requestAnimationFrame(animate);
+  }
+
+  /** Animate this slot sliding in from a given scene position.
+   *  Returns a promise that resolves when the animation completes. */
+  slideInFrom(fromX: number, fromY: number, duration = 600): Promise<void> {
+    return new Promise(resolve => {
+      const targetX = this.x;
+      const targetY = this.y;
+      this.x = fromX;
+      this.y = fromY;
+      this.alpha = 0;
+      this.scale.set(0.5);
+      this.visible = true;
+
+      const startTime = performance.now();
+      const animate = (now: number) => {
+        const t = Math.min((now - startTime) / duration, 1);
+        // Ease-out cubic
+        const ease = 1 - Math.pow(1 - t, 3);
+        this.x = fromX + (targetX - fromX) * ease;
+        this.y = fromY + (targetY - fromY) * ease;
+        this.alpha = Math.min(1, t * 2);
+        this.scale.set(0.5 + 0.5 * ease);
+        if (t < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          this.x = targetX;
+          this.y = targetY;
+          this.alpha = 1;
+          this.scale.set(1);
+          resolve();
+        }
+      };
+      requestAnimationFrame(animate);
+    });
   }
 
   // --- Internal ---

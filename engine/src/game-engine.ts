@@ -394,7 +394,7 @@ export class PokerGameEngine {
       if (p.bet > 0) debugLog('END_ROUND', `   ${p.id}: bet=$${p.bet}`);
     });
 
-    this.pot.collectBetsSimple(this.players);
+    this.pot.collectBets(this.players);
 
     const potAfter = this.pot.getTotalPot();
     debugLog('END_ROUND', ` AFTER collectBets: pot=$${potAfter}`);
@@ -452,6 +452,11 @@ export class PokerGameEngine {
       throw new Error('No AI instance for this player');
     }
 
+    // Calculate position relative to dealer (0 = button, 1 = cutoff, etc.)
+    const playerIndex = this.players.findIndex(p => p.id === playerId);
+    const numPlayers = this.players.length;
+    const posFromDealer = (numPlayers - ((playerIndex - this.dealerIndex + numPlayers) % numPlayers)) % numPlayers;
+
     const context = {
       street: this.street,
       pot: this.getCurrentPot(),
@@ -461,7 +466,10 @@ export class PokerGameEngine {
       minRaise: this.bettingRound.getMinRaise(),
       opponentChips: this.players.find(p => p.id !== playerId)?.chips || 0,
       holeCards: player.cards,
-      communityCards: this.communityCards
+      communityCards: this.communityCards,
+      positionFromDealer: posFromDealer,
+      activePlayers: this.players.filter(p => !p.folded).length,
+      bigBlind: this.config.bigBlind,
     };
 
     return ai.decide(context);
@@ -555,11 +563,24 @@ export class PokerGameEngine {
       compareHands(h.handStrength, bestHand.handStrength) === 0
     );
 
-    // Capture pot amount before awarding (awardPot resets to 0)
+    // Capture pot amount before awarding (awardPots resets to 0)
     const potAmount = this.pot.getTotalPot();
 
-    // Award pot
-    this.pot.awardPot(winners.map(w => w.player));
+    // Award main pot and side pots separately based on eligibility
+    this.pot.awardPots(this.players, (eligible) => {
+      // Among eligible players, find the best hand(s)
+      const eligibleHands = handsWithPlayers.filter(h => eligible.includes(h.player));
+      if (eligibleHands.length === 0) return [];
+      let best = eligibleHands[0];
+      for (let i = 1; i < eligibleHands.length; i++) {
+        if (compareHands(eligibleHands[i].handStrength, best.handStrength) > 0) {
+          best = eligibleHands[i];
+        }
+      }
+      return eligibleHands
+        .filter(h => compareHands(h.handStrength, best.handStrength) === 0)
+        .map(h => h.player);
+    });
 
     const result: GameResult = {
       winners: winners.map(w => w.player.id),
@@ -579,8 +600,9 @@ export class PokerGameEngine {
    */
   private endHandByFold(winner: Player): void {
     const potAmount = this.getCurrentPot();
-    this.pot.collectBetsSimple(this.players);
+    this.pot.collectBets(this.players);
     winner.addChips(this.pot.getTotalPot());
+    this.pot.reset();
 
     const result: GameResult = {
       winners: [winner.id],
@@ -599,7 +621,7 @@ export class PokerGameEngine {
     debugLog('FORCE_COMPLETE', `⚡ Forcing hand completion - all players all-in or folded`);
 
     // Collect any outstanding bets
-    this.pot.collectBetsSimple(this.players);
+    this.pot.collectBets(this.players);
     this.emitEvent({ type: 'pot_updated', amount: this.pot.getTotalPot() });
 
     // Deal all remaining community cards
@@ -786,6 +808,13 @@ export class PokerGameEngine {
   getCurrentPot(): number {
     const currentBets = this.players.reduce((sum, p) => sum + p.bet, 0);
     return this.pot.getTotalPot() + currentBets;
+  }
+
+  /**
+   * Get main pot amount (excluding side pots)
+   */
+  getMainPot(): number {
+    return this.pot.getMainPot();
   }
 
   /**

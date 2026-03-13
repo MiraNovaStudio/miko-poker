@@ -98,12 +98,6 @@ export class PotManager {
       previousBetLevel = currentBetLevel;
     }
 
-    // If we only have main pot and no side pots, collect all bets into main pot
-    if (this.sidePots.length === 0) {
-      const total = playersWithBets.reduce((sum, p) => sum + p.bet, 0);
-      this.mainPot += total;
-    }
-
     // Reset all player bets for next street
     for (const player of players) {
       player.resetBetForStreet();

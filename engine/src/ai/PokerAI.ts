@@ -22,6 +22,12 @@ export interface GameContext {
   opponentChips: number;
   holeCards: Card[];
   communityCards: Card[];
+  /** Player's position relative to dealer (0 = dealer/button) */
+  positionFromDealer?: number;
+  /** Number of players still active (not folded) this hand */
+  activePlayers?: number;
+  /** Big blind amount */
+  bigBlind?: number;
 }
 
 /**
@@ -53,7 +59,10 @@ export class PokerAI {
           playerChips: context.playerChips,
           minRaise: context.minRaise,
           opponentChips: context.opponentChips,
-          holeCards: context.holeCards
+          holeCards: context.holeCards,
+          positionFromDealer: context.positionFromDealer,
+          activePlayers: context.activePlayers,
+          bigBlind: context.bigBlind,
         },
         this.config,
         strength

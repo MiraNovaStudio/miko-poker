@@ -52,6 +52,8 @@ async function init() {
   const deckUnicodeBtn = document.getElementById('deck-unicode');
   const chipDollarBtn = document.getElementById('chip-dollar');
   const chipBbBtn = document.getElementById('chip-bb');
+  const animsOnBtn = document.getElementById('anims-on');
+  const animsOffBtn = document.getElementById('anims-off');
 
   if (settingsBtn && settingsModal) {
     settingsBtn.style.display = 'none'; // hidden on start screen
@@ -101,6 +103,22 @@ async function init() {
       updateChipButtons();
     });
 
+    // Card animations toggle
+    const updateAnimButtons = () => {
+      animsOnBtn?.classList.toggle('active', settings.cardAnimations);
+      animsOffBtn?.classList.toggle('active', !settings.cardAnimations);
+    };
+
+    animsOnBtn?.addEventListener('click', () => {
+      settings.cardAnimations = true;
+      updateAnimButtons();
+    });
+
+    animsOffBtn?.addEventListener('click', () => {
+      settings.cardAnimations = false;
+      updateAnimButtons();
+    });
+
     // Player name input
     const nameInput = document.getElementById('player-name') as HTMLInputElement | null;
     if (nameInput) {
@@ -113,6 +131,7 @@ async function init() {
     // Sync button state with saved preference on load
     updateDeckButtons();
     updateChipButtons();
+    updateAnimButtons();
   }
 
   const pageTitle = document.getElementById('page-title');

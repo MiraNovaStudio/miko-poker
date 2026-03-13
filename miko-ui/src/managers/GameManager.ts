@@ -43,6 +43,8 @@ export class GameManager {
   private totalKnockouts = 0;
   private currentActivePlayer: string | null = null;
   private pendingReplacements: { seatIndex: number; engineId: string; entry: RosterEntry }[] = [];
+  /** Replacements waiting one extra hand before joining */
+  private deferredReplacements: { seatIndex: number; engineId: string; entry: RosterEntry }[] = [];
   private handCounter = 0;
   private handPhase: HandPhase = 'idle';
 
@@ -204,6 +206,25 @@ export class GameManager {
       dealtCards.push(deck.deal());
     }
 
+    // Find the highest card (rank first, then suit: spades > hearts > diamonds > clubs)
+    let winnerIdx = 0;
+    let bestRank = GameManager.RANK_VALUE[dealtCards[0].rank];
+    let bestSuit = GameManager.SUIT_VALUE[dealtCards[0].suit];
+
+    for (let i = 1; i < numPlayers; i++) {
+      const rank = GameManager.RANK_VALUE[dealtCards[i].rank];
+      const suit = GameManager.SUIT_VALUE[dealtCards[i].suit];
+      if (rank > bestRank || (rank === bestRank && suit > bestSuit)) {
+        winnerIdx = i;
+        bestRank = rank;
+        bestSuit = suit;
+      }
+    }
+
+    // Set dealer index so startNewHand()'s +1 rotation lands on the winner
+    const prevIdx = (winnerIdx - 1 + numPlayers) % numPlayers;
+    this.engine!.setDealerIndex(prevIdx);
+
     // Set up all slots with names and chips first
     this.playerIdBySeat.forEach((pid, idx) => {
       const slot = this.slotLayout.getSlot(idx);
@@ -213,6 +234,13 @@ export class GameManager {
       slot.setChips(GAME_CONFIG.startingChips);
       slot.visible = true;
     });
+
+    // Skip the dealing animation if card animations are off
+    if (!SettingsManager.instance.cardAnimations) {
+      this.engine!.startNewHand();
+      setTimeout(() => this.advanceGame(), 500);
+      return;
+    }
 
     this.statusBar.setStatus('Dealing for the button...');
     this.statusBar.setPot('');
@@ -229,24 +257,9 @@ export class GameManager {
       }, idx * dealDelay);
     });
 
-    // After all cards are dealt, determine the winner
+    // After all cards are dealt, show the winner
     const revealTime = numPlayers * dealDelay + 1500;
     setTimeout(() => {
-      // Find the highest card (rank first, then suit: spades > hearts > diamonds > clubs)
-      let winnerIdx = 0;
-      let bestRank = GameManager.RANK_VALUE[dealtCards[0].rank];
-      let bestSuit = GameManager.SUIT_VALUE[dealtCards[0].suit];
-
-      for (let i = 1; i < numPlayers; i++) {
-        const rank = GameManager.RANK_VALUE[dealtCards[i].rank];
-        const suit = GameManager.SUIT_VALUE[dealtCards[i].suit];
-        if (rank > bestRank || (rank === bestRank && suit > bestSuit)) {
-          winnerIdx = i;
-          bestRank = rank;
-          bestSuit = suit;
-        }
-      }
-
       const winnerName = this.getDisplayName(this.playerIdBySeat[winnerIdx]);
       const winCard = dealtCards[winnerIdx];
       this.statusBar.setStatus(
@@ -256,12 +269,6 @@ export class GameManager {
       // Show BUTTON animation on the winner's slot
       const winnerSlot = this.slotLayout.getSlot(winnerIdx);
       if (winnerSlot) winnerSlot.showButtonLabel(3000);
-
-      // Set dealer index so startNewHand()'s +1 rotation lands on the winner
-      // startNewHand does: dealerIndex = (dealerIndex + 1) % numPlayers
-      // So we set it to (winnerIdx - 1 + numPlayers) % numPlayers
-      const prevIdx = (winnerIdx - 1 + numPlayers) % numPlayers;
-      this.engine!.setDealerIndex(prevIdx);
 
       // After the BUTTON label has shown, clear and start the real hand
       setTimeout(() => {
@@ -558,7 +565,11 @@ export class GameManager {
     if (action.type === 'fold') {
       slot.setBet(0, 'Fold');
       slot.setBetColor(0x888888);
-      slot.foldCardsTo(this.communityCards.x, this.communityCards.y);
+      if (SettingsManager.instance.cardAnimations) {
+        slot.foldCardsTo(this.communityCards.x, this.communityCards.y);
+      } else {
+        slot.hideCards();
+      }
       this.audioManager.playFoldSound();
       if (playerId === 'player') {
         this.humanFolded = true;
@@ -683,9 +694,22 @@ export class GameManager {
       if (this.totalKnockouts >= PLAYER_ROSTER.length) return;
 
       if (this.engine && !this.engine.isHandInProgress()) {
-        this.applyPendingReplacements();
-        this.engine.startNewHand();
-        setTimeout(() => this.advanceGame(), 500);
+        // Promote deferred replacements → pending (they waited one hand)
+        if (this.deferredReplacements.length > 0) {
+          this.pendingReplacements.push(...this.deferredReplacements);
+          this.deferredReplacements = [];
+        }
+
+        // Apply pending with slide-in animation, then start hand
+        if (this.pendingReplacements.length > 0) {
+          this.applyPendingReplacementsAnimated(() => {
+            this.engine!.startNewHand();
+            setTimeout(() => this.advanceGame(), 500);
+          });
+        } else {
+          this.engine.startNewHand();
+          setTimeout(() => this.advanceGame(), 500);
+        }
       }
     }, 8000);
   }
@@ -756,18 +780,17 @@ export class GameManager {
 
   private updatePotLabel(): void {
     if (!this.engine) return;
-    const gameState = this.engine.getGameState();
-    const enginePot = gameState.pot;
+    const totalPot = this.engine.getCurrentPot();
     const sidePots = this.engine.getSidePots();
 
     if (sidePots && sidePots.length > 0) {
-      let text = `Main: ${formatChips(enginePot)}`;
+      let text = `Pot: ${formatChips(totalPot)}`;
       sidePots.forEach((pot: { amount: number }, i: number) => {
-        text += ` | Side ${i + 1}: ${formatChips(pot.amount)}`;
+        text += `\nSP${i + 1}: ${formatChips(pot.amount)}`;
       });
       this.statusBar.setPot(text);
     } else {
-      this.statusBar.setPot(`Pot: ${formatChips(enginePot)}`);
+      this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
     }
   }
 
@@ -922,8 +945,8 @@ export class GameManager {
       this.usedRosterNames.add(newEntry.name);
       const engineId = id; // reuse same engine slot ID (ai1, ai2, etc.)
 
-      // Schedule replacement for next hand
-      this.pendingReplacements.push({ seatIndex, engineId, entry: newEntry });
+      // Defer replacement: play one hand empty, then join with animation
+      this.deferredReplacements.push({ seatIndex, engineId, entry: newEntry });
     }
   }
 
@@ -958,6 +981,62 @@ export class GameManager {
     this.pendingReplacements = [];
   }
 
+  /** Apply pending replacements with a slide-in animation, then call onComplete */
+  private applyPendingReplacementsAnimated(onComplete: () => void): void {
+    if (!this.engine || this.pendingReplacements.length === 0) {
+      onComplete();
+      return;
+    }
+
+    // Upper-left origin for animation (same as community card deal origin)
+    const originX = -480;
+    const originY = -340;
+
+    const promises: Promise<void>[] = [];
+
+    for (const { seatIndex, engineId, entry } of this.pendingReplacements) {
+      // Replace in engine
+      this.engine.replacePlayer(seatIndex, engineId, entry.config);
+
+      // Update display name mapping
+      this.displayNameById.set(engineId, entry.name);
+
+      // Update UI slot — set up content but keep hidden until animation
+      const slot = this.slotLayout.getSlot(seatIndex);
+      if (slot) {
+        slot.resetForNewHand();
+        slot.setPlayerName(entry.name);
+        slot.setChips(GAME_CONFIG.startingChips);
+        slot.visible = false; // hidden until animation starts
+        slot.clearStatus();
+
+        // Animate slide-in from upper-left to seat position
+        const seatPos = SEAT_POSITIONS[seatIndex];
+        if (seatPos) {
+          promises.push(slot.slideInFrom(originX, originY, 600));
+        } else {
+          slot.visible = true;
+        }
+      }
+
+      // Remove from eliminated set so they can play
+      this.eliminatedPlayers.delete(engineId);
+
+      this.statusBar.setStatus(`${entry.name} has joined the table!`);
+    }
+
+    this.pendingReplacements = [];
+
+    // Wait for all slide-in animations, then start the hand
+    if (promises.length > 0) {
+      Promise.all(promises).then(() => {
+        setTimeout(onComplete, 500); // brief pause after animation
+      });
+    } else {
+      onComplete();
+    }
+  }
+
   private revealAllCardsAtShowdown(): void {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
@@ -971,6 +1050,7 @@ export class GameManager {
       slot.dealCards(
         player.cards.map((c: EngineCard) => ({ rank: c.rank, suit: c.suit })),
         true,
+        true, // skipAnim — showdown reveal, not a fresh deal
       );
     });
   }

@@ -14,6 +14,12 @@ export interface PreflopContext {
   minRaise: number;
   opponentChips: number;
   holeCards: Card[];
+  /** Player's position relative to dealer (0 = button, 1 = cutoff, etc.) */
+  positionFromDealer?: number;
+  /** Number of players still active (not folded) this hand */
+  activePlayers?: number;
+  /** Big blind amount */
+  bigBlind?: number;
 }
 
 /**
@@ -82,6 +88,28 @@ export function decidePreflopAction(
   }
 
   // --- Facing a bet ---
+
+  // Shark blind steal: raise from button or cutoff when folded to them
+  const bb = context.bigBlind ?? 10;
+  const pos = context.positionFromDealer ?? 99;
+  const isLatePosition = pos <= 1; // 0 = button, 1 = cutoff
+  const foldedToUs = currentBet === bb && toCall === bb - playerBet;
+
+  if (config.playstyle === 'shark' && isLatePosition && foldedToUs) {
+    // Steal with a wider range: any hand above ~0.30 strength
+    if (strength > 0.30) {
+      // Strong hand (0.65+): raise 3.5x BB
+      if (strength > 0.65) {
+        const amount = Math.min(Math.floor(bb * 3.5), playerChips);
+        return { type: 'raise', amount };
+      }
+      // Decent hand: standard 2.5x BB steal raise (~70% of the time)
+      if (Math.random() < 0.7) {
+        const amount = Math.min(Math.floor(bb * 2.5), playerChips);
+        return { type: 'raise', amount };
+      }
+    }
+  }
 
   // All-in decision
   if (toCall >= playerChips) {

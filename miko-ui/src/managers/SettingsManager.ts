@@ -5,6 +5,7 @@ export type ChipDisplay = 'dollar' | 'bb';
 const DECK_KEY = 'miko_deckType';
 const NAME_KEY = 'miko_playerName';
 const CHIP_DISPLAY_KEY = 'miko_chipDisplay';
+const CARD_ANIMS_KEY = 'miko_cardAnimations';
 const DEFAULT_NAME = 'Player';
 const BIG_BLIND = 10;
 
@@ -31,6 +32,7 @@ export class SettingsManager {
   private _deckType: DeckType;
   private _playerName: string;
   private _chipDisplay: ChipDisplay;
+  private _cardAnimations: boolean;
   private _onChange: (() => void) | null = null;
 
   private constructor() {
@@ -39,6 +41,8 @@ export class SettingsManager {
     this._playerName = localStorage.getItem(NAME_KEY) || DEFAULT_NAME;
     const savedChip = localStorage.getItem(CHIP_DISPLAY_KEY);
     this._chipDisplay = (savedChip === 'dollar' || savedChip === 'bb') ? savedChip : 'dollar';
+    const savedAnims = localStorage.getItem(CARD_ANIMS_KEY);
+    this._cardAnimations = savedAnims !== 'false'; // default: on
   }
 
   get deckType(): DeckType {
@@ -72,6 +76,17 @@ export class SettingsManager {
     if (this._chipDisplay === value) return;
     this._chipDisplay = value;
     localStorage.setItem(CHIP_DISPLAY_KEY, value);
+    this._onChange?.();
+  }
+
+  get cardAnimations(): boolean {
+    return this._cardAnimations;
+  }
+
+  set cardAnimations(value: boolean) {
+    if (this._cardAnimations === value) return;
+    this._cardAnimations = value;
+    localStorage.setItem(CARD_ANIMS_KEY, String(value));
     this._onChange?.();
   }
 
