@@ -6,6 +6,7 @@ const DECK_KEY = 'miko_deckType';
 const NAME_KEY = 'miko_playerName';
 const CHIP_DISPLAY_KEY = 'miko_chipDisplay';
 const CARD_ANIMS_KEY = 'miko_cardAnimations';
+const FOUR_COLOR_KEY = 'miko_fourColorDeck';
 const DEFAULT_NAME = 'Player';
 const BIG_BLIND = 10;
 
@@ -33,6 +34,7 @@ export class SettingsManager {
   private _playerName: string;
   private _chipDisplay: ChipDisplay;
   private _cardAnimations: boolean;
+  private _fourColorDeck: boolean;
   private _onChange: (() => void) | null = null;
 
   private constructor() {
@@ -43,6 +45,8 @@ export class SettingsManager {
     this._chipDisplay = (savedChip === 'dollar' || savedChip === 'bb') ? savedChip : 'dollar';
     const savedAnims = localStorage.getItem(CARD_ANIMS_KEY);
     this._cardAnimations = savedAnims !== 'false'; // default: on
+    const savedFourColor = localStorage.getItem(FOUR_COLOR_KEY);
+    this._fourColorDeck = savedFourColor === 'true'; // default: off
   }
 
   get deckType(): DeckType {
@@ -87,6 +91,17 @@ export class SettingsManager {
     if (this._cardAnimations === value) return;
     this._cardAnimations = value;
     localStorage.setItem(CARD_ANIMS_KEY, String(value));
+    this._onChange?.();
+  }
+
+  get fourColorDeck(): boolean {
+    return this._fourColorDeck;
+  }
+
+  set fourColorDeck(value: boolean) {
+    if (this._fourColorDeck === value) return;
+    this._fourColorDeck = value;
+    localStorage.setItem(FOUR_COLOR_KEY, String(value));
     this._onChange?.();
   }
 

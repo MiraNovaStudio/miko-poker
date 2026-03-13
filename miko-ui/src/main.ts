@@ -54,6 +54,9 @@ async function init() {
   const chipBbBtn = document.getElementById('chip-bb');
   const animsOnBtn = document.getElementById('anims-on');
   const animsOffBtn = document.getElementById('anims-off');
+  const fourColorOnBtn = document.getElementById('fourcolor-on');
+  const fourColorOffBtn = document.getElementById('fourcolor-off');
+  const fourColorRow = document.getElementById('four-color-row');
 
   if (settingsBtn && settingsModal) {
     settingsBtn.style.display = 'none'; // hidden on start screen
@@ -75,6 +78,16 @@ async function init() {
     const updateDeckButtons = () => {
       deckPngBtn?.classList.toggle('active', settings.deckType === 'png');
       deckUnicodeBtn?.classList.toggle('active', settings.deckType === 'unicode');
+      // 4-Color Deck only available with Unicode deck
+      const isUnicode = settings.deckType === 'unicode';
+      if (fourColorRow) {
+        fourColorRow.style.opacity = isUnicode ? '1' : '0.4';
+        fourColorRow.style.pointerEvents = isUnicode ? 'auto' : 'none';
+      }
+      if (!isUnicode && settings.fourColorDeck) {
+        settings.fourColorDeck = false;
+        updateFourColorButtons();
+      }
     };
 
     deckPngBtn?.addEventListener('click', () => {
@@ -119,6 +132,22 @@ async function init() {
       updateAnimButtons();
     });
 
+    // 4-Color Deck toggle (Unicode only)
+    const updateFourColorButtons = () => {
+      fourColorOnBtn?.classList.toggle('active', settings.fourColorDeck);
+      fourColorOffBtn?.classList.toggle('active', !settings.fourColorDeck);
+    };
+
+    fourColorOnBtn?.addEventListener('click', () => {
+      settings.fourColorDeck = true;
+      updateFourColorButtons();
+    });
+
+    fourColorOffBtn?.addEventListener('click', () => {
+      settings.fourColorDeck = false;
+      updateFourColorButtons();
+    });
+
     // Player name input
     const nameInput = document.getElementById('player-name') as HTMLInputElement | null;
     if (nameInput) {
@@ -130,6 +159,7 @@ async function init() {
 
     // Sync button state with saved preference on load
     updateDeckButtons();
+    updateFourColorButtons();
     updateChipButtons();
     updateAnimButtons();
   }

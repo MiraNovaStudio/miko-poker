@@ -23,6 +23,13 @@ const SUIT_COLORS: Record<string, number> = {
   spades: 0x111111,
 };
 
+const SUIT_COLORS_4: Record<string, number> = {
+  hearts: 0xcc0000,
+  diamonds: 0x2266cc,
+  clubs: 0x228833,
+  spades: 0x111111,
+};
+
 const CARD_BG = 0xf5f5f0;
 const CARD_BORDER = 0x888888;
 const CARD_BACK_COLOR = 0x2255aa;
@@ -188,7 +195,8 @@ export class Card extends Container {
     const w = this._cardWidth;
     const h = this._cardHeight;
     const suit = this.cardData.suit;
-    const color = SUIT_COLORS[suit] ?? 0x000000;
+    const colorMap = SettingsManager.instance.fourColorDeck ? SUIT_COLORS_4 : SUIT_COLORS;
+    const color = colorMap[suit] ?? 0x000000;
     const suitSymbol = SUIT_SYMBOLS[suit] ?? '?';
     const r = Math.max(CARD_RADIUS * (w / 80), 3);
     const pad = w * 0.07;
