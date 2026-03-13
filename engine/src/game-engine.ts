@@ -1,3 +1,4 @@
+// (c) 2025 MiraNova Studios
 /**
  * Main Texas Hold'em Game Engine
  * Orchestrates all game components and provides the primary API

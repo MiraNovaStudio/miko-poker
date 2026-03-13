@@ -1,3 +1,4 @@
+// (c) 2026 MiraNova Studios
 import { Container, Sprite, Graphics, Text, type TextStyleOptions } from 'pixi.js';
 import { AssetManager } from '../managers/AssetManager.js';
 import { FONTS } from '../utils/constants.js';

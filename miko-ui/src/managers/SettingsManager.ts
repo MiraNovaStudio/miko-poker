@@ -1,3 +1,4 @@
+// (c) 2026 MiraNova Studios
 export type DeckType = 'png' | 'unicode';
 
 export class SettingsManager {

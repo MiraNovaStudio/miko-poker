@@ -1,3 +1,4 @@
+// (c) 2026 MiraNova Studios
 import { Container, Text, type TextStyleOptions } from 'pixi.js';
 import { FONTS } from '../utils/constants.js';
 

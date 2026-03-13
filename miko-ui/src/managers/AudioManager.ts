@@ -1,3 +1,4 @@
+// (c) 2026 MiraNova Studios
 export class AudioManager {
   private static _instance: AudioManager | null = null;
 

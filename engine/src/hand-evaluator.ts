@@ -1,3 +1,4 @@
+// (c) 2025 MiraNova Studios
 /**
  * Poker hand evaluation logic
  * Evaluates 5-7 card hands and determines the best possible hand

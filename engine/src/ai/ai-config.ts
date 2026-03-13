@@ -1,3 +1,4 @@
+// (c) 2025 MiraNova Studios
 /**
  * AI configuration and difficulty presets
  */

@@ -1,3 +1,4 @@
+// (c) 2025 MiraNova Studios
 /**
  * Debug logging utility for the poker engine
  * Set DEBUG_ENABLED to true to enable detailed logging

@@ -1,3 +1,4 @@
+// (c) 2026 MiraNova Studios
 import { Sprite } from 'pixi.js';
 import { AssetManager } from '../managers/AssetManager.js';
 import { DEALER_BUTTON_SIZE, DEALER_BUTTON_OFFSETS } from '../utils/constants.js';

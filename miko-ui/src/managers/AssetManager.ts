@@ -1,3 +1,4 @@
+// (c) 2026 MiraNova Studios
 import { Assets, Texture } from 'pixi.js';
 import { RANK_TO_FILENAME } from '../utils/constants.js';
 

@@ -1,3 +1,4 @@
+// (c) 2026 MiraNova Studios
 import { Container } from 'pixi.js';
 import { PlayerSlot } from './PlayerSlot.js';
 import { SEAT_POSITIONS } from '../utils/constants.js';

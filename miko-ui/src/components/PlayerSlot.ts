@@ -1,3 +1,4 @@
+// (c) 2026 MiraNova Studios
 import { Container, Graphics, Text, type TextStyleOptions } from 'pixi.js';
 import { Card, type CardData } from './Card.js';
 import {

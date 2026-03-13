@@ -1,3 +1,4 @@
+// (c) 2026 MiraNova Studios
 import { Container, Sprite, Texture } from 'pixi.js';
 import { AssetManager } from '../managers/AssetManager.js';
 import { HOLE_CARD_WIDTH, HOLE_CARD_HEIGHT } from '../utils/constants.js';
