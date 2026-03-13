@@ -375,9 +375,32 @@ export class GameManager {
     this.handPhase = 'showdown';
     this.actionBar.hide();
 
-    // Clear bets, update chips
+    // Clear bets but do NOT update chip labels yet — wait for pot animation
     this.slotLayout.getAllSlots().forEach(s => s.clearBet());
-    this.updateAllChipLabels();
+
+    // Snapshot each player's chips BEFORE the engine updates them
+    const preWinChips = new Map<string, number>();
+    if (this.engine) {
+      // Engine has already updated chips by now, so subtract pot to get pre-win amounts
+      const potPerWinner = Math.floor(result.potAmount / result.winners.length);
+      for (const pid of result.winners) {
+        const seat = this.seatByPlayerId.get(pid);
+        if (seat === undefined) continue;
+        const player = this.engine.getGameState().players[seat];
+        if (player) preWinChips.set(pid, player.chips - potPerWinner);
+      }
+    }
+
+    // Show pre-win chip amounts for all players (non-winners get current values)
+    if (this.engine) {
+      this.engine.getGameState().players.forEach(player => {
+        const slot = this.getSlotForPlayer(player.id);
+        if (!slot) return;
+        const pre = preWinChips.get(player.id);
+        slot.setChips(pre !== undefined ? pre : player.chips);
+      });
+    }
+
     this.checkForEliminatedPlayers();
 
     // Reveal cards at showdown (not fold wins)
@@ -385,9 +408,9 @@ export class GameManager {
       this.revealAllCardsAtShowdown();
     }
 
-    // Display winner status
+    // Display winner status with pot amount
     const winners = result.winners.join(', ');
-    let statusMsg = `${winners} wins!`;
+    let statusMsg = `${winners} wins $${result.potAmount}!`;
     if (result.winningHand) {
       statusMsg += ` — ${result.winningHand}`;
     }
@@ -401,8 +424,8 @@ export class GameManager {
     // Highlight winner names temporarily
     this.highlightWinnerNames(result.winners);
 
-    // Animate pot flying to winner's stack
-    this.animatePotToWinners(result.winners);
+    // Animate pot flying to winner's stack (chips update on arrival)
+    this.animatePotToWinners(result.winners, preWinChips);
 
     // Highlight winning cards (raise them up)
     if (result.winningHand) {
@@ -590,12 +613,15 @@ export class GameManager {
     });
   }
 
-  /** Animate the pot label flying to each winner's chip stack, then pulse it */
-  private animatePotToWinners(winnerIds: string[]): void {
+  /** Animate the pot label flying to each winner's chip stack, then pulse and count up */
+  private animatePotToWinners(winnerIds: string[], preWinChips: Map<string, number>): void {
     const potPos = this.statusBar.getPotLabelScenePosition();
     const potText = this.statusBar.getPotText();
     const scene = this.statusBar.parent;
     if (!scene) return;
+
+    // Hide the pot label until next hand
+    this.statusBar.setPot('');
 
     winnerIds.forEach((pid, idx) => {
       const slot = this.getSlotForPlayer(pid);
@@ -616,13 +642,13 @@ export class GameManager {
       scene.addChild(floatingText);
 
       // Stagger multiple winners slightly
-      const delay = idx * 200;
+      const delay = idx * 300;
 
       setTimeout(() => {
         const startX = floatingText.x;
         const startY = floatingText.y;
         const startTime = performance.now();
-        const flyDuration = 800;
+        const flyDuration = 1400;
 
         const animate = (now: number) => {
           const t = Math.min((now - startTime) / flyDuration, 1);
@@ -643,9 +669,17 @@ export class GameManager {
             // Remove the floating text
             scene.removeChild(floatingText);
             floatingText.destroy();
-            // Pulse the winner's chip overlay and update chips
+
+            // Pulse the chip overlay
             slot.pulseChipOverlay();
-            this.updateAllChipLabels();
+
+            // Animate chip count spinning up from pre-win to post-win
+            const fromChips = preWinChips.get(pid) ?? 0;
+            const seat = this.seatByPlayerId.get(pid);
+            const toChips = (seat !== undefined && this.engine)
+              ? this.engine.getGameState().players[seat]?.chips ?? fromChips
+              : fromChips;
+            slot.animateChipsTo(fromChips, toChips);
           }
         };
         requestAnimationFrame(animate);

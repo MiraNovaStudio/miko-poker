@@ -206,6 +206,26 @@ export class PlayerSlot extends Container {
     this.cardsContainer.visible = true;
   }
 
+  /** Animate the chip count spinning from one value to another */
+  animateChipsTo(from: number, to: number, duration = 1000): void {
+    const startTime = performance.now();
+    const label = this.chipsLabel;
+
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      // Ease-out quad for a smooth deceleration
+      const ease = 1 - (1 - t) * (1 - t);
+      const current = Math.round(from + (to - from) * ease);
+      label.text = `$${current}`;
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        label.text = `$${to}`;
+      }
+    };
+    requestAnimationFrame(animate);
+  }
+
   /** Pulse the chip overlay to indicate chips received */
   pulseChipOverlay(): void {
     const startTime = performance.now();
