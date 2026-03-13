@@ -431,11 +431,12 @@ export class GameManager {
       this.revealAllCardsAtShowdown();
     }
 
-    // Display winner status with pot amount
+    // Display winner status with pot amount and full hand
     const winners = result.winners.join(', ');
     let statusMsg = `${winners} wins $${result.potAmount}!`;
-    if (result.winningHand) {
-      statusMsg += ` — ${result.winningHand}`;
+    if (result.winningHand && this.engine) {
+      const handDesc = this.getWinningHandDescription(result.winners[0]);
+      statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
     }
     this.statusBar.setStatus(statusMsg);
 
@@ -526,6 +527,57 @@ export class GameManager {
       this.statusBar.setPot(text);
     } else {
       this.statusBar.setPot(`Pot: $${enginePot}`);
+    }
+  }
+
+  /** Get the best 5-card hand as a short string like "KKJJT" */
+  private getWinningHandDescription(winnerId: string): string {
+    if (!this.engine) return '';
+    const gameState = this.engine.getGameState();
+    const winner = gameState.players.find(p => p.id === winnerId);
+    if (!winner?.cards?.length) return '';
+
+    const combined = [...(winner.cards as EngineCard[]), ...this.currentCommunityCards];
+    if (combined.length < 5) return '';
+
+    try {
+      const strength = evaluateHand(combined as EngineCard[]);
+      // Build best 5 cards from kickers based on hand category
+      const kickers = strength.kickers;
+      const valToRank: Record<number, string> = {
+        14: 'A', 13: 'K', 12: 'Q', 11: 'J', 10: 'T',
+        9: '9', 8: '8', 7: '7', 6: '6', 5: '5', 4: '4', 3: '3', 2: '2',
+      };
+
+      // For most hands, kickers represent the key cards; build full 5-card representation
+      switch (strength.category) {
+        case 8: // Straight Flush
+        case 4: { // Straight
+          const high = kickers[0];
+          if (high === 5) return '5432A';
+          const cards = [];
+          for (let i = 0; i < 5; i++) cards.push(valToRank[high - i] ?? '?');
+          return cards.join('');
+        }
+        case 7: // Four of a Kind — [quad, kicker]
+          return (valToRank[kickers[0]] ?? '').repeat(4) + (valToRank[kickers[1]] ?? '');
+        case 6: // Full House — [trips, pair]
+          return (valToRank[kickers[0]] ?? '').repeat(3) + (valToRank[kickers[1]] ?? '').repeat(2);
+        case 5: // Flush — [5 kickers]
+          return kickers.slice(0, 5).map(k => valToRank[k] ?? '?').join('');
+        case 3: // Three of a Kind — [trips, k1, k2]
+          return (valToRank[kickers[0]] ?? '').repeat(3) + kickers.slice(1, 3).map(k => valToRank[k] ?? '?').join('');
+        case 2: // Two Pair — [pair1, pair2, kicker]
+          return (valToRank[kickers[0]] ?? '').repeat(2) + (valToRank[kickers[1]] ?? '').repeat(2) + (valToRank[kickers[2]] ?? '');
+        case 1: // One Pair — [pair, k1, k2, k3]
+          return (valToRank[kickers[0]] ?? '').repeat(2) + kickers.slice(1, 4).map(k => valToRank[k] ?? '?').join('');
+        case 0: // High Card — [5 kickers]
+          return kickers.slice(0, 5).map(k => valToRank[k] ?? '?').join('');
+        default:
+          return '';
+      }
+    } catch {
+      return '';
     }
   }
 

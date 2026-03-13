@@ -554,6 +554,9 @@ export class PokerGameEngine {
       compareHands(h.handStrength, bestHand.handStrength) === 0
     );
 
+    // Capture pot amount before awarding (awardPot resets to 0)
+    const potAmount = this.pot.getTotalPot();
+
     // Award pot
     this.pot.awardPot(winners.map(w => w.player));
 
@@ -562,7 +565,7 @@ export class PokerGameEngine {
       winningHand: bestHand.handName,
       playerHand: handsWithPlayers.find(h => h.player.id === this.players[0].id)?.handName,
       opponentHand: handsWithPlayers.find(h => h.player.id === this.players[1]?.id)?.handName,
-      potAmount: this.pot.getTotalPot()
+      potAmount
     };
 
     this.emitEvent({ type: 'hand_complete', result });
