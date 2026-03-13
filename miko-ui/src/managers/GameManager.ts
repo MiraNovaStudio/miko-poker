@@ -117,8 +117,8 @@ export class GameManager {
   }
 
   /** Reposition the hand history HTML overlay on resize */
-  onResize(screenWidth: number, screenHeight: number, scale: number): void {
-    this.handHistory.updatePosition(screenWidth, screenHeight, scale);
+  onResize(screenWidth: number, sceneCenterY: number, scale: number): void {
+    this.handHistory.updatePosition(screenWidth, sceneCenterY, scale);
   }
 
   /** Restart the game from scratch (New Game button) */

@@ -209,9 +209,11 @@ async function init() {
     // Center horizontally, but anchor to top when viewport is taller than needed
     currentScene.y = h > scaledH ? scaledH / 2 : h / 2;
 
-    // Notify the game scene so the HTML bet input can reposition
+    // Notify the game scene so the HTML bet input can reposition.
+    // Pass the actual scene center (not raw screen center) so overlays align correctly.
+    const sceneCenterY = currentScene.y;
     if (currentScene instanceof GameScene) {
-      currentScene.onResize(w, h, scale);
+      currentScene.onResize(w, sceneCenterY, scale);
     }
   }
 

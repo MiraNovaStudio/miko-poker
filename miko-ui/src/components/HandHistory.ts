@@ -83,14 +83,14 @@ export class HandHistory {
     }
   }
 
-  /** Reposition/resize based on screen dimensions and scale factor. */
-  updatePosition(screenWidth: number, screenHeight: number, scale: number): void {
+  /** Reposition/resize based on screen dimensions and scene center Y. */
+  updatePosition(screenWidth: number, sceneCenterY: number, scale: number): void {
     const cx = screenWidth / 2;
-    const cy = screenHeight / 2;
+    const cy = sceneCenterY;
 
     // Toggle button — bottom-left, just above the hand label area
     const btnLeft = cx + -460 * scale;
-    const btnTop = cy + 260 * scale;
+    const btnTop = cy + 240 * scale;
     this.toggleBtn.style.left = `${btnLeft}px`;
     this.toggleBtn.style.top = `${btnTop}px`;
     this.toggleBtn.style.fontSize = `${Math.max(11, 12 * scale)}px`;

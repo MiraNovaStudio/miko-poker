@@ -99,14 +99,15 @@ export class GameScene extends Container {
     this.gameManager.start();
   }
 
-  /** Called from main.ts on window resize to reposition HTML overlays */
-  onResize(screenWidth: number, screenHeight: number, scale: number): void {
+  /** Called from main.ts on window resize to reposition HTML overlays.
+   *  sceneCenterY is the actual Y coordinate of the scene's origin on screen. */
+  onResize(screenWidth: number, sceneCenterY: number, scale: number): void {
     // The action bar is at y=320 in design space, centered.
     // Convert to screen coords for the HTML input overlay.
     const inputScreenX = screenWidth / 2;
-    const inputScreenY = screenHeight / 2 + 320 * scale;
+    const inputScreenY = sceneCenterY + 320 * scale;
     this.actionBar.updateInputPosition(inputScreenX, inputScreenY, scale);
-    this.gameManager?.onResize(screenWidth, screenHeight, scale);
+    this.gameManager?.onResize(screenWidth, sceneCenterY, scale);
   }
 
   destroy(): void {
