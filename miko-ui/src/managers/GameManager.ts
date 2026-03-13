@@ -254,6 +254,11 @@ export class GameManager {
     // Reset UI
     this.communityCards.clear();
     this.statusBar.setHand('');
+    if (this.winningHandLabel) {
+      this.winningHandLabel.parent?.removeChild(this.winningHandLabel);
+      this.winningHandLabel.destroy();
+      this.winningHandLabel = null;
+    }
     if (this.currentActivePlayer) {
       this.unhighlightPlayer(this.currentActivePlayer);
       this.currentActivePlayer = null;
@@ -609,9 +614,13 @@ export class GameManager {
 
   private showShowdownHandNames(winnerIds: string[]): void {
     if (!this.engine) return;
+    const winnerSet = new Set(winnerIds);
     const gameState = this.engine.getGameState();
+
+    // Show losing hands in small italic on bet labels; skip winners
     gameState.players.forEach((p: PlayerState) => {
       if (!p.cards || p.cards.length === 0 || p.folded) return;
+      if (winnerSet.has(p.id)) return; // winners get the big animated label instead
       try {
         const combined = [...(p.cards as EngineCard[]), ...this.currentCommunityCards];
         if (combined.length < 5) return;
@@ -619,11 +628,85 @@ export class GameManager {
         const handName = getHandName(strength);
         const slot = this.getSlotForPlayer(p.id);
         if (!slot) return;
-        slot.setBet(0, handName);
+        slot.setBetSmallItalic(handName);
       } catch (err) {
         console.warn('Failed to set showdown hand for', p.id, err);
       }
     });
+
+    // Show animated winning hand name above the board
+    if (winnerIds.length > 0) {
+      const winnerId = winnerIds[0];
+      const winner = gameState.players.find(p => p.id === winnerId);
+      if (winner?.cards?.length) {
+        try {
+          const combined = [...(winner.cards as EngineCard[]), ...this.currentCommunityCards];
+          if (combined.length >= 5) {
+            const strength = evaluateHand(combined as EngineCard[]);
+            const handName = getHandName(strength);
+            this.showWinningHandAboveBoard(handName);
+          }
+        } catch (err) {
+          console.warn('Failed to evaluate winning hand:', err);
+        }
+      }
+    }
+  }
+
+  private winningHandLabel: Text | null = null;
+
+  private showWinningHandAboveBoard(handName: string): void {
+    const scene = this.communityCards.parent;
+    if (!scene) return;
+
+    // Remove any existing label
+    if (this.winningHandLabel) {
+      this.winningHandLabel.parent?.removeChild(this.winningHandLabel);
+      this.winningHandLabel.destroy();
+      this.winningHandLabel = null;
+    }
+
+    const label = new Text({
+      text: handName,
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 42,
+        fontWeight: 'bold',
+        fill: 0xffd700,
+        stroke: { color: 0x000000, width: 4 },
+      } as TextStyleOptions,
+    });
+    label.anchor.set(0.5);
+    label.x = this.communityCards.x;
+    label.y = this.communityCards.y - 70;
+    label.alpha = 0;
+    label.scale.set(0.5);
+    scene.addChild(label);
+    this.winningHandLabel = label;
+
+    // Animate: scale up + fade in with bounce
+    const startTime = performance.now();
+    const duration = 600;
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      // Elastic ease-out
+      const ease = t === 1 ? 1 : 1 - Math.pow(2, -10 * t) * Math.cos((t * 10 - 0.75) * (2 * Math.PI / 3));
+      label.alpha = Math.min(t * 2, 1);
+      label.scale.set(0.5 + 0.5 * ease);
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    requestAnimationFrame(animate);
+
+    // Clean up after 7.5 seconds (before next hand at 8s)
+    setTimeout(() => {
+      if (this.winningHandLabel === label) {
+        label.parent?.removeChild(label);
+        label.destroy();
+        this.winningHandLabel = null;
+      }
+    }, 7500);
   }
 
   private highlightWinnerNames(winnerIds: string[]): void {

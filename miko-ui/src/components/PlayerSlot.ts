@@ -80,6 +80,9 @@ export class PlayerSlot extends Container {
   }
 
   setBet(amount: number, actionText?: string): void {
+    // Reset to default style
+    this.betLabel.style.fontSize = (FONTS.betLabel as { fontSize: number }).fontSize;
+    this.betLabel.style.fontStyle = 'normal';
     if (actionText) {
       this.betLabel.text = actionText;
       this.betLabel.visible = true;
@@ -90,6 +93,13 @@ export class PlayerSlot extends Container {
       this.betLabel.text = '';
       this.betLabel.visible = false;
     }
+  }
+
+  setBetSmallItalic(text: string): void {
+    this.betLabel.style.fontSize = 16;
+    this.betLabel.style.fontStyle = 'italic';
+    this.betLabel.text = text;
+    this.betLabel.visible = true;
   }
 
   clearBet(): void {
