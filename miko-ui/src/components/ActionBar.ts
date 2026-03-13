@@ -53,6 +53,15 @@ export class ActionBar extends Container {
   private middleBtn: Button;  // Bet / Raise
   private rightBtn: Button;   // Fold
 
+  // Preaction button (Check/Fold or Fold)
+  private preactionBtn: Container;
+  private preactionBg: Graphics;
+  private preactionLabel: Text;
+  private preactionCheckbox: Graphics;
+  private _preactionActive = false;
+  private _preactionType: 'checkfold' | 'fold' = 'fold';
+  onPreactionChanged: ((active: boolean, type: 'checkfold' | 'fold') => void) | null = null;
+
   // Bet input (HTML overlay)
   private betInputEl: HTMLInputElement | null = null;
   private betInputContainer: HTMLDivElement | null = null;
@@ -91,6 +100,42 @@ export class ActionBar extends Container {
     this.rightBtn.x = 240;
     this.rightBtn.on('pointerdown', () => this.onRightClick?.());
     this.addChild(this.rightBtn);
+
+    // Preaction button — same position as Fold, shown when not player's turn
+    this.preactionBtn = new Container();
+    this.preactionBtn.x = 240;
+    this.preactionBtn.visible = false;
+    this.preactionBtn.eventMode = 'static';
+    this.preactionBtn.cursor = 'pointer';
+
+    this.preactionBg = new Graphics();
+    this.drawPreactionBg(BTN_NORMAL);
+    this.preactionBtn.addChild(this.preactionBg);
+
+    // Checkbox (left side of button)
+    this.preactionCheckbox = new Graphics();
+    this.drawCheckbox(false);
+    this.preactionBtn.addChild(this.preactionCheckbox);
+
+    // Label (right of checkbox)
+    this.preactionLabel = new Text({ text: 'Check/Fold', style: {
+      fontFamily: 'Arial',
+      fontSize: 16,
+      fill: 0xffffff,
+    } as TextStyleOptions });
+    this.preactionLabel.anchor.set(0, 0.5);
+    this.preactionLabel.x = -46;
+    this.preactionBtn.addChild(this.preactionLabel);
+
+    this.preactionBtn.on('pointerover', () => {
+      if (!this._preactionActive) this.drawPreactionBg(BTN_HOVER);
+    });
+    this.preactionBtn.on('pointerout', () => {
+      if (!this._preactionActive) this.drawPreactionBg(BTN_NORMAL);
+    });
+    this.preactionBtn.on('pointerdown', () => this.togglePreaction());
+
+    this.addChild(this.preactionBtn);
 
     this.createBetInput();
     this.createSliderPanel();
@@ -162,6 +207,8 @@ export class ActionBar extends Container {
 
   show(): void {
     this.visible = true;
+    // Hide preaction when real action bar is shown
+    this.preactionBtn.visible = false;
     // Reset bet input to empty each turn
     if (this.betInputEl) {
       this.betInputEl.value = '';
@@ -175,6 +222,10 @@ export class ActionBar extends Container {
     if (this.sliderPanel && this.hasBetOption) {
       this.sliderPanel.style.display = 'flex';
     }
+    // Show normal buttons
+    this.leftBtn.visible = true;
+    this.middleBtn.visible = true;
+    this.rightBtn.visible = true;
   }
 
   hide(): void {
@@ -184,6 +235,76 @@ export class ActionBar extends Container {
     }
     if (this.sliderPanel) {
       this.sliderPanel.style.display = 'none';
+    }
+  }
+
+  // ─── Preaction ─────────────────────────────────────────────
+
+  /** Show the preaction button. canCheck indicates whether check is possible. */
+  showPreaction(canCheck: boolean): void {
+    this._preactionType = canCheck ? 'checkfold' : 'fold';
+    this.preactionLabel.text = canCheck ? 'Check/Fold' : 'Fold';
+    // Ensure the container is "visible" so preaction renders, but hide normal buttons
+    this.visible = true;
+    this.leftBtn.visible = false;
+    this.middleBtn.visible = false;
+    this.rightBtn.visible = false;
+    if (this.betInputContainer) this.betInputContainer.style.display = 'none';
+    if (this.sliderPanel) this.sliderPanel.style.display = 'none';
+    this.preactionBtn.visible = true;
+  }
+
+  /** Hide the preaction button and clear the selection. */
+  hidePreaction(): void {
+    this.preactionBtn.visible = false;
+    this._preactionActive = false;
+    this.drawCheckbox(false);
+    this.drawPreactionBg(BTN_NORMAL);
+  }
+
+  /** Returns true if preaction is currently toggled on. */
+  get preactionActive(): boolean {
+    return this._preactionActive;
+  }
+
+  /** Returns the preaction type ('checkfold' or 'fold'). */
+  get preactionType(): 'checkfold' | 'fold' {
+    return this._preactionType;
+  }
+
+  /** Clear preaction state without hiding (used on street changes). */
+  clearPreaction(): void {
+    this._preactionActive = false;
+    this.drawCheckbox(false);
+    this.drawPreactionBg(BTN_NORMAL);
+  }
+
+  private togglePreaction(): void {
+    this._preactionActive = !this._preactionActive;
+    this.drawCheckbox(this._preactionActive);
+    this.drawPreactionBg(this._preactionActive ? 0x2a4a5a : BTN_NORMAL);
+    this.onPreactionChanged?.(this._preactionActive, this._preactionType);
+  }
+
+  private drawPreactionBg(color: number): void {
+    const w = 150;
+    const h = 44;
+    this.preactionBg.clear();
+    this.preactionBg.roundRect(-w / 2, -h / 2, w, h, 8);
+    this.preactionBg.fill({ color, alpha: 1 });
+    this.preactionBg.stroke({ color: BTN_BORDER, width: 2 });
+  }
+
+  private drawCheckbox(checked: boolean): void {
+    const size = 14;
+    const x = -66;
+    const y = -size / 2;
+    this.preactionCheckbox.clear();
+    this.preactionCheckbox.roundRect(x, y, size, size, 2);
+    this.preactionCheckbox.stroke({ color: 0x88ccff, width: 1.5 });
+    if (checked) {
+      this.preactionCheckbox.roundRect(x + 2, y + 2, size - 4, size - 4, 1);
+      this.preactionCheckbox.fill({ color: 0x88ccff });
     }
   }
 

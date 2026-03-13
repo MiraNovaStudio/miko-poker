@@ -434,7 +434,29 @@ export class GameManager {
     this.highlightPlayer(currentPlayer.id);
 
     if (currentPlayer.id === 'player') {
-      // Human player's turn
+      // Human player's turn — check if preaction should auto-execute
+      if (this.actionBar.preactionActive) {
+        const preType = this.actionBar.preactionType;
+        this.actionBar.hidePreaction();
+        if (preType === 'checkfold') {
+          // Check if we can, otherwise fold
+          if (gameState.canCheck) {
+            this.engine.processAction('player', { type: 'check' });
+          } else {
+            this.engine.processAction('player', { type: 'fold' });
+          }
+          this.delayed(() => this.advanceGame(), 500);
+          return;
+        } else {
+          // Pure fold
+          this.engine.processAction('player', { type: 'fold' });
+          this.delayed(() => this.advanceGame(), 500);
+          return;
+        }
+      }
+
+      this.actionBar.hidePreaction();
+
       const validActions: string[] = [];
       if (gameState.canFold) validActions.push('fold');
       if (gameState.canCheck) validActions.push('check');
@@ -485,7 +507,15 @@ export class GameManager {
       this.actionBar.show();
       this.statusBar.setStatus('Your turn!');
     } else {
-      // AI player's turn
+      // AI player's turn — show preaction for human while waiting
+      if (!this.humanFolded) {
+        // Determine if check would be possible (no outstanding bet on this street)
+        const humanPlayer = gameState.players.find((p: PlayerState) => p.id === 'player');
+        const canCheckPreaction = humanPlayer && !humanPlayer.folded &&
+          gameState.callAmount === 0;
+        this.actionBar.showPreaction(!!canCheckPreaction);
+      }
+
       this.statusBar.setStatus(`${this.getDisplayName(currentPlayer.id)} is thinking...`);
 
       const delay = (GAME_CONFIG.aiThinkingDelayMin + Math.random() *
@@ -542,6 +572,7 @@ export class GameManager {
     this.currentCommunityCards = [];
     this.playerHoleCards.clear();
     this.humanFolded = false;
+    this.actionBar.hidePreaction();
 
     // Reset UI
     this.communityCards.clear();
@@ -636,6 +667,9 @@ export class GameManager {
       this.streetQueue.push({ street, cards: cards.slice() });
       return;
     }
+
+    // Clear preaction on street change — bet state is different now
+    this.actionBar.clearPreaction();
 
     this.streetJustChanged = true;
     this.updatePotLabel();
