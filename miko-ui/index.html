@@ -21,10 +21,9 @@
       height: 100%;
       display: block;
     }
-    #sound-toggle {
+    .top-btn {
       position: fixed;
       top: 12px;
-      right: 12px;
       z-index: 100;
       width: 44px;
       height: 44px;
@@ -40,14 +39,109 @@
       user-select: none;
       transition: background 0.15s;
     }
-    #sound-toggle:hover {
+    .top-btn:hover {
+      background: rgba(68, 85, 102, 0.9);
+    }
+    #sound-toggle { right: 12px; }
+    #settings-toggle { right: 64px; }
+
+    /* Settings modal */
+    #settings-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.6);
+    }
+    #settings-modal.open {
+      display: flex;
+    }
+    #settings-panel {
+      background: #1e2a3a;
+      border: 2px solid #5588aa;
+      border-radius: 12px;
+      padding: 24px 32px;
+      min-width: 280px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+    }
+    #settings-panel h2 {
+      margin: 0 0 16px;
+      font-size: 20px;
+      text-align: center;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #2a3a4a;
+    }
+    .setting-row:last-child {
+      border-bottom: none;
+    }
+    .setting-label {
+      font-size: 16px;
+    }
+    .setting-options {
+      display: flex;
+      gap: 8px;
+    }
+    .setting-options button {
+      padding: 6px 14px;
+      border: 2px solid #5588aa;
+      border-radius: 6px;
+      background: transparent;
+      color: #aac;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .setting-options button.active {
+      background: #5588aa;
+      color: #fff;
+    }
+    .setting-options button:hover:not(.active) {
+      background: rgba(85, 136, 170, 0.3);
+    }
+    #settings-close {
+      display: block;
+      margin: 18px auto 0;
+      padding: 8px 32px;
+      border: 2px solid #5588aa;
+      border-radius: 8px;
+      background: rgba(51, 68, 85, 0.85);
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #settings-close:hover {
       background: rgba(68, 85, 102, 0.9);
     }
   </style>
 </head>
 <body>
   <div id="game-canvas"></div>
-  <button id="sound-toggle" title="Toggle sound">&#x1F50A;</button>
+  <button id="settings-toggle" class="top-btn" title="Settings">&#x2699;</button>
+  <button id="sound-toggle" class="top-btn" title="Toggle sound">&#x1F50A;</button>
+
+  <!-- Settings modal -->
+  <div id="settings-modal">
+    <div id="settings-panel">
+      <h2>Settings</h2>
+      <div class="setting-row">
+        <span class="setting-label">Card Deck</span>
+        <div class="setting-options">
+          <button id="deck-png" class="active">PNG</button>
+          <button id="deck-unicode">Unicode</button>
+        </div>
+      </div>
+      <button id="settings-close">Close</button>
+    </div>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

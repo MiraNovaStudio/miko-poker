@@ -1,6 +1,7 @@
 import { Application } from 'pixi.js';
 import { AssetManager } from './managers/AssetManager.js';
 import { AudioManager } from './managers/AudioManager.js';
+import { SettingsManager, type DeckType } from './managers/SettingsManager.js';
 import { StartScene } from './scenes/StartScene.js';
 import { GameScene } from './scenes/GameScene.js';
 
@@ -41,6 +42,47 @@ async function init() {
     });
   }
 
+  // Settings button and modal
+  const settings = SettingsManager.instance;
+  const settingsBtn = document.getElementById('settings-toggle');
+  const settingsModal = document.getElementById('settings-modal');
+  const settingsClose = document.getElementById('settings-close');
+  const deckPngBtn = document.getElementById('deck-png');
+  const deckUnicodeBtn = document.getElementById('deck-unicode');
+
+  if (settingsBtn && settingsModal) {
+    settingsBtn.style.display = 'none'; // hidden on start screen
+
+    settingsBtn.addEventListener('click', () => {
+      settingsModal.classList.add('open');
+    });
+
+    settingsClose?.addEventListener('click', () => {
+      settingsModal.classList.remove('open');
+    });
+
+    // Close modal when clicking backdrop
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) settingsModal.classList.remove('open');
+    });
+
+    // Deck type selection
+    const updateDeckButtons = () => {
+      deckPngBtn?.classList.toggle('active', settings.deckType === 'png');
+      deckUnicodeBtn?.classList.toggle('active', settings.deckType === 'unicode');
+    };
+
+    deckPngBtn?.addEventListener('click', () => {
+      settings.deckType = 'png';
+      updateDeckButtons();
+    });
+
+    deckUnicodeBtn?.addEventListener('click', () => {
+      settings.deckType = 'unicode';
+      updateDeckButtons();
+    });
+  }
+
   let currentScene: StartScene | GameScene | null = null;
 
   /** Center the scene and scale it to fit the viewport while preserving aspect ratio. */
@@ -74,6 +116,7 @@ async function init() {
       currentScene.destroy();
     }
     if (soundBtn) soundBtn.style.display = 'none';
+    if (settingsBtn) settingsBtn.style.display = 'none';
     const start = new StartScene();
     currentScene = start;
     app.stage.addChild(start);
@@ -88,6 +131,7 @@ async function init() {
       currentScene.destroy();
     }
     if (soundBtn) soundBtn.style.display = 'flex';
+    if (settingsBtn) settingsBtn.style.display = 'flex';
     const game = new GameScene();
     currentScene = game;
     app.stage.addChild(game);
