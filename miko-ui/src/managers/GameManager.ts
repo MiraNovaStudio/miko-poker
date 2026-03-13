@@ -438,9 +438,35 @@ export class GameManager {
       this.actionBar.updateLabels(validActions);
       // Show min raise/bet in input placeholder so user knows the default
       const isPreflop = gameState.street === 'preflop';
-      const minAmount = gameState.canBet
-        ? (isPreflop ? gameState.minRaiseAmount : gameState.minBetAmount)
-        : gameState.minRaiseAmount;
+      let minAmount: number;
+      if (gameState.canBet && isPreflop) {
+        // BB preflop option: min raise is 2x BB
+        minAmount = GAME_CONFIG.bigBlind * 2;
+      } else if (gameState.canBet) {
+        // Postflop open bet: min is 1 BB
+        minAmount = gameState.minBetAmount;
+      } else if (isPreflop) {
+        // Preflop raise: engine's minRaiseAmount may carry stale lastRaiseAmount
+        // from a previous hand (BettingRound.reset() isn't called in startNewHand).
+        // If no one has raised yet (callAmount == BB), min raise is 2x BB.
+        // If someone raised, compute correctly: currentBet + lastRaise.
+        // We detect "no raise yet" when callAmount equals BB (only blinds posted).
+        const bb = GAME_CONFIG.bigBlind;
+        if (gameState.callAmount <= bb) {
+          // No raise yet — min raise to 2x BB
+          minAmount = bb * 2;
+        } else {
+          // Someone raised. The raise size = callAmount + playerBet - BB.
+          // Min re-raise = (callAmount + playerBet) + raiseSize.
+          // But engine's minRaiseAmount is correct for within-hand raises since
+          // lastRaiseAmount was set by the current hand's raise, not stale data.
+          minAmount = gameState.minRaiseAmount;
+        }
+      } else {
+        // Postflop raise: BettingRound.reset() is called between streets,
+        // so engine's minRaiseAmount is correct.
+        minAmount = gameState.minRaiseAmount;
+      }
       this.actionBar.setMinBet(minAmount);
       this.actionBar.show();
       this.statusBar.setStatus('Your turn!');
@@ -855,9 +881,19 @@ export class GameManager {
     const isPreflop = gameState.street === 'preflop';
     // Preflop BB option: canBet is true but currentBet > 0, so use 'raise' not 'bet'
     const actionType = (gameState.canBet && !isPreflop) ? 'bet' : 'raise';
-    const defaultAmount = gameState.canBet
-      ? (isPreflop ? gameState.minRaiseAmount : gameState.minBetAmount)
-      : gameState.minRaiseAmount;
+    let defaultAmount: number;
+    if (gameState.canBet && isPreflop) {
+      defaultAmount = GAME_CONFIG.bigBlind * 2;
+    } else if (gameState.canBet) {
+      defaultAmount = gameState.minBetAmount;
+    } else if (isPreflop) {
+      const bb = GAME_CONFIG.bigBlind;
+      defaultAmount = gameState.callAmount <= bb
+        ? bb * 2
+        : gameState.minRaiseAmount;
+    } else {
+      defaultAmount = gameState.minRaiseAmount;
+    }
     const amount = this.actionBar.getBetAmount(defaultAmount);
     this.engine.processAction('player', { type: actionType as 'bet' | 'raise', amount });
     this.actionBar.hide();
