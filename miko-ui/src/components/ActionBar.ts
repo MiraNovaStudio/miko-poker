@@ -111,6 +111,12 @@ export class ActionBar extends Container {
     return isNaN(val) || val <= 0 ? defaultBet : val;
   }
 
+  setMinBet(amount: number): void {
+    if (this.betInputEl) {
+      this.betInputEl.placeholder = `$${amount}`;
+    }
+  }
+
   show(): void {
     this.visible = true;
     // Reset bet input to empty each turn

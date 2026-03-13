@@ -396,6 +396,12 @@ export class GameManager {
       if (gameState.canRaise) validActions.push('raise');
 
       this.actionBar.updateLabels(validActions);
+      // Show min raise/bet in input placeholder so user knows the default
+      const isPreflop = gameState.street === 'preflop';
+      const minAmount = gameState.canBet
+        ? (isPreflop ? gameState.minRaiseAmount : gameState.minBetAmount)
+        : gameState.minRaiseAmount;
+      this.actionBar.setMinBet(minAmount);
       this.actionBar.show();
       this.statusBar.setStatus('Your turn!');
     } else {
@@ -805,9 +811,9 @@ export class GameManager {
   private onBetOrRaise(): void {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
-    const actionType = gameState.canBet ? 'bet' : 'raise';
-    // Default amount: use minRaise preflop (BB raise), minBet postflop, minRaise when facing bet
     const isPreflop = gameState.street === 'preflop';
+    // Preflop BB option: canBet is true but currentBet > 0, so use 'raise' not 'bet'
+    const actionType = (gameState.canBet && !isPreflop) ? 'bet' : 'raise';
     const defaultAmount = gameState.canBet
       ? (isPreflop ? gameState.minRaiseAmount : gameState.minBetAmount)
       : gameState.minRaiseAmount;
