@@ -12,7 +12,8 @@ export class StatusBar extends Container {
     // Pot label (center, above the table)
     this.potLabel = new Text({ text: 'Pot: $0', style: FONTS.potLabel as TextStyleOptions });
     this.potLabel.anchor.set(0.5);
-    this.potLabel.y = -15;
+    this.potLabel.y = -94;
+    this.potLabel.x = -410;
     this.addChild(this.potLabel);
 
     // Status label ("AI is thinking...", etc.) — bottom-left, aligned with action bar
