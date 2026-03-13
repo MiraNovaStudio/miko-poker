@@ -163,20 +163,22 @@ export class Card extends Container {
         this.drawUnicodeBack();
       }
     } else {
-      // PNG mode — hide unicode containers
+      // PNG mode — use PNG faces but drawn card backs
       this.unicodeContainer.visible = false;
-      this.backContainer.visible = false;
-      this.cardSprite.visible = true;
-
-      const texture = this._isFaceUp
-        ? AssetManager.getCardTexture(this.cardData.rank, this.cardData.suit)
-        : AssetManager.getCardBack();
-
-      if (texture) {
-        this.cardSprite.texture = texture;
+      if (this._isFaceUp) {
+        this.backContainer.visible = false;
+        this.cardSprite.visible = true;
+        const texture = AssetManager.getCardTexture(this.cardData.rank, this.cardData.suit);
+        if (texture) {
+          this.cardSprite.texture = texture;
+        }
+        this.cardSprite.width = this._cardWidth;
+        this.cardSprite.height = this._cardHeight;
+      } else {
+        this.cardSprite.visible = false;
+        this.backContainer.visible = true;
+        this.drawUnicodeBack();
       }
-      this.cardSprite.width = this._cardWidth;
-      this.cardSprite.height = this._cardHeight;
     }
   }
 
