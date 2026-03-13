@@ -82,6 +82,9 @@ async function init() {
       settings.deckType = 'unicode';
       updateDeckButtons();
     });
+
+    // Sync button state with saved preference on load
+    updateDeckButtons();
   }
 
   const pageTitle = document.getElementById('page-title');
