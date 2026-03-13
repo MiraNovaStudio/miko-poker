@@ -3,10 +3,10 @@
  * Player roster — 32 named AI opponents with consistent playstyles.
  *
  * Distribution:
- *   passive  (40%) = 13 players — calling stations, wide VPIP, rarely raises
- *   nit      (15%) =  5 players — rocks, <20% VPIP, only plays premiums
+ *   passive  (44%) = 14 players — calling stations, wide VPIP, rarely raises
+ *   nit      (19%) =  6 players — rocks, <20% VPIP, only plays premiums
  *   shark    (25%) =  8 players — tight-aggressive, selective but bets hard
- *   maniac   (20%) =  6 players — 50%+ VPIP, bluffs and raises constantly
+ *   maniac   (12%) =  4 players — 50%+ VPIP, bluffs and raises constantly
  */
 
 import type { AIConfig, Playstyle } from '@engine/index.js';
@@ -27,9 +27,9 @@ function nameHash(name: string): number {
   return Math.abs(h);
 }
 
-// [name, playstyle] — 13 passive, 5 nit, 8 shark, 6 maniac
+// [name, playstyle] — 14 passive (44%), 6 nit (19%), 8 shark (25%), 4 maniac (12%)
 const ROSTER_DATA: [string, Playstyle][] = [
-  // --- Passive (13 = 40.6%) ---
+  // --- Passive (14 = 43.75%) ---
   ['TiltedGrandma',   'passive'],
   ['LuckyRiver13',    'passive'],
   ['LuckyFlop420',    'passive'],
@@ -43,13 +43,15 @@ const ROSTER_DATA: [string, Playstyle][] = [
   ['AcePilot99',      'passive'],
   ['DeepStackHero',   'passive'],
   ['PotBuilderX',     'passive'],
+  ['RiverRaptor',     'passive'],
 
-  // --- Nit (5 = 15.6%) ---
+  // --- Nit (6 = 18.75%) ---
   ['FoldMaster64',    'nit'],
   ['SilentGrinder',   'nit'],
   ['RiverGhost',      'nit'],
   ['StackSniper',     'nit'],
   ['VarianceKnight',  'nit'],
+  ['NeuralBluffer',   'nit'],
 
   // --- Shark (8 = 25%) ---
   ['SolverMode',      'shark'],
@@ -61,13 +63,11 @@ const ROSTER_DATA: [string, Playstyle][] = [
   ['FlopWizard88',    'shark'],
   ['ChipStackMage',   'shark'],
 
-  // --- Maniac (6 = 18.75%) ---
+  // --- Maniac (4 = 12.5%) ---
   ['BluffingBanana',  'maniac'],
   ['AllInGoblin',     'maniac'],
   ['RiverBandit77',   'maniac'],
-  ['NeuralBluffer',   'maniac'],
   ['BluffBotX',       'maniac'],
-  ['RiverRaptor',     'maniac'],
 ];
 
 /** Full roster with pre-computed AI configs (jittered per player). */

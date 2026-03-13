@@ -25,8 +25,8 @@ export const CARD_SPACING_HOLE = 50;       // x-offset between two hole cards
 export const CARD_SPACING_COMMUNITY = 116; // x-offset between community cards
 
 /** Chip overlay bar */
-export const CHIP_OVERLAY_WIDTH = 140;
-export const CHIP_OVERLAY_HEIGHT = 36;
+export const CHIP_OVERLAY_WIDTH = 160;
+export const CHIP_OVERLAY_HEIGHT = 42;
 export const CHIP_OVERLAY_Y = 18;  // y-offset from slot center (below cards)
 
 /** Dealer button */
