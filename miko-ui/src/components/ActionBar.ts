@@ -57,6 +57,16 @@ export class ActionBar extends Container {
   private betInputEl: HTMLInputElement | null = null;
   private betInputContainer: HTMLDivElement | null = null;
 
+  // Bet slider panel (HTML overlay)
+  private sliderPanel: HTMLDivElement | null = null;
+  private sliderEl: HTMLInputElement | null = null;
+  private sliderAmountLabel: HTMLDivElement | null = null;
+  private sliderMin = 0;
+  private sliderMax = 0;
+  private sliderPot = 0;
+  private sliderCallAmount = 0;
+  private hasBetOption = false;
+
   private onLeftClick: ActionCallback | null = null;
   private onMiddleClick: ActionCallback | null = null;
   private onRightClick: ActionCallback | null = null;
@@ -83,6 +93,7 @@ export class ActionBar extends Container {
     this.addChild(this.rightBtn);
 
     this.createBetInput();
+    this.createSliderPanel();
     this.hide();
   }
 
@@ -101,9 +112,14 @@ export class ActionBar extends Container {
     this.middleBtn.setText(hasBet ? 'Bet' : 'Raise');
     this.rightBtn.setText('Fold');
 
-    // Show/hide bet input
+    this.hasBetOption = hasBet || hasRaise;
+
+    // Show/hide bet input and slider
     if (this.betInputContainer) {
-      this.betInputContainer.style.display = (hasBet || hasRaise) ? 'block' : 'none';
+      this.betInputContainer.style.display = this.hasBetOption ? 'block' : 'none';
+    }
+    if (this.sliderPanel) {
+      this.sliderPanel.style.display = this.hasBetOption ? 'flex' : 'none';
     }
   }
 
@@ -129,6 +145,21 @@ export class ActionBar extends Container {
     }
   }
 
+  /** Configure the slider range and pot-fraction values. */
+  setBetLimits(min: number, max: number, pot: number, callAmount: number): void {
+    this.sliderMin = min;
+    this.sliderMax = max;
+    this.sliderPot = pot;
+    this.sliderCallAmount = callAmount;
+
+    if (this.sliderEl) {
+      this.sliderEl.min = String(min);
+      this.sliderEl.max = String(max);
+      this.sliderEl.value = String(min);
+      this.updateSliderAmount(min);
+    }
+  }
+
   show(): void {
     this.visible = true;
     // Reset bet input to empty each turn
@@ -141,12 +172,18 @@ export class ActionBar extends Container {
     if (this.betInputContainer) {
       this.betInputContainer.style.display = 'block';
     }
+    if (this.sliderPanel && this.hasBetOption) {
+      this.sliderPanel.style.display = 'flex';
+    }
   }
 
   hide(): void {
     this.visible = false;
     if (this.betInputContainer) {
       this.betInputContainer.style.display = 'none';
+    }
+    if (this.sliderPanel) {
+      this.sliderPanel.style.display = 'none';
     }
   }
 
@@ -162,10 +199,26 @@ export class ActionBar extends Container {
       this.betInputContainer.style.width = `${inputW}px`;
       this.betInputContainer.style.height = `${inputH}px`;
     }
+
+    // Position slider panel in the lower right of the viewport
+    if (this.sliderPanel) {
+      // Anchor: right edge of the viewport, vertically centered on the action bar area
+      const panelW = 76;  // fixed width in px
+      const panelH = 280; // approximate height
+      const margin = 12;
+
+      // Right edge, vertically aligned with action bar
+      const right = margin;
+      const top = screenY - panelH / 2;
+
+      this.sliderPanel.style.right = `${right}px`;
+      this.sliderPanel.style.top = `${Math.max(margin, top)}px`;
+    }
   }
 
   destroy(): void {
     this.betInputContainer?.remove();
+    this.sliderPanel?.remove();
     super.destroy();
   }
 
@@ -207,6 +260,8 @@ export class ActionBar extends Container {
       } else {
         this.betInputEl!.value = this.betInputEl!.value.replace(/[^0-9]/g, '');
       }
+      // Sync slider to typed value
+      this.syncSliderFromInput();
     });
     this.betInputEl.addEventListener('focus', () => {
       this.betInputEl!.style.borderColor = '#88ccff';
@@ -217,5 +272,190 @@ export class ActionBar extends Container {
 
     this.betInputContainer.appendChild(this.betInputEl);
     document.body.appendChild(this.betInputContainer);
+  }
+
+  // ─── Bet Slider Panel ───────────────────────────────────────
+
+  private createSliderPanel(): void {
+    this.sliderPanel = document.createElement('div');
+    this.sliderPanel.style.cssText = `
+      position: fixed;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      z-index: 10;
+      padding: 8px 6px;
+      background: rgba(26, 26, 46, 0.92);
+      border: 2px solid #5588aa;
+      border-radius: 10px;
+      user-select: none;
+    `;
+
+    // Amount label at top
+    this.sliderAmountLabel = document.createElement('div');
+    this.sliderAmountLabel.style.cssText = `
+      color: #fff;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      font-weight: bold;
+      text-align: center;
+      padding: 2px 0 4px;
+      min-width: 60px;
+    `;
+    this.sliderAmountLabel.textContent = '$0';
+    this.sliderPanel.appendChild(this.sliderAmountLabel);
+
+    // Vertical slider (range input rotated)
+    const sliderWrap = document.createElement('div');
+    sliderWrap.style.cssText = `
+      width: 30px;
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    `;
+
+    this.sliderEl = document.createElement('input');
+    this.sliderEl.type = 'range';
+    this.sliderEl.min = '0';
+    this.sliderEl.max = '1000';
+    this.sliderEl.value = '0';
+    this.sliderEl.style.cssText = `
+      -webkit-appearance: none;
+      appearance: none;
+      width: 120px;
+      height: 6px;
+      background: linear-gradient(to right, #3a5a7a, #5588aa, #4ade80);
+      border-radius: 3px;
+      outline: none;
+      transform: rotate(-90deg);
+      transform-origin: center center;
+      cursor: pointer;
+    `;
+
+    // Slider thumb styling via a <style> tag
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+      .miko-bet-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #fff;
+        border: 2px solid #5588aa;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      }
+      .miko-bet-slider::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #fff;
+        border: 2px solid #5588aa;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      }
+    `;
+    document.head.appendChild(styleEl);
+    this.sliderEl.classList.add('miko-bet-slider');
+
+    this.sliderEl.addEventListener('input', () => {
+      const val = parseInt(this.sliderEl!.value, 10);
+      this.setBetFromSlider(val);
+    });
+
+    sliderWrap.appendChild(this.sliderEl);
+    this.sliderPanel.appendChild(sliderWrap);
+
+    // Pot fraction buttons
+    const fractions: { label: string; fraction: number | 'allin' }[] = [
+      { label: '1/4', fraction: 0.25 },
+      { label: '1/2', fraction: 0.5 },
+      { label: '3/4', fraction: 0.75 },
+      { label: 'Pot', fraction: 1.0 },
+      { label: 'All In', fraction: 'allin' },
+    ];
+
+    for (const { label, fraction } of fractions) {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.style.cssText = `
+        width: 62px;
+        padding: 5px 0;
+        border: 1px solid #5588aa;
+        border-radius: 5px;
+        background: rgba(51, 68, 85, 0.85);
+        color: #cde;
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.12s, color 0.12s;
+        text-align: center;
+      `;
+      btn.addEventListener('pointerover', () => {
+        btn.style.background = 'rgba(85, 136, 170, 0.6)';
+        btn.style.color = '#fff';
+      });
+      btn.addEventListener('pointerout', () => {
+        btn.style.background = 'rgba(51, 68, 85, 0.85)';
+        btn.style.color = '#cde';
+      });
+      btn.addEventListener('click', () => {
+        if (fraction === 'allin') {
+          this.setBetFromSlider(this.sliderMax);
+        } else {
+          // Pot-fraction raise = callAmount + fraction * (pot + callAmount)
+          const raiseTotal = this.sliderCallAmount + Math.floor(fraction * (this.sliderPot + this.sliderCallAmount));
+          const clamped = Math.min(Math.max(raiseTotal, this.sliderMin), this.sliderMax);
+          this.setBetFromSlider(clamped);
+        }
+      });
+      this.sliderPanel.appendChild(btn);
+    }
+
+    document.body.appendChild(this.sliderPanel);
+  }
+
+  /** Set bet amount from slider value, update input and label. */
+  private setBetFromSlider(value: number): void {
+    const clamped = Math.min(Math.max(value, this.sliderMin), this.sliderMax);
+    if (this.sliderEl) this.sliderEl.value = String(clamped);
+    if (this.betInputEl) {
+      if (SettingsManager.instance.chipDisplay === 'bb') {
+        this.betInputEl.value = (clamped / BIG_BLIND).toFixed(1);
+      } else {
+        this.betInputEl.value = String(clamped);
+      }
+    }
+    this.updateSliderAmount(clamped);
+  }
+
+  /** Update the amount display label above the slider. */
+  private updateSliderAmount(value: number): void {
+    if (this.sliderAmountLabel) {
+      this.sliderAmountLabel.textContent = formatChips(value);
+    }
+  }
+
+  /** Sync slider position when user types in the bet input. */
+  private syncSliderFromInput(): void {
+    if (!this.betInputEl || !this.sliderEl) return;
+    const raw = this.betInputEl.value;
+    let dollars: number;
+    if (SettingsManager.instance.chipDisplay === 'bb') {
+      const bbVal = parseFloat(raw);
+      if (isNaN(bbVal) || bbVal <= 0) return;
+      dollars = Math.round(bbVal * BIG_BLIND);
+    } else {
+      dollars = parseInt(raw, 10);
+      if (isNaN(dollars) || dollars <= 0) return;
+    }
+    const clamped = Math.min(Math.max(dollars, this.sliderMin), this.sliderMax);
+    this.sliderEl.value = String(clamped);
+    this.updateSliderAmount(clamped);
   }
 }

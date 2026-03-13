@@ -473,6 +473,9 @@ export class GameManager {
         minAmount = gameState.minRaiseAmount;
       }
       this.actionBar.setMinBet(minAmount);
+      // Configure slider range: min bet to all-in (player's total available)
+      const playerChips = currentPlayer.chips + currentPlayer.bet;
+      this.actionBar.setBetLimits(minAmount, playerChips, gameState.pot, gameState.callAmount);
       this.actionBar.show();
       this.statusBar.setStatus('Your turn!');
     } else {
