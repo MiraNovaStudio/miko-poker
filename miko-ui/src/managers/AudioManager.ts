@@ -12,9 +12,9 @@ export class AudioManager {
   private audioCtx: AudioContext | null = null;
   private buffers: Map<string, AudioBuffer> = new Map();
   private loaded = false;
-  private musicSource: AudioBufferSourceNode | null = null;
-  private musicGain: GainNode | null = null;
-  musicPlaying = false;
+
+  /** When true, all sound effects are suppressed */
+  muted = false;
 
   async initialize(): Promise<void> {
     this.audioCtx = new AudioContext();
@@ -23,7 +23,6 @@ export class AudioManager {
       { name: 'check', path: 'assets/sounds/check_one_knock.wav' },
       { name: 'bet', path: 'assets/sounds/bet_chips_2.wav' },
       { name: 'fold', path: 'assets/sounds/fold.wav' },
-      { name: 'music', path: 'assets/sounds/Funky-Chiptune.ogg' },
     ];
 
     await Promise.all(
@@ -50,7 +49,7 @@ export class AudioManager {
   }
 
   private play(name: string): void {
-    if (!this.audioCtx || !this.loaded) return;
+    if (!this.audioCtx || !this.loaded || this.muted) return;
     this.ensureResumed();
 
     const buffer = this.buffers.get(name);
@@ -65,39 +64,4 @@ export class AudioManager {
   playCheckSound(): void { this.play('check'); }
   playBetSound(): void { this.play('bet'); }
   playFoldSound(): void { this.play('fold'); }
-
-  /** Start looping background music */
-  playMusic(volume = 0.3): void {
-    if (!this.audioCtx || !this.loaded) return;
-    this.stopMusic();
-    this.ensureResumed();
-
-    const buffer = this.buffers.get('music');
-    if (!buffer) return;
-
-    this.musicGain = this.audioCtx.createGain();
-    this.musicGain.gain.value = volume;
-    this.musicGain.connect(this.audioCtx.destination);
-
-    this.musicSource = this.audioCtx.createBufferSource();
-    this.musicSource.buffer = buffer;
-    this.musicSource.loop = true;
-    this.musicSource.connect(this.musicGain);
-    this.musicSource.start(0);
-    this.musicPlaying = true;
-  }
-
-  /** Stop background music */
-  stopMusic(): void {
-    if (this.musicSource) {
-      try { this.musicSource.stop(); } catch { /* already stopped */ }
-      this.musicSource.disconnect();
-      this.musicSource = null;
-    }
-    if (this.musicGain) {
-      this.musicGain.disconnect();
-      this.musicGain = null;
-    }
-    this.musicPlaying = false;
-  }
 }

@@ -21,7 +21,7 @@
       height: 100%;
       display: block;
     }
-    #music-toggle {
+    #sound-toggle {
       position: fixed;
       top: 12px;
       right: 12px;
@@ -34,20 +34,20 @@
       color: #fff;
       font-size: 22px;
       cursor: pointer;
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       user-select: none;
       transition: background 0.15s;
     }
-    #music-toggle:hover {
+    #sound-toggle:hover {
       background: rgba(68, 85, 102, 0.9);
     }
   </style>
 </head>
 <body>
   <div id="game-canvas"></div>
-  <button id="music-toggle" title="Toggle music">&#x1F507;</button>
+  <button id="sound-toggle" title="Toggle sound">&#x1F50A;</button>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -28,18 +28,15 @@ async function init() {
   const audio = AudioManager.instance;
   await audio.initialize();
 
-  // Music toggle button (HTML overlay, top-right of viewport)
-  const musicBtn = document.getElementById('music-toggle');
-  if (musicBtn) {
+  // Sound mute toggle button (HTML overlay, top-right — hidden on start screen)
+  const soundBtn = document.getElementById('sound-toggle');
+  if (soundBtn) {
+    soundBtn.style.display = 'none'; // hidden on start screen
     const updateIcon = () => {
-      musicBtn.innerHTML = audio.musicPlaying ? '&#x1F50A;' : '&#x1F507;';
+      soundBtn.innerHTML = audio.muted ? '&#x1F507;' : '&#x1F50A;';
     };
-    musicBtn.addEventListener('click', () => {
-      if (audio.musicPlaying) {
-        audio.stopMusic();
-      } else {
-        audio.playMusic(0.2);
-      }
+    soundBtn.addEventListener('click', () => {
+      audio.muted = !audio.muted;
       updateIcon();
     });
   }
@@ -76,6 +73,7 @@ async function init() {
       app.stage.removeChild(currentScene);
       currentScene.destroy();
     }
+    if (soundBtn) soundBtn.style.display = 'none';
     const start = new StartScene();
     currentScene = start;
     app.stage.addChild(start);
@@ -89,6 +87,7 @@ async function init() {
       app.stage.removeChild(currentScene);
       currentScene.destroy();
     }
+    if (soundBtn) soundBtn.style.display = 'flex';
     const game = new GameScene();
     currentScene = game;
     app.stage.addChild(game);
