@@ -378,7 +378,7 @@ export class PlayerSlot extends Container {
     this.hideWinnerLabel();
 
     this.winnerLabel = new Text({
-      text: 'KNOCKED OUT',
+      text: 'K.O.',
       style: {
         fontFamily: 'Arial',
         fontSize: 32,
