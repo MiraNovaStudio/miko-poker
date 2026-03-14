@@ -196,6 +196,7 @@ export class PokerGameEngine {
     // Reset for new hand
     this.deck.reset();
     this.pot.reset();
+    this.bettingRound.reset();
     debugLog('HAND_START', ` Pot reset to $${this.pot.getTotalPot()} for new hand`);
     this.communityCards = [];
     this.street = 'preflop';
