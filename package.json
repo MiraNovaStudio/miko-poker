@@ -10,7 +10,9 @@
     "build:ui": "npm -w @miko/ui run build",
     "dev": "npm -w @miko/ui run dev",
     "serve": "npx serve public -l 9001",
-    "test": "npm -w @miko/engine run test",
+    "test": "npm -w @miko/engine run test && npm -w @miko/ui run test",
+    "test:engine": "npm -w @miko/engine run test",
+    "test:ui": "npm -w @miko/ui run test",
     "lint": "npm -w @miko/engine run lint"
   }
 }
