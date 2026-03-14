@@ -93,8 +93,8 @@ export class PlayerSlot extends Container {
     this.avatarSprite.width = 80;
     this.avatarSprite.height = 80;
 
-    // Sit on top of chip overlay; cards will cover most of it when dealt
-    this.avatarSprite.y = CHIP_OVERLAY_Y - 30;
+    // Sit on top of chip overlay — bottom of avatar aligns with top edge of stack box
+    this.avatarSprite.y = CHIP_OVERLAY_Y - CHIP_OVERLAY_HEIGHT / 2 - 40;
 
     // Insert behind cards container so dealt cards overlap the avatar
     const cardsIdx = this.getChildIndex(this.cardsContainer);
