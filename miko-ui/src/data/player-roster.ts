@@ -32,32 +32,32 @@ const ROSTER_DATA: [string, Playstyle][] = [
   // --- Passive ---
   ['TiltedGrandma',   'passive'],
   ['LuckyRiver13',    'passive'],
-  ['LuckyFlop420',    'passive'],
+  ['Hiker420',    'passive'],
   ['QuantumCaller',   'passive'],
-  ['PocketNinjas',    'passive'],
+  ['MiraNova',    'passive'],
   ['CardShark300',    'passive'],
   ['RogueButton',     'passive'],
   ['NeonHeart7',  'passive'],
   ['LadyAllIn',       'passive'],
 
   // --- Nit ---
-  ['FoldMaster64',    'nit'],
+  ['LaserMagicka',    'nit'],
   ['SilentGrinder',   'nit'],
-  ['RiverGhost',      'nit'],
+  ['GolfGuy9',      'nit'],
   ['StackSniper',     'nit'],
   ['ChipEnchantress',  'nit'],
   ['Athena812',   'nit'],
-  ['RiverQueen',   'nit'],
+  ['gr8Qu33n',   'nit'],
   ['AcePilot99',      'nit'],
-  ['DeepStackHero',   'nit'],
+  ['MountainBiker22',   'nit'],
   ['PotBuilderX',     'nit'],
-  ['RiverRaptor',     'nit'],
+  ['PocketAces',     'nit'],
 
   // --- Shark ---
   ['GoddessOfWar',      'shark'],
   ['AceHuntress44',     'shark'],
   ['GTO_Samurai',     'shark'],
-  ['BotDealer9000',   'shark'],
+  ['user_984322',   'shark'],
   ['AceCrusher7',     'shark'],
   ['StackOverflow',   'shark'],
   ['FlopDonkey76',    'shark'],
@@ -65,10 +65,10 @@ const ROSTER_DATA: [string, Playstyle][] = [
   ['HappyFish', 'shark'],
 
   // --- Maniac ---
-  ['MaxDegenMad',  'maniac'],
+  ['MaxDegen',  'maniac'],
   ['AllInGoblin',     'maniac'],
   ['UltraSage11',   'maniac'],
-  ['BluffBotXX',       'maniac'],
+  ['JustABot4U2',       'maniac'],
 ];
 
 /** Full roster with pre-computed AI configs (jittered per player). */
