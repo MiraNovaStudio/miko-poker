@@ -10,11 +10,12 @@ describe('PLAYER_ROSTER', () => {
     expect(PLAYER_ROSTER.length).toBeGreaterThanOrEqual(32);
   });
 
-  it('every entry should have name, playstyle, and config', () => {
+  it('every entry should have name, playstyle, gender, and config', () => {
     for (const entry of PLAYER_ROSTER) {
       expect(typeof entry.name).toBe('string');
       expect(entry.name.length).toBeGreaterThan(0);
       expect(['passive', 'nit', 'shark', 'maniac']).toContain(entry.playstyle);
+      expect(['male', 'female']).toContain(entry.gender);
       expect(entry.config).toBeDefined();
     }
   });

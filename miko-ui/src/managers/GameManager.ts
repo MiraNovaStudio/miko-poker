@@ -117,10 +117,10 @@ export class GameManager {
   // ─── Avatars ──────────────────────────────────────────────
 
   /** Get (or generate and cache) an avatar texture for a player name. */
-  private getAvatarTexture(name: string): Texture {
+  private getAvatarTexture(name: string, gender: 'male' | 'female' = 'male'): Texture {
     let tex = this.avatarTextureCache.get(name);
     if (!tex) {
-      const container = createAvatar(name);
+      const container = createAvatar(name, gender);
       tex = this.renderer.generateTexture(container);
       container.destroy(true);
       this.avatarTextureCache.set(name, tex);
@@ -134,7 +134,8 @@ export class GameManager {
     // Use avatarName override from roster if present
     const rosterEntry = PLAYER_ROSTER.find(p => p.name === name);
     const avatarSeed = rosterEntry?.avatarName ?? name;
-    const tex = this.getAvatarTexture(avatarSeed);
+    const gender = rosterEntry?.gender ?? 'male';
+    const tex = this.getAvatarTexture(avatarSeed, gender);
     slot.setAvatar(tex);
   }
 
@@ -1325,7 +1326,7 @@ export class GameManager {
       if (slot) {
         slot.resetForNewHand();
         slot.setPlayerName(entry.name);
-        slot.setAvatar(this.getAvatarTexture(entry.avatarName ?? entry.name));
+        slot.setAvatar(this.getAvatarTexture(entry.avatarName ?? entry.name, entry.gender));
         slot.setChips(GAME_CONFIG.startingChips);
         slot.visible = true;
         slot.clearStatus();
@@ -1366,7 +1367,7 @@ export class GameManager {
       if (slot) {
         slot.resetForNewHand();
         slot.setPlayerName(entry.name);
-        slot.setAvatar(this.getAvatarTexture(entry.avatarName ?? entry.name));
+        slot.setAvatar(this.getAvatarTexture(entry.avatarName ?? entry.name, entry.gender));
         slot.setChips(GAME_CONFIG.startingChips);
         slot.visible = false; // hidden until animation starts
         slot.clearStatus();

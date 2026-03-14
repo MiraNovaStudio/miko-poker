@@ -6,6 +6,7 @@
  */
 
 import { Container, Graphics } from 'pixi.js';
+import type { Gender } from '../data/player-roster';
 
 // ─── Seeded PRNG ──────────────────────────────────────────────────
 
@@ -204,24 +205,29 @@ function pick<T>(arr: T[], rng: () => number): T {
 /**
  * Create a procedural avatar Container for a player.
  * The same name always produces the same avatar.
+ * Gender controls which optional features are available:
+ *   female — no beard, higher earring chance
+ *   male   — no earrings, can have beard
  *
  * The returned Container is AVATAR_SIZE × AVATAR_SIZE and can be
  * converted to a texture via `renderer.generateTexture(container)`.
  */
-export function createAvatar(name: string): Container {
+export function createAvatar(name: string, gender: Gender = 'male'): Container {
   const seed = hashName(name);
   const rng = createRng(seed);
+
+  const isFemale = gender === 'female';
 
   // Pick colors
   const skinColor = pick(SKIN_TONES, rng);
   const shirtColor = pick(SHIRT_COLORS, rng);
   const eyeColor = pick(EYE_COLORS, rng);
 
-  // Decide which optional features to include
+  // Decide which optional features to include (gender-aware)
   const hasHat = rng() < 0.35;
   const hasSunglasses = rng() < 0.25;
-  const hasBeard = rng() < 0.30;
-  const hasEarrings = rng() < 0.15;
+  const hasBeard = !isFemale && rng() < 0.30;
+  const hasEarrings = isFemale ? rng() < 0.40 : false;
   const hasHeadband = !hasHat && rng() < 0.20;
 
   const container = new Container();

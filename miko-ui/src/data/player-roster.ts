@@ -12,10 +12,13 @@
 import type { AIConfig, Playstyle } from '@engine/index.js';
 import { getPlaystyleConfig } from '@engine/index.js';
 
+export type Gender = 'male' | 'female';
+
 export interface RosterEntry {
   name: string;
   playstyle: Playstyle;
   config: AIConfig;
+  gender: Gender;
   /** If set, avatar is generated from this name instead of the player's own name. */
   avatarName?: string;
 }
@@ -29,54 +32,55 @@ function nameHash(name: string): number {
   return Math.abs(h);
 }
 
-// [name, playstyle, avatarName?] — 14 passive (44%), 6 nit (19%), 8 shark (25%), 4 maniac (12%)
-const ROSTER_DATA: [string, Playstyle, string?][] = [
+// [name, playstyle, gender, avatarName?]
+const ROSTER_DATA: [string, Playstyle, Gender, string?][] = [
   // --- Passive ---
-  ['TiltedGrandma',   'passive'],
-  ['LuckyRiver13',    'passive'],
-  ['Hiker420',    'passive'],
-  ['QuantumCaller',   'passive'],
-  ['MiraNova',    'passive'],
-  ['CardShark300',    'passive'],
-  ['RogueButton',     'passive'],
-  ['NeonHeart7',  'passive'],
-  ['LadyAllIn',       'passive'],
+  ['TiltedGrandma',   'passive', 'female'],
+  ['LuckyRiver13',    'passive', 'male'],
+  ['Hiker420',        'passive', 'male'],
+  ['QuantumCaller',   'passive', 'male'],
+  ['MiraNova',        'passive', 'male'],
+  ['CardShark300',    'passive', 'male'],
+  ['RogueButton',     'passive', 'male'],
+  ['NeonHeart7',      'passive', 'female'],
+  ['LadyAllIn',       'passive', 'female'],
 
   // --- Nit ---
-  ['LaserMagicka',    'nit'],
-  ['SilentGrinder',   'nit'],
-  ['GolfGuy9',      'nit'],
-  ['StackSniper',     'nit'],
-  ['ChipEnchantress',  'nit'],
-  ['Athena812',   'nit', 'MountainBiker22'],
-  ['gr8Qu33n',   'nit'],
-  ['AcePilot99',      'nit'],
-  ['MountainBiker22',   'nit', 'Athena812'],
-  ['PotBuilderX',     'nit'],
-  ['PocketAces',     'nit'],
+  ['LaserMagicka',    'nit', 'female'],
+  ['SilentGrinder',   'nit', 'male'],
+  ['GolfGuy9',        'nit', 'male'],
+  ['StackSniper',     'nit', 'male'],
+  ['ChipEnchantress', 'nit', 'female'],
+  ['Athena812',       'nit', 'female'],
+  ['gr8Qu33n',        'nit', 'male'],
+  ['AcePilot99',      'nit', 'male'],
+  ['MountainBiker22', 'nit', 'male'],
+  ['AngelCupcake',    'nit', 'female'],
+  ['PocketAces',      'nit', 'male'],
 
   // --- Shark ---
-  ['GoddessOfWar',      'shark'],
-  ['AceHuntress44',     'shark'],
-  ['GTO_Samurai',     'shark'],
-  ['user_984322',   'shark'],
-  ['AceCrusher7',     'shark'],
-  ['StackOverflow',   'shark'],
-  ['FlopDonkey76',    'shark'],
-  ['crypt0zenith',   'shark'],
-  ['HappyFish', 'shark'],
+  ['GoddessOfWar',    'shark', 'female'],
+  ['AceHuntress44',   'shark', 'female'],
+  ['GTO_Samurai',     'shark', 'male'],
+  ['user_984322',     'shark', 'male'],
+  ['AceCrusher7',     'shark', 'male'],
+  ['StackOverflow',   'shark', 'male'],
+  ['FlopDonkey76',    'shark', 'male'],
+  ['crypt0zenith',    'shark', 'male'],
+  ['HappyFish',       'shark', 'male'],
 
   // --- Maniac ---
-  ['MaxDegen',  'maniac'],
-  ['AllInGoblin',     'maniac'],
-  ['UltraSage11',   'maniac'],
-  ['JustABot4U2',       'maniac'],
+  ['MaxDegen',        'maniac', 'male'],
+  ['AllInGoblin',     'maniac', 'male'],
+  ['UltraSage11',     'maniac', 'male'],
+  ['JustABot4U2',     'maniac', 'male'],
 ];
 
 /** Full roster with pre-computed AI configs (jittered per player). */
-export const PLAYER_ROSTER: RosterEntry[] = ROSTER_DATA.map(([name, playstyle, avatarName]) => ({
+export const PLAYER_ROSTER: RosterEntry[] = ROSTER_DATA.map(([name, playstyle, gender, avatarName]) => ({
   name,
   playstyle,
+  gender,
   config: getPlaystyleConfig(playstyle, nameHash(name)),
   ...(avatarName ? { avatarName } : {}),
 }));
