@@ -59,6 +59,7 @@ export class GameManager {
   private playerHoleCards: Map<string, EngineCard[]> = new Map();
   private currentCommunityCards: EngineCard[] = [];
   private humanFolded = false;
+  private humanActedThisStreet = false;
   private streetJustChanged = false;
 
   // All-in runout sequencing
@@ -170,6 +171,7 @@ export class GameManager {
     this.playerHoleCards.clear();
     this.currentCommunityCards = [];
     this.humanFolded = false;
+    this.humanActedThisStreet = false;
     this.allInRunout = false;
     this.streetQueue = [];
     this.pendingHandResult = null;
@@ -473,6 +475,7 @@ export class GameManager {
       if (this.actionBar.preactionActive) {
         const preType = this.actionBar.preactionType;
         this.actionBar.hidePreaction();
+        this.humanActedThisStreet = true;
         if (preType === 'checkfold') {
           // Check if we can, otherwise fold
           if (gameState.canCheck) {
@@ -544,11 +547,19 @@ export class GameManager {
     } else {
       // AI player's turn — show preaction for human while waiting
       if (!this.humanFolded) {
-        // Determine if check would be possible (no outstanding bet on this street)
         const humanPlayer = gameState.players.find((p: PlayerState) => p.id === 'player');
-        const canCheckPreaction = humanPlayer && !humanPlayer.folded &&
-          gameState.callAmount === 0;
-        this.actionBar.showPreaction(!!canCheckPreaction);
+        if (humanPlayer && !humanPlayer.folded) {
+          if (!this.humanActedThisStreet) {
+            // Human hasn't acted yet — show Check/Fold or Fold
+            const canCheck = gameState.callAmount === 0;
+            this.actionBar.showPreaction(canCheck);
+          } else if (gameState.callAmount > (humanPlayer.bet || 0)) {
+            // Human already acted but someone raised — new decision needed, show Fold
+            this.humanActedThisStreet = false;
+            this.actionBar.showPreaction(false);
+          }
+          // Otherwise human acted and no raise occurred — keep button hidden
+        }
       }
 
       this.statusBar.setStatus(`${this.getDisplayName(currentPlayer.id)} is thinking...`);
@@ -607,6 +618,7 @@ export class GameManager {
     this.currentCommunityCards = [];
     this.playerHoleCards.clear();
     this.humanFolded = false;
+    this.humanActedThisStreet = false;
     this.actionBar.hidePreaction();
 
     // Reset UI
@@ -705,6 +717,7 @@ export class GameManager {
 
     // Clear preaction on street change — bet state is different now
     this.actionBar.clearPreaction();
+    this.humanActedThisStreet = false;
 
     this.streetJustChanged = true;
     this.updatePotLabel();
@@ -994,6 +1007,7 @@ export class GameManager {
     const gameState = this.engine.getGameState();
     const actionType = gameState.canCheck ? 'check' : 'call';
     this.engine.processAction('player', { type: actionType as 'check' | 'call' });
+    this.humanActedThisStreet = true;
     this.actionBar.hide();
     this.delayed(() => this.advanceGame(), 500);
   }
@@ -1019,6 +1033,7 @@ export class GameManager {
     }
     const amount = this.actionBar.getBetAmount(defaultAmount);
     this.engine.processAction('player', { type: actionType as 'bet' | 'raise', amount });
+    this.humanActedThisStreet = true;
     this.actionBar.hide();
     this.delayed(() => this.advanceGame(), 500);
   }
@@ -1026,6 +1041,7 @@ export class GameManager {
   private onFold(): void {
     if (!this.engine) return;
     this.engine.processAction('player', { type: 'fold' });
+    this.humanActedThisStreet = true;
     this.actionBar.hide();
     this.delayed(() => this.advanceGame(), 500);
   }
