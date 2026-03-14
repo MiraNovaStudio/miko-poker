@@ -90,13 +90,15 @@ export class PlayerSlot extends Container {
 
     this.avatarSprite = new Sprite(texture);
     this.avatarSprite.anchor.set(0.5);
-    this.avatarSprite.width = 40;
-    this.avatarSprite.height = 40;
+    this.avatarSprite.width = 80;
+    this.avatarSprite.height = 80;
 
-    const isTopRow = TOP_ROW_SEATS.includes(this.seatIndex);
-    // Place avatar above the name label
-    this.avatarSprite.y = this.nameLabel.y + (isTopRow ? -22 : -22);
-    this.addChild(this.avatarSprite);
+    // Sit on top of chip overlay; cards will cover most of it when dealt
+    this.avatarSprite.y = CHIP_OVERLAY_Y - 30;
+
+    // Insert behind cards container so dealt cards overlap the avatar
+    const cardsIdx = this.getChildIndex(this.cardsContainer);
+    this.addChildAt(this.avatarSprite, cardsIdx);
   }
 
   /** Remove the avatar sprite. */
