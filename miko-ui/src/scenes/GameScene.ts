@@ -1,5 +1,5 @@
 // (c) 2026 MiraNova Studios
-import { Container, Sprite } from 'pixi.js';
+import { Container, Sprite, type Renderer } from 'pixi.js';
 import { AssetManager } from '../managers/AssetManager.js';
 import { SettingsManager } from '../managers/SettingsManager.js';
 import { GameManager } from '../managers/GameManager.js';
@@ -16,7 +16,7 @@ export class GameScene extends Container {
   private tableSprite: Sprite;
   onQuit: (() => void) | null = null;
 
-  constructor() {
+  constructor(renderer: Renderer) {
     super();
 
     // Table background
@@ -60,6 +60,7 @@ export class GameScene extends Container {
       statusBar,
       this.actionBar,
       audioManager,
+      renderer,
     );
 
     // Wire game-over to HTML modal

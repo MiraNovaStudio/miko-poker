@@ -299,7 +299,7 @@ async function init() {
     if (settingsBtn) settingsBtn.style.display = 'flex';
     if (pageTitle) pageTitle.style.display = 'block';
     if (copyrightEl) copyrightEl.style.display = 'none';
-    const game = new GameScene();
+    const game = new GameScene(app.renderer);
     game.onQuit = () => showStartScene();
     currentScene = game;
     app.stage.addChild(game);

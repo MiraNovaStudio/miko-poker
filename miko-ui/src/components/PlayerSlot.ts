@@ -1,5 +1,5 @@
 // (c) 2026 MiraNova Studios
-import { Container, Graphics, Text, type TextStyleOptions } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
 import { Card, type CardData } from './Card.js';
 import {
   HOLE_CARD_WIDTH, HOLE_CARD_HEIGHT, CARD_SPACING_HOLE,
@@ -20,6 +20,7 @@ export class PlayerSlot extends Container {
   private statusLabel: Text;
   private chipOverlay: Graphics;
   private cardsContainer: Container;
+  private avatarSprite: Sprite | null = null;
   private winnerLabel: Text | null = null;
   private winnerTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -78,6 +79,33 @@ export class PlayerSlot extends Container {
 
   setPlayerName(name: string): void {
     this.nameLabel.text = name;
+  }
+
+  /** Set the player's avatar from a pre-generated texture. */
+  setAvatar(texture: Texture): void {
+    if (this.avatarSprite) {
+      this.removeChild(this.avatarSprite);
+      this.avatarSprite.destroy();
+    }
+
+    this.avatarSprite = new Sprite(texture);
+    this.avatarSprite.anchor.set(0.5);
+    this.avatarSprite.width = 40;
+    this.avatarSprite.height = 40;
+
+    const isTopRow = TOP_ROW_SEATS.includes(this.seatIndex);
+    // Place avatar above the name label
+    this.avatarSprite.y = this.nameLabel.y + (isTopRow ? -22 : -22);
+    this.addChild(this.avatarSprite);
+  }
+
+  /** Remove the avatar sprite. */
+  clearAvatar(): void {
+    if (this.avatarSprite) {
+      this.removeChild(this.avatarSprite);
+      this.avatarSprite.destroy();
+      this.avatarSprite = null;
+    }
   }
 
   setChips(amount: number): void {

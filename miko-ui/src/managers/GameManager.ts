@@ -18,8 +18,9 @@ import { SettingsManager, formatChips } from './SettingsManager.js';
 import { HandHistory } from '../components/HandHistory.js';
 import { Card } from '../components/Card.js';
 import { PLAYER_ROSTER, pickNewPlayer, type RosterEntry } from '../data/player-roster.js';
-import { Text, Container, type TextStyleOptions } from 'pixi.js';
+import { Text, Container, Texture, type Renderer, type TextStyleOptions } from 'pixi.js';
 import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS } from '../utils/constants.js';
+import { createAvatar } from '../utils/createAvatar.js';
 
 type HandPhase = 'idle' | 'starting' | 'dealing' | 'betting' | 'showdown';
 
@@ -31,7 +32,11 @@ export class GameManager {
   private statusBar: StatusBar;
   private actionBar: ActionBar;
   private audioManager: AudioManager;
+  private renderer: Renderer;
   private handHistory: HandHistory;
+
+  // Avatar texture cache (keyed by player display name)
+  private avatarTextureCache: Map<string, Texture> = new Map();
 
   // Engine
   private engine: PokerGameEngine | null = null;
@@ -77,6 +82,7 @@ export class GameManager {
     statusBar: StatusBar,
     actionBar: ActionBar,
     audioManager: AudioManager,
+    renderer: Renderer,
   ) {
     this.slotLayout = slotLayout;
     this.communityCards = communityCards;
@@ -84,6 +90,7 @@ export class GameManager {
     this.statusBar = statusBar;
     this.actionBar = actionBar;
     this.audioManager = audioManager;
+    this.renderer = renderer;
     this.handHistory = new HandHistory();
 
     // Wire action bar callbacks: Check/Call, Bet/Raise, Fold
@@ -104,6 +111,27 @@ export class GameManager {
       this.updateAllChipLabels();
       this.updatePotLabel();
     });
+  }
+
+  // ─── Avatars ──────────────────────────────────────────────
+
+  /** Get (or generate and cache) an avatar texture for a player name. */
+  private getAvatarTexture(name: string): Texture {
+    let tex = this.avatarTextureCache.get(name);
+    if (!tex) {
+      const container = createAvatar(name);
+      tex = this.renderer.generateTexture(container);
+      container.destroy(true);
+      this.avatarTextureCache.set(name, tex);
+    }
+    return tex;
+  }
+
+  /** Apply avatar to a slot for the given player ID. */
+  private applyAvatar(slot: PlayerSlot, playerId: string): void {
+    const name = this.getDisplayName(playerId);
+    const tex = this.getAvatarTexture(name);
+    slot.setAvatar(tex);
   }
 
   // ─── Public API ────────────────────────────────────────────
@@ -295,12 +323,13 @@ export class GameManager {
     const prevIdx = (winnerIdx - 1 + numPlayers) % numPlayers;
     this.engine!.setDealerIndex(prevIdx);
 
-    // Set up all slots with names and chips first
+    // Set up all slots with names, chips, and avatars
     this.playerIdBySeat.forEach((pid, idx) => {
       const slot = this.slotLayout.getSlot(idx);
       if (!slot) return;
       slot.resetForNewHand();
       slot.setPlayerName(this.getDisplayName(pid));
+      this.applyAvatar(slot, pid);
       slot.setChips(GAME_CONFIG.startingChips);
       slot.visible = true;
     });
@@ -1277,6 +1306,7 @@ export class GameManager {
       if (slot) {
         slot.resetForNewHand();
         slot.setPlayerName(entry.name);
+        slot.setAvatar(this.getAvatarTexture(entry.name));
         slot.setChips(GAME_CONFIG.startingChips);
         slot.visible = true;
         slot.clearStatus();
@@ -1317,6 +1347,7 @@ export class GameManager {
       if (slot) {
         slot.resetForNewHand();
         slot.setPlayerName(entry.name);
+        slot.setAvatar(this.getAvatarTexture(entry.name));
         slot.setChips(GAME_CONFIG.startingChips);
         slot.visible = false; // hidden until animation starts
         slot.clearStatus();
