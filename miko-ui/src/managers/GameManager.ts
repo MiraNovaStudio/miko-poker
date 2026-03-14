@@ -130,7 +130,10 @@ export class GameManager {
   /** Apply avatar to a slot for the given player ID. */
   private applyAvatar(slot: PlayerSlot, playerId: string): void {
     const name = this.getDisplayName(playerId);
-    const tex = this.getAvatarTexture(name);
+    // Use avatarName override from roster if present
+    const rosterEntry = PLAYER_ROSTER.find(p => p.name === name);
+    const avatarSeed = rosterEntry?.avatarName ?? name;
+    const tex = this.getAvatarTexture(avatarSeed);
     slot.setAvatar(tex);
   }
 
@@ -1306,7 +1309,7 @@ export class GameManager {
       if (slot) {
         slot.resetForNewHand();
         slot.setPlayerName(entry.name);
-        slot.setAvatar(this.getAvatarTexture(entry.name));
+        slot.setAvatar(this.getAvatarTexture(entry.avatarName ?? entry.name));
         slot.setChips(GAME_CONFIG.startingChips);
         slot.visible = true;
         slot.clearStatus();
@@ -1347,7 +1350,7 @@ export class GameManager {
       if (slot) {
         slot.resetForNewHand();
         slot.setPlayerName(entry.name);
-        slot.setAvatar(this.getAvatarTexture(entry.name));
+        slot.setAvatar(this.getAvatarTexture(entry.avatarName ?? entry.name));
         slot.setChips(GAME_CONFIG.startingChips);
         slot.visible = false; // hidden until animation starts
         slot.clearStatus();

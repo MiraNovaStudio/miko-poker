@@ -16,6 +16,8 @@ export interface RosterEntry {
   name: string;
   playstyle: Playstyle;
   config: AIConfig;
+  /** If set, avatar is generated from this name instead of the player's own name. */
+  avatarName?: string;
 }
 
 /** Simple deterministic hash for per-player jitter seed. */
@@ -27,8 +29,8 @@ function nameHash(name: string): number {
   return Math.abs(h);
 }
 
-// [name, playstyle] — 14 passive (44%), 6 nit (19%), 8 shark (25%), 4 maniac (12%)
-const ROSTER_DATA: [string, Playstyle][] = [
+// [name, playstyle, avatarName?] — 14 passive (44%), 6 nit (19%), 8 shark (25%), 4 maniac (12%)
+const ROSTER_DATA: [string, Playstyle, string?][] = [
   // --- Passive ---
   ['TiltedGrandma',   'passive'],
   ['LuckyRiver13',    'passive'],
@@ -46,10 +48,10 @@ const ROSTER_DATA: [string, Playstyle][] = [
   ['GolfGuy9',      'nit'],
   ['StackSniper',     'nit'],
   ['ChipEnchantress',  'nit'],
-  ['Athena812',   'nit'],
+  ['Athena812',   'nit', 'MountainBiker22'],
   ['gr8Qu33n',   'nit'],
   ['AcePilot99',      'nit'],
-  ['MountainBiker22',   'nit'],
+  ['MountainBiker22',   'nit', 'Athena812'],
   ['PotBuilderX',     'nit'],
   ['PocketAces',     'nit'],
 
@@ -72,10 +74,11 @@ const ROSTER_DATA: [string, Playstyle][] = [
 ];
 
 /** Full roster with pre-computed AI configs (jittered per player). */
-export const PLAYER_ROSTER: RosterEntry[] = ROSTER_DATA.map(([name, playstyle]) => ({
+export const PLAYER_ROSTER: RosterEntry[] = ROSTER_DATA.map(([name, playstyle, avatarName]) => ({
   name,
   playstyle,
   config: getPlaystyleConfig(playstyle, nameHash(name)),
+  ...(avatarName ? { avatarName } : {}),
 }));
 
 /**
