@@ -26,6 +26,8 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: mode === 'production' ? [
     javascriptObfuscator({
+      apply: 'build',
+      debugger: false,
       options: {
         compact: true,
         controlFlowFlattening: true,
@@ -38,9 +40,10 @@ export default defineConfig(({ mode }) => ({
         stringArray: true,
         stringArrayCallsTransform: true,
         stringArrayEncoding: ['base64'],
-        stringArrayThreshold: 0.5,
+        stringArrayThreshold: 0.75,
         transformObjectKeys: true,
         unicodeEscapeSequence: false,
+        sourceMap: false,
       },
     }),
   ] : [],
