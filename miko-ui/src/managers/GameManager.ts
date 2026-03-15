@@ -4,8 +4,8 @@
  * Engine code is NOT modified; only UI calls change.
  */
 
-import { PokerGameEngine, evaluateHand, getHandName, Deck } from '@engine/index.js';
-import type { GameEvent, GameResult, Card as EngineCard, PlayerState } from '@engine/index.js';
+import { PokerGameEngine, evaluateHand, getHandName, getRankName, Deck } from '@engine/index.js';
+import type { GameEvent, GameResult, Card as EngineCard, PlayerState, HandStrength } from '@engine/index.js';
 
 import { SlotLayout } from '../components/SlotLayout.js';
 import { PlayerSlot } from '../components/PlayerSlot.js';
@@ -1203,6 +1203,44 @@ export class GameManager {
     });
   }
 
+  /**
+   * Get a detailed hand name that distinguishes sets from trips and
+   * uses "Pair of X" instead of "One Pair".
+   *
+   * - Category 1: "Pair of Kings" instead of "One Pair"
+   * - Category 3: "Set of Sixes" if both hole cards are the trip rank,
+   *               otherwise "Three of a Kind" (trips)
+   */
+  private getDetailedHandName(
+    strength: HandStrength,
+    holeCards?: EngineCard[],
+  ): string {
+    const rankVal = strength.kickers[0];
+    const rankName = getRankName(rankVal);
+    // Pluralize rank name
+    const plural = rankName === 'Six' ? 'Sixes' : rankName + 's';
+
+    if (strength.category === 1) {
+      return `Pair of ${plural}`;
+    }
+
+    if (strength.category === 3 && holeCards && holeCards.length === 2) {
+      // Map rank string → numeric value for comparison
+      const rankToVal: Record<string, number> = {
+        'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10,
+        '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2,
+      };
+      const h1 = rankToVal[holeCards[0].rank] ?? 0;
+      const h2 = rankToVal[holeCards[1].rank] ?? 0;
+      // Set = pocket pair matching the trip rank
+      if (h1 === rankVal && h2 === rankVal) {
+        return `Set of ${plural}`;
+      }
+    }
+
+    return getHandName(strength);
+  }
+
   private updateHumanHandLabel(): void {
     if (this.humanFolded) {
       this.statusBar.setHand('');
@@ -1218,10 +1256,21 @@ export class GameManager {
       let name = '';
       if (cardsForEval.length >= 5) {
         const strength = evaluateHand(cardsForEval as EngineCard[]);
-        name = getHandName(strength);
+        name = this.getDetailedHandName(strength, hole);
       } else {
         const [c1, c2] = hole;
-        name = (c1 && c2 && c1.rank === c2.rank) ? 'One Pair' : 'High Card';
+        if (c1 && c2 && c1.rank === c2.rank) {
+          const rankToVal: Record<string, number> = {
+            'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10,
+            '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2,
+          };
+          const val = rankToVal[c1.rank] ?? 0;
+          const rn = getRankName(val);
+          const pl = rn === 'Six' ? 'Sixes' : rn + 's';
+          name = `Pair of ${pl}`;
+        } else {
+          name = 'High Card';
+        }
       }
       this.statusBar.setHand(name);
     } catch (err) {
@@ -1420,7 +1469,7 @@ export class GameManager {
         const combined = [...(p.cards as EngineCard[]), ...this.currentCommunityCards];
         if (combined.length < 5) return;
         const strength = evaluateHand(combined as EngineCard[]);
-        const handName = getHandName(strength);
+        const handName = this.getDetailedHandName(strength, p.cards as EngineCard[]);
         const slot = this.getSlotForPlayer(p.id);
         if (!slot) return;
         slot.setBetSmallItalic(handName);
@@ -1437,7 +1486,7 @@ export class GameManager {
         const combined = [...(winner.cards as EngineCard[]), ...this.currentCommunityCards];
         if (combined.length < 5) return;
         const strength = evaluateHand(combined as EngineCard[]);
-        const handName = getHandName(strength);
+        const handName = this.getDetailedHandName(strength, winner.cards as EngineCard[]);
         const slot = this.getSlotForPlayer(winnerId);
         if (slot) this.showWinningHandAtSlot(handName, slot);
       } catch (err) {
