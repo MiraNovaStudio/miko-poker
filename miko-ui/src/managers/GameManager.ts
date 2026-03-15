@@ -375,6 +375,7 @@ export class GameManager {
       this.statusBar.setStatus(
         `${winnerName} has the high card (${winCard.rank} of ${winCard.suit}) — dealing!`
       );
+      this.handHistory.addEntry(`Button: ${winnerName}`);
       const winnerSlot = this.slotLayout.getSlot(winnerIdx);
       if (winnerSlot) winnerSlot.showButtonLabel(3000);
 
@@ -410,6 +411,7 @@ export class GameManager {
       this.statusBar.setStatus(
         `${winnerName} has the high card (${winCard.rank} of ${winCard.suit}) — dealing!`
       );
+      this.handHistory.addEntry(`Button: ${winnerName}`);
 
       // Show BUTTON animation on the winner's slot
       const winnerSlot = this.slotLayout.getSlot(winnerIdx);
@@ -917,7 +919,8 @@ export class GameManager {
       statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
     }
     this.statusBar.setStatus(statusMsg);
-    this.handHistory.addEntry(statusMsg);
+    const handNum = String(this.handCounter).padStart(3, '0');
+    this.handHistory.addEntry(`Hand ${handNum}: ${statusMsg}`);
 
     // Show hand names on bet labels at showdown
     if (result.winningHand) {
