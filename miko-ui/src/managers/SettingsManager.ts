@@ -12,7 +12,7 @@ const TABLE_STYLE_KEY = 'miko_tableStyle';
 const AVATAR_KEY = 'miko_avatarPreset';
 const CARD_BACK_KEY = 'miko_cardBack';
 const DEFAULT_NAME = 'Player';
-const DEFAULT_AVATAR = 'male1';
+const DEFAULT_AVATAR = 'female2';
 const DEFAULT_CARD_BACK = 'classic-blue';
 const BIG_BLIND = 10;
 
