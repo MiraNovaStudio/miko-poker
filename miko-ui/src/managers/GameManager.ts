@@ -101,13 +101,16 @@ export class GameManager {
       () => this.onFold(),
     );
 
-    // Refresh UI when settings change (deck type, player name, chip display)
+    // Refresh UI when settings change (deck type, player name, chip display, avatar)
     SettingsManager.instance.onChange(() => {
       this.refreshAllCards();
       // Update player display name live
       this.displayNameById.set('player', SettingsManager.instance.playerName);
       const slot = this.slotLayout.getSlot(0);
-      if (slot) slot.setPlayerName(SettingsManager.instance.playerName);
+      if (slot) {
+        slot.setPlayerName(SettingsManager.instance.playerName);
+        this.applyAvatar(slot, 'player');
+      }
       // Refresh chip labels and pot when chip display mode changes
       this.updateAllChipLabels();
       this.updatePotLabel();
