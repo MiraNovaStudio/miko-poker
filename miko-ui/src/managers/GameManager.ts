@@ -678,15 +678,17 @@ export class GameManager {
     this.updatePotLabel();
   }
 
-  private onCardsDealt(playerId: string, cards: EngineCard[]): void {
+  private onCardsDealt(playerId: string, cards: EngineCard[], retries = 0): void {
     if (this.handPhase !== 'dealing') {
-      this.delayed(() => this.onCardsDealt(playerId, cards), 50);
+      if (retries < 20) this.delayed(() => this.onCardsDealt(playerId, cards, retries + 1), 50);
+      else console.warn(`onCardsDealt: gave up waiting for dealing phase for ${playerId}`);
       return;
     }
 
     const slot = this.getSlotForPlayer(playerId);
     if (!slot) {
-      this.delayed(() => this.onCardsDealt(playerId, cards), 50);
+      if (retries < 20) this.delayed(() => this.onCardsDealt(playerId, cards, retries + 1), 50);
+      else console.warn(`onCardsDealt: no slot found for ${playerId} after retries`);
       return;
     }
 
@@ -1363,6 +1365,12 @@ export class GameManager {
       // Replace in engine
       this.engine.replacePlayer(seatIndex, engineId, entry.config);
 
+      // Update seat ↔ ID mappings
+      const oldId = this.playerIdBySeat[seatIndex];
+      if (oldId) this.seatByPlayerId.delete(oldId);
+      this.playerIdBySeat[seatIndex] = engineId;
+      this.seatByPlayerId.set(engineId, seatIndex);
+
       // Update display name mapping
       this.displayNameById.set(engineId, entry.name);
 
@@ -1403,6 +1411,12 @@ export class GameManager {
     for (const { seatIndex, engineId, entry } of this.pendingReplacements) {
       // Replace in engine
       this.engine.replacePlayer(seatIndex, engineId, entry.config);
+
+      // Update seat ↔ ID mappings
+      const oldId = this.playerIdBySeat[seatIndex];
+      if (oldId) this.seatByPlayerId.delete(oldId);
+      this.playerIdBySeat[seatIndex] = engineId;
+      this.seatByPlayerId.set(engineId, seatIndex);
 
       // Update display name mapping
       this.displayNameById.set(engineId, entry.name);
