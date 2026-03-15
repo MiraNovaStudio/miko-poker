@@ -5,6 +5,7 @@ import { AudioManager } from './managers/AudioManager.js';
 import { SettingsManager, type DeckType } from './managers/SettingsManager.js';
 import { StartScene } from './scenes/StartScene.js';
 import { GameScene } from './scenes/GameScene.js';
+import { createAvatar, AVATAR_PRESETS } from './utils/createAvatar.js';
 
 /** Design resolution the layout was authored for */
 const DESIGN_WIDTH = 960;
@@ -175,12 +176,84 @@ async function init() {
       });
     }
 
+    // Avatar picker
+    const avatarPreview = document.getElementById('avatar-preview') as HTMLCanvasElement | null;
+    const avatarChooseBtn = document.getElementById('avatar-choose-btn');
+    const avatarModal = document.getElementById('avatar-modal');
+    const avatarGrid = document.getElementById('avatar-grid');
+    const avatarClose = document.getElementById('avatar-close');
+
+    /** Render a PixiJS avatar container to a target canvas element. */
+    function renderAvatarToCanvas(seed: string, gender: 'male' | 'female', target: HTMLCanvasElement): void {
+      const container = createAvatar(seed, gender);
+      // Generate texture via the app renderer, then extract pixels
+      const tex = app.renderer.generateTexture(container);
+      const extract = app.renderer.extract;
+      const extractCanvas = extract.canvas(tex) as HTMLCanvasElement;
+      const ctx = target.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, target.width, target.height);
+        ctx.drawImage(extractCanvas, 0, 0, target.width, target.height);
+      }
+      container.destroy(true);
+      tex.destroy(true);
+    }
+
+    /** Update the small avatar preview in the settings row. */
+    function updateAvatarPreview(): void {
+      if (!avatarPreview) return;
+      const presetId = settings.avatarPreset;
+      const preset = AVATAR_PRESETS.find(p => p.id === presetId) ?? AVATAR_PRESETS[0];
+      renderAvatarToCanvas(preset.seed, preset.gender, avatarPreview);
+    }
+
+    /** Build the avatar picker grid. */
+    function buildAvatarGrid(): void {
+      if (!avatarGrid) return;
+      avatarGrid.innerHTML = '';
+      for (const preset of AVATAR_PRESETS) {
+        const cell = document.createElement('div');
+        cell.className = 'avatar-option';
+        if (preset.id === settings.avatarPreset) cell.classList.add('selected');
+        const canvas = document.createElement('canvas');
+        canvas.width = 48;
+        canvas.height = 48;
+        cell.appendChild(canvas);
+        avatarGrid.appendChild(cell);
+
+        // Render avatar onto the cell canvas
+        renderAvatarToCanvas(preset.seed, preset.gender, canvas);
+
+        cell.addEventListener('click', () => {
+          settings.avatarPreset = preset.id;
+          // Update selection highlight
+          avatarGrid!.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+          cell.classList.add('selected');
+          updateAvatarPreview();
+        });
+      }
+    }
+
+    avatarChooseBtn?.addEventListener('click', () => {
+      buildAvatarGrid();
+      avatarModal?.classList.add('open');
+    });
+
+    avatarClose?.addEventListener('click', () => {
+      avatarModal?.classList.remove('open');
+    });
+
+    avatarModal?.addEventListener('click', (e) => {
+      if (e.target === avatarModal) avatarModal.classList.remove('open');
+    });
+
     // Sync button state with saved preference on load
     updateDeckButtons();
     updateFourColorButtons();
     updateChipButtons();
     updateAnimButtons();
     updateTableButtons();
+    updateAvatarPreview();
   }
 
   // About modal (click page title to open)

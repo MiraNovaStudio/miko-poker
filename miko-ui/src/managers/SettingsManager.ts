@@ -9,7 +9,9 @@ const CHIP_DISPLAY_KEY = 'miko_chipDisplay';
 const CARD_ANIMS_KEY = 'miko_cardAnimations';
 const FOUR_COLOR_KEY = 'miko_fourColorDeck';
 const TABLE_STYLE_KEY = 'miko_tableStyle';
+const AVATAR_KEY = 'miko_avatarPreset';
 const DEFAULT_NAME = 'Player';
+const DEFAULT_AVATAR = 'male1';
 const BIG_BLIND = 10;
 
 /** Format a chip amount as "$100" or "10 BB" depending on settings. */
@@ -38,6 +40,7 @@ export class SettingsManager {
   private _cardAnimations: boolean;
   private _fourColorDeck: boolean;
   private _tableStyle: TableStyle;
+  private _avatarPreset: string;
   private _onChangeListeners: (() => void)[] = [];
 
   private constructor() {
@@ -52,6 +55,7 @@ export class SettingsManager {
     this._fourColorDeck = savedFourColor === 'true'; // default: off
     const savedTable = localStorage.getItem(TABLE_STYLE_KEY);
     this._tableStyle = (savedTable === 'table1' || savedTable === 'table2') ? savedTable : 'table1';
+    this._avatarPreset = localStorage.getItem(AVATAR_KEY) || DEFAULT_AVATAR;
   }
 
   get deckType(): DeckType {
@@ -118,6 +122,17 @@ export class SettingsManager {
     if (this._tableStyle === value) return;
     this._tableStyle = value;
     localStorage.setItem(TABLE_STYLE_KEY, value);
+    this._onChangeListeners.forEach(cb => cb());
+  }
+
+  get avatarPreset(): string {
+    return this._avatarPreset;
+  }
+
+  set avatarPreset(value: string) {
+    if (this._avatarPreset === value) return;
+    this._avatarPreset = value;
+    localStorage.setItem(AVATAR_KEY, value);
     this._onChangeListeners.forEach(cb => cb());
   }
 

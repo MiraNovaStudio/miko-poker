@@ -122,6 +122,86 @@
     #settings-close:hover {
       background: rgba(68, 85, 102, 0.9);
     }
+    /* Avatar picker modal */
+    #avatar-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.7);
+    }
+    #avatar-modal.open {
+      display: flex;
+    }
+    #avatar-panel {
+      background: #1e2a3a;
+      border: 2px solid #5588aa;
+      border-radius: 12px;
+      padding: 24px 32px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    #avatar-panel h3 {
+      margin: 0 0 16px;
+      font-size: 18px;
+    }
+    #avatar-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .avatar-option {
+      width: 72px;
+      height: 72px;
+      border: 3px solid #2a3a4a;
+      border-radius: 10px;
+      background: #1a1a2e;
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .avatar-option:hover {
+      border-color: #5588aa;
+      transform: scale(1.08);
+    }
+    .avatar-option.selected {
+      border-color: #4ade80;
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+    }
+    .avatar-option canvas {
+      width: 56px;
+      height: 56px;
+      image-rendering: auto;
+    }
+    #avatar-choose-btn {
+      padding: 6px 14px;
+      border: 2px solid #5588aa;
+      border-radius: 6px;
+      background: transparent;
+      color: #aac;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    #avatar-choose-btn:hover {
+      background: rgba(85, 136, 170, 0.3);
+    }
+    #avatar-preview {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      background: #1a1a2e;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+      image-rendering: auto;
+    }
     /* About modal */
     #about-modal {
       display: none;
@@ -324,6 +404,13 @@
         </div>
       </div>
       <div class="setting-row">
+        <span class="setting-label">Avatar</span>
+        <div class="setting-options" style="align-items:center;">
+          <canvas id="avatar-preview" width="48" height="48"></canvas>
+          <button id="avatar-choose-btn">Choose</button>
+        </div>
+      </div>
+      <div class="setting-row">
         <span class="setting-label">Card Deck</span>
         <div class="setting-options">
           <button id="deck-png" class="active">PNG</button>
@@ -371,6 +458,14 @@
         <button id="quit-btn" class="gameover-btn" style="display:none;">Quit</button>
         <button id="new-game-btn" class="gameover-btn" style="display:none;">New Game</button>
       </div>
+    </div>
+  </div>
+  <!-- Avatar picker modal -->
+  <div id="avatar-modal">
+    <div id="avatar-panel">
+      <h3>Choose Your Avatar</h3>
+      <div id="avatar-grid"></div>
+      <button id="avatar-close" style="padding:6px 24px; border:2px solid #5588aa; border-radius:6px; background:rgba(51,68,85,0.85); color:#fff; font-size:14px; cursor:pointer;">Done</button>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

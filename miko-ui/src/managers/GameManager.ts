@@ -20,7 +20,7 @@ import { Card } from '../components/Card.js';
 import { PLAYER_ROSTER, pickNewPlayer, type RosterEntry } from '../data/player-roster.js';
 import { Text, Container, Texture, type Renderer, type TextStyleOptions } from 'pixi.js';
 import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS } from '../utils/constants.js';
-import { createAvatar } from '../utils/createAvatar.js';
+import { createAvatar, AVATAR_PRESETS } from '../utils/createAvatar.js';
 
 type HandPhase = 'idle' | 'starting' | 'dealing' | 'betting' | 'showdown';
 
@@ -130,6 +130,14 @@ export class GameManager {
 
   /** Apply avatar to a slot for the given player ID. */
   private applyAvatar(slot: PlayerSlot, playerId: string): void {
+    if (playerId === 'player') {
+      // Human player uses the selected avatar preset
+      const presetId = SettingsManager.instance.avatarPreset;
+      const preset = AVATAR_PRESETS.find(p => p.id === presetId) ?? AVATAR_PRESETS[0];
+      const tex = this.getAvatarTexture(preset.seed, preset.gender);
+      slot.setAvatar(tex);
+      return;
+    }
     const name = this.getDisplayName(playerId);
     // Use avatarName override from roster if present
     const rosterEntry = PLAYER_ROSTER.find(p => p.name === name);
