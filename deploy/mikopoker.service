@@ -1,0 +1,18 @@
+[Unit]
+Description=MikoPoker Static Server
+After=network.target
+
+[Service]
+Type=simple
+User=miko
+Group=miko
+WorkingDirectory=/home/miko/miko-poker/public
+ExecStart=/usr/bin/npx serve -l 9555 -s /home/miko/miko-poker/public
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
