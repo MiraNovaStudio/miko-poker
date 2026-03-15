@@ -717,6 +717,9 @@ export class GameManager {
     this.streetJustChanged = true;
     this.updatePotLabel();
 
+    // Move side-seat bet labels based on street (middle preflop–turn, wide on river)
+    this.slotLayout.getAllSlots().forEach(s => s.updateBetLabelForStreet(street));
+
     // Delay clearing previous round's bets so the last action label stays visible for 1s
     this.delayed(() => {
       this.slotLayout.getAllSlots().forEach(s => s.clearBet());
@@ -760,6 +763,8 @@ export class GameManager {
           item.cards.map(c => ({ rank: c.rank, suit: c.suit })),
         );
         this.updateHumanHandLabel();
+        // Move side-seat bet labels for river
+        this.slotLayout.getAllSlots().forEach(s => s.updateBetLabelForStreet(item.street));
 
         // After the last street is revealed, process hand completion
         if (idx === queue.length - 1 && this.pendingHandResult) {

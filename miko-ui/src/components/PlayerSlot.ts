@@ -4,7 +4,7 @@ import { Card, type CardData } from './Card.js';
 import {
   HOLE_CARD_WIDTH, HOLE_CARD_HEIGHT, CARD_SPACING_HOLE,
   CHIP_OVERLAY_WIDTH, CHIP_OVERLAY_HEIGHT, CHIP_OVERLAY_Y,
-  COLORS, FONTS, TOP_ROW_SEATS, getBetLabelOffset,
+  COLORS, FONTS, TOP_ROW_SEATS, SIDE_SEATS, getBetLabelOffset,
 } from '../utils/constants.js';
 import { SettingsManager, formatChips } from '../managers/SettingsManager.js';
 
@@ -28,10 +28,27 @@ export class PlayerSlot extends Container {
   private _folded = false;
   private _foldedCards: CardData[] = [];
   private _allIn = false;
+  private _isSideSeat: boolean;
+  private _seatPos: { x: number; y: number };
+  /** Bet label offset when side seat should show label toward center (preflop–turn). */
+  private _betOffsetMiddle: { x: number; y: number };
+  /** Bet label offset when side seat should show label below board (river). */
+  private _betOffsetWide: { x: number; y: number };
 
   constructor(seatIndex: number, seatPos: { x: number; y: number }) {
     super();
     this.seatIndex = seatIndex;
+    this._seatPos = seatPos;
+    this._isSideSeat = SIDE_SEATS.includes(seatIndex);
+    this._betOffsetWide = getBetLabelOffset(seatIndex, seatPos);
+    // Middle position: closer to center, between player and community area
+    if (seatPos.x < 0) {
+      this._betOffsetMiddle = { x: 160, y: -30 };
+    } else if (seatPos.x > 0) {
+      this._betOffsetMiddle = { x: -160, y: -30 };
+    } else {
+      this._betOffsetMiddle = this._betOffsetWide;
+    }
 
     // Cards container (above center of slot)
     this.cardsContainer = new Container();
@@ -57,8 +74,8 @@ export class PlayerSlot extends Container {
     this.nameLabel.y = isTopRow ? -90 : 50;
     this.addChild(this.nameLabel);
 
-    // Bet label (positioned based on seat region)
-    const betOffset = getBetLabelOffset(seatIndex, seatPos);
+    // Bet label (positioned based on seat region; side seats start in middle)
+    const betOffset = this._isSideSeat ? this._betOffsetMiddle : this._betOffsetWide;
 
     this.betLabel = new Text({ text: '', style: FONTS.betLabel as TextStyleOptions });
     this.betLabel.anchor.set(0.5);
@@ -76,6 +93,18 @@ export class PlayerSlot extends Container {
   }
 
   // --- Public API ---
+
+  /**
+   * Move the bet label for side seats based on the current street.
+   * Preflop/flop/turn → middle position (toward center, clear of board).
+   * River → wide position (below the board, clear of 5th community card).
+   */
+  updateBetLabelForStreet(street: string): void {
+    if (!this._isSideSeat) return;
+    const offset = street === 'river' ? this._betOffsetWide : this._betOffsetMiddle;
+    this.betLabel.x = offset.x;
+    this.betLabel.y = offset.y;
+  }
 
   setPlayerName(name: string): void {
     this.nameLabel.text = name;
@@ -441,6 +470,11 @@ export class PlayerSlot extends Container {
     this.chipOverlay.cursor = 'default';
     this.chipOverlay.removeAllListeners();
     this.cardsContainer.visible = true;
+    // Reset side seat bet label to middle position for new hand
+    if (this._isSideSeat) {
+      this.betLabel.x = this._betOffsetMiddle.x;
+      this.betLabel.y = this._betOffsetMiddle.y;
+    }
   }
 
   /** For human player only: toggle folded cards at 50% opacity on click of stack box */
