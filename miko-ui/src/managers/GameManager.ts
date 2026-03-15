@@ -18,9 +18,10 @@ import { SettingsManager, formatChips } from './SettingsManager.js';
 import { HandHistory } from '../components/HandHistory.js';
 import { Card } from '../components/Card.js';
 import { PLAYER_ROSTER, pickNewPlayer, type RosterEntry } from '../data/player-roster.js';
-import { Text, Container, Texture, type Renderer, type TextStyleOptions } from 'pixi.js';
+import { Text, Graphics, Container, Texture, type Renderer, type TextStyleOptions } from 'pixi.js';
 import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS } from '../utils/constants.js';
 import { createAvatar, AVATAR_PRESETS } from '../utils/createAvatar.js';
+import { PotChips } from '../components/PotChips.js';
 
 type HandPhase = 'idle' | 'starting' | 'dealing' | 'betting' | 'showdown';
 
@@ -76,6 +77,8 @@ export class GameManager {
   // Generation counter — incremented on restart to cancel stale timer callbacks
   private generation = 0;
 
+  private potChips: PotChips;
+
   constructor(
     slotLayout: SlotLayout,
     communityCards: CommunityCards,
@@ -84,6 +87,7 @@ export class GameManager {
     actionBar: ActionBar,
     audioManager: AudioManager,
     renderer: Renderer,
+    potChips: PotChips,
   ) {
     this.slotLayout = slotLayout;
     this.communityCards = communityCards;
@@ -92,6 +96,7 @@ export class GameManager {
     this.actionBar = actionBar;
     this.audioManager = audioManager;
     this.renderer = renderer;
+    this.potChips = potChips;
     this.handHistory = new HandHistory();
 
     // Wire action bar callbacks: Check/Call, Bet/Raise, Fold
@@ -1126,6 +1131,9 @@ export class GameManager {
     } else {
       this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
     }
+
+    // Update visual chip stack
+    this.potChips.update(totalPot);
   }
 
   /** Get the best 5-card hand as a short string like "KKJJT" */
@@ -1517,8 +1525,16 @@ export class GameManager {
     const scene = this.statusBar.parent;
     if (!scene) return;
 
-    // Hide the pot label until next hand
+    // Hide the pot label and chip stack
     this.statusBar.setPot('');
+
+    // Create flying chip graphics from the pot stack before clearing it
+    const flyingChipSets: Graphics[][] = [];
+    const chipsPerWinner = Math.max(2, Math.min(5, Math.ceil(this.potChips.chipCount || 6) / Math.max(winnerIds.length, 1)));
+    for (let i = 0; i < winnerIds.length; i++) {
+      flyingChipSets.push(this.potChips.createFlyingChips(chipsPerWinner));
+    }
+    this.potChips.clear();
 
     winnerIds.forEach((pid, idx) => {
       const slot = this.getSlotForPlayer(pid);
@@ -1542,6 +1558,20 @@ export class GameManager {
       floatingText.y = potPos.y;
       scene.addChild(floatingText);
 
+      // Add flying chip graphics to the scene with slight scatter
+      const flyingChips = flyingChipSets[idx] ?? [];
+      const chipStartX = this.potChips.x;
+      const chipStartY = this.potChips.y;
+      const chipOrigins: { x: number; y: number }[] = [];
+      flyingChips.forEach((chip, ci) => {
+        const ox = chipStartX + (Math.random() - 0.5) * 16;
+        const oy = chipStartY - ci * 3;
+        chip.x = ox;
+        chip.y = oy;
+        chipOrigins.push({ x: ox, y: oy });
+        scene.addChild(chip);
+      });
+
       // Stagger multiple winners
       const delay = idx * 600;
 
@@ -1564,12 +1594,33 @@ export class GameManager {
           floatingText.scale.set(1 - 0.3 * ease);
           floatingText.alpha = 1 - 0.2 * ease;
 
+          // Animate flying chips with slight spread and varying speed
+          flyingChips.forEach((chip, ci) => {
+            const chipDelay = ci * 0.06; // stagger each chip slightly
+            const chipT = Math.max(0, Math.min((t - chipDelay) / (1 - chipDelay), 1));
+            const chipEase = chipT < 0.5
+              ? 4 * chipT * chipT * chipT
+              : 1 - Math.pow(-2 * chipT + 2, 3) / 2;
+
+            const origin = chipOrigins[ci] ?? { x: chipStartX, y: chipStartY };
+            chip.x = origin.x + (targetX - origin.x) * chipEase;
+            chip.y = origin.y + (targetY - origin.y) * chipEase;
+            chip.alpha = 1 - 0.3 * chipEase;
+            chip.scale.set(1 - 0.4 * chipEase);
+          });
+
           if (t < 1) {
             requestAnimationFrame(animate);
           } else {
             // Remove the floating text
             scene.removeChild(floatingText);
             floatingText.destroy();
+
+            // Remove flying chips
+            flyingChips.forEach(chip => {
+              scene.removeChild(chip);
+              chip.destroy();
+            });
 
             // Pulse the chip overlay
             slot.pulseChipOverlay();

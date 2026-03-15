@@ -9,6 +9,7 @@ import { CommunityCards } from '../components/CommunityCards.js';
 import { DealerButton } from '../components/DealerButton.js';
 import { StatusBar } from '../components/StatusBar.js';
 import { ActionBar } from '../components/ActionBar.js';
+import { PotChips } from '../components/PotChips.js';
 
 export class GameScene extends Container {
   private gameManager: GameManager | null = null;
@@ -40,6 +41,12 @@ export class GameScene extends Container {
     const dealerButton = new DealerButton();
     this.addChild(dealerButton);
 
+    // Pot chips (visual chip stack above pot label)
+    const potChips = new PotChips();
+    potChips.x = -410;   // aligned with pot label x
+    potChips.y = -140 + -94 - 20; // statusBar.y + potLabel.y - offset above label
+    this.addChild(potChips);
+
     // Status bar
     const statusBar = new StatusBar();
     statusBar.y = -140;
@@ -61,6 +68,7 @@ export class GameScene extends Container {
       this.actionBar,
       audioManager,
       renderer,
+      potChips,
     );
 
     // Wire game-over to HTML modal
