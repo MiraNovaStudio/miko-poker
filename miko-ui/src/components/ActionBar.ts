@@ -84,6 +84,8 @@ export class ActionBar extends Container {
   private _betInteracted = false;
   /** True when fold confirmation is showing (second click folds for real). */
   private _foldConfirming = false;
+  /** True when check is available this turn (folding when you can check is always a mistake). */
+  private _canCheck = false;
 
   constructor() {
     super();
@@ -158,6 +160,7 @@ export class ActionBar extends Container {
     const hasBet = validActions.includes('bet');
     const hasRaise = validActions.includes('raise');
 
+    this._canCheck = hasCheck;
     this.leftBtn.setText(hasCheck ? 'Check' : 'Call');
     this.middleBtn.setText(hasBet ? 'Bet' : 'Raise');
     this.rightBtn.setText('Fold');
@@ -583,15 +586,15 @@ export class ActionBar extends Container {
     }
   }
 
-  /** Handle fold button click — confirm if player interacted with bet controls. */
+  /** Handle fold button click — confirm if player interacted with bet controls or can check. */
   private handleFoldClick(): void {
-    if (this._betInteracted && !this._foldConfirming) {
+    if ((this._betInteracted || this._canCheck) && !this._foldConfirming) {
       // First click: show confirmation
       this._foldConfirming = true;
       this.rightBtn.setText('Sure?');
       return;
     }
-    // No bet interaction, or second click confirms fold
+    // No bet interaction and can't check, or second click confirms fold
     this.resetFoldConfirm();
     this.onRightClick?.();
   }

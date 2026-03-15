@@ -165,6 +165,213 @@ export class GameManager {
     this.startFirstHand();
   }
 
+  /**
+   * DEBUG: Rig the game so only one AI opponent remains with minimal chips.
+   * Call from browser console: window.debugEndgame()
+   * Waits for the current hand to finish, then takes effect next hand.
+   */
+  /**
+   * DEBUG: Set the human player's chip stack.
+   * Call from browser console: window.debugSetChips(5000)
+   */
+  debugSetChips(amount: number): void {
+    if (!this.engine) { console.warn('Engine not ready'); return; }
+    const enginePlayers = (this.engine as any).players as { id: string; chips: number }[];
+    const ep = enginePlayers.find(p => p.id === 'player');
+    if (ep) {
+      ep.chips = amount;
+      this.getSlotForPlayer('player')?.setChips(amount);
+      console.log(`💰 Player chips set to ${amount}`);
+    }
+  }
+
+  /** DEBUG: Deal pocket aces every hand */
+  private debugPocketAces = false;
+
+  /**
+   * DEBUG: Toggle pocket aces mode — player gets AA every hand.
+   * Call from browser console: window.debugAces()
+   */
+  debugAces(): void {
+    this.debugPocketAces = !this.debugPocketAces;
+    console.log(`🅰️ Pocket Aces mode: ${this.debugPocketAces ? 'ON' : 'OFF'}`);
+  }
+
+  /**
+   * After a hand is dealt, swap the player's hole cards for two aces.
+   * Pure swap — no duplicates: player's originals go where the aces were.
+   */
+  private rigPlayerAces(): void {
+    if (!this.debugPocketAces || !this.engine) return;
+
+    const enginePlayers = (this.engine as any).players as {
+      id: string; cards: EngineCard[]; isActive: boolean;
+    }[];
+    const deckCards = ((this.engine as any).deck as any).cards as EngineCard[];
+
+    const player = enginePlayers.find(p => p.id === 'player');
+    if (!player || player.cards.length < 2) return;
+
+    const needSwap = [
+      player.cards[0].rank !== 'A' ? 0 : -1,
+      player.cards[1].rank !== 'A' ? 1 : -1,
+    ].filter(i => i >= 0);
+
+    if (needSwap.length === 0) return; // already AA
+
+    let found = 0;
+
+    // Search other players' hands, then the deck
+    const searchLocations = [
+      ...enginePlayers.filter(p => p.id !== 'player' && p.isActive).map(p => p.cards),
+      deckCards,
+    ];
+
+    for (const cards of searchLocations) {
+      for (let i = 0; i < cards.length && found < needSwap.length; i++) {
+        if (cards[i].rank === 'A') {
+          const ace = cards[i];
+          const swapIdx = needSwap[found];
+          cards[i] = player.cards[swapIdx]; // player's card goes where ace was
+          player.cards[swapIdx] = ace;       // ace goes to player
+          found++;
+        }
+      }
+      if (found >= needSwap.length) break;
+    }
+
+    // Update the UI card display
+    const slot = this.getSlotForPlayer('player');
+    if (slot) {
+      slot.dealCards(
+        player.cards.map(c => ({ rank: c.rank, suit: c.suit })),
+        true,
+      );
+    }
+    // Update tracking for hand evaluation
+    this.playerHoleCards.set('player', [...player.cards]);
+    this.updateHumanHandLabel();
+
+    console.log(`🅰️ Rigged: ${player.cards.map(c => c.rank + c.suit).join(', ')}`);
+  }
+
+  /** Flag: apply endgame rig between hands */
+  private debugEndgamePending = false;
+
+  debugEndgame(): void {
+    if (!this.engine) { console.warn('Engine not ready'); return; }
+    this.debugEndgamePending = true;
+    console.log('🎯 Endgame will activate after the current hand finishes. Play it out!');
+    this.statusBar.setStatus('DEBUG: Endgame queued — finish this hand');
+  }
+
+  /** Flag: clear entire table between hands */
+  private debugClearTablePending = false;
+
+  /**
+   * DEBUG: Eliminate ALL AI opponents — triggers victory after current hand.
+   * Call from browser console: window.debugClearTable()
+   */
+  debugClearTable(): void {
+    if (!this.engine) { console.warn('Engine not ready'); return; }
+    this.debugClearTablePending = true;
+    console.log('🎯 Table clear will activate after the current hand finishes. Play it out!');
+    this.statusBar.setStatus('DEBUG: Table clear queued — finish this hand');
+  }
+
+  /** Called between hands to eliminate all AI and trigger victory */
+  private applyDebugClearTable(): void {
+    if (!this.debugClearTablePending || !this.engine) return;
+    this.debugClearTablePending = false;
+
+    // Eliminate every AI
+    for (const id of this.playerIdBySeat) {
+      if (id === 'player') continue;
+      if (!this.eliminatedPlayers.has(id)) {
+        this.eliminatedPlayers.add(id);
+      }
+      const seat = this.seatByPlayerId.get(id);
+      if (seat !== undefined) {
+        const slot = this.slotLayout.getSlot(seat);
+        if (slot) slot.visible = false;
+      }
+    }
+
+    // Cancel all replacements and max out knockouts
+    this.pendingReplacements = [];
+    this.deferredReplacements = [];
+    this.totalKnockouts = PLAYER_ROSTER.length;
+
+    // Zero all AI chips in engine
+    const enginePlayers = (this.engine as any).players as { id: string; chips: number }[];
+    for (const ep of enginePlayers) {
+      if (ep.id === 'player') {
+        ep.chips = 10000;
+        this.getSlotForPlayer('player')?.setChips(10000);
+      } else {
+        ep.chips = 0;
+      }
+    }
+
+    console.log('🏆 All opponents eliminated! Victory incoming...');
+    this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
+    this.actionBar.hide();
+    this.handPhase = 'idle';
+    this.onGameOver?.('You eliminated all opponents!');
+  }
+
+  /** Called between hands to actually rig the endgame state */
+  private applyDebugEndgame(): void {
+    if (!this.debugEndgamePending || !this.engine) return;
+    this.debugEndgamePending = false;
+
+    // Pick the first non-eliminated AI to keep
+    const keepId = this.playerIdBySeat.find(
+      id => id !== 'player' && !this.eliminatedPlayers.has(id)
+    );
+    if (!keepId) { console.warn('No AI players left'); return; }
+
+    // Eliminate all other AI
+    for (const id of this.playerIdBySeat) {
+      if (id === 'player' || id === keepId) continue;
+      if (!this.eliminatedPlayers.has(id)) {
+        this.eliminatedPlayers.add(id);
+        this.totalKnockouts++;
+      }
+      const seat = this.seatByPlayerId.get(id);
+      if (seat !== undefined) {
+        const slot = this.slotLayout.getSlot(seat);
+        if (slot) slot.visible = false;
+      }
+    }
+
+    // Cancel any pending/deferred replacements
+    this.pendingReplacements = [];
+    this.deferredReplacements = [];
+
+    // Count all 32 roster players as knocked out except the one we kept
+    this.totalKnockouts = PLAYER_ROSTER.length - 1;
+
+    // Set chips in engine: eliminated AI → 0, kept AI → 20, player → 10000
+    // When engine calls resetForNewHand(), chips=0 players get folded/deactivated automatically
+    const enginePlayers = (this.engine as any).players as { id: string; chips: number }[];
+    for (const ep of enginePlayers) {
+      if (ep.id === 'player') {
+        ep.chips = 10000;
+        this.getSlotForPlayer('player')?.setChips(10000);
+      } else if (ep.id === keepId) {
+        ep.chips = 20;
+        this.getSlotForPlayer(keepId)?.setChips(20);
+      } else {
+        ep.chips = 0;
+      }
+    }
+
+    const keepName = this.displayNameById.get(keepId) ?? keepId;
+    console.log(`🎯 ENDGAME RIGGED: Only ${keepName} remains with 20 chips. You have 10,000.`);
+    this.statusBar.setStatus(`DEBUG: Final opponent — ${keepName}`);
+  }
+
   /** Reposition the hand history HTML overlay on resize */
   onResize(screenWidth: number, sceneCenterY: number, scale: number): void {
     this.handHistory.updatePosition(screenWidth, sceneCenterY, scale);
@@ -178,6 +385,7 @@ export class GameManager {
     this.eliminatedPlayers.clear();
     this.usedRosterNames.clear();
     this.displayNameById.clear();
+    this.originalAIConfigs.clear();
     this.handHistory.clear();
     this.totalKnockouts = 0;
     this.pendingReplacements = [];
@@ -240,7 +448,7 @@ export class GameManager {
     const gen = this.generation;
     setTimeout(() => {
       if (this.generation !== gen) return;
-      this.engine!.startNewHand();
+      this.adjustAIForTableSize(); this.engine!.startNewHand();
       this.delayed(() => this.advanceGame(), 500);
     }, 1500);
   }
@@ -382,7 +590,7 @@ export class GameManager {
       // After a brief pause, clear and start the real hand
       this.delayed(() => {
         this.slotLayout.getAllSlots().forEach(s => s.resetForNewHand());
-        this.engine!.startNewHand();
+        this.adjustAIForTableSize(); this.engine!.startNewHand();
         this.delayed(() => this.advanceGame(), 500);
       }, 3000);
       return;
@@ -420,7 +628,7 @@ export class GameManager {
       // After the BUTTON label has shown, clear and start the real hand
       this.delayed(() => {
         this.slotLayout.getAllSlots().forEach(s => s.resetForNewHand());
-        this.engine!.startNewHand();
+        this.adjustAIForTableSize(); this.engine!.startNewHand();
         this.delayed(() => this.advanceGame(), 500);
       }, 3000);
     }, revealTime);
@@ -450,9 +658,27 @@ export class GameManager {
     const activePlayers = gameState.players.filter((p: PlayerState) => !p.folded);
     const canActPlayers = activePlayers.filter((p: PlayerState) => !p.allIn);
 
-    if (canActPlayers.length === 0 && activePlayers.length > 1
-        && activePlayers.some((p: PlayerState) => p.allIn)) {
+    // Trigger all-in runout when:
+    // 1) Everyone is all-in (canAct === 0), OR
+    // 2) Only one player can act, all opponents are all-in, AND that player
+    //    has already matched the highest bet (no outstanding call).
+    //    If they still owe chips, let them act first (call/fold).
+    const highBet = activePlayers.reduce((max: number, p: PlayerState) => Math.max(max, p.bet), 0);
+    const soloOwes = canActPlayers.length === 1 && canActPlayers[0].bet < highBet;
+    const allOpponentsAllIn = activePlayers.length > 1
+      && activePlayers.some((p: PlayerState) => p.allIn)
+      && (canActPlayers.length === 0 || (canActPlayers.length === 1 && !soloOwes));
+    if (activePlayers.some((p: PlayerState) => p.allIn)) {
+      console.log(`[ALL-IN CHECK] canAct=${canActPlayers.length}, active=${activePlayers.length}, highBet=${highBet}, soloOwes=${soloOwes}, trigger=${allOpponentsAllIn}`,
+        canActPlayers.map(p => `${p.id} bet=${p.bet}`).join(', '));
+    }
+    if (allOpponentsAllIn) {
       if (!this.allInRunout) {
+        // Clear turn indicator — no more decisions to make
+        if (this.currentActivePlayer) {
+          this.unhighlightPlayer(this.currentActivePlayer);
+          this.currentActivePlayer = null;
+        }
         // Show ALL IN label on every all-in player's slot
         for (const p of activePlayers) {
           if (p.allIn) this.getSlotForPlayer(p.id)?.showAllIn();
@@ -564,7 +790,30 @@ export class GameManager {
 
       this.delayed(() => {
         try {
-          const action = this.engine!.getAIAction(currentPlayer.id);
+          let action = this.engine!.getAIAction(currentPlayer.id);
+          // Short-handed override: AI folds too often against raises
+          // due to hardcoded engine thresholds. Override folds based on table size.
+          if (action.type === 'fold') {
+            const activePlayers = this.playerIdBySeat.filter(
+              id => !this.eliminatedPlayers.has(id)
+            ).length;
+            // Heads-up: call 75% of folds, fold only 25%
+            // 3-handed: call 50% of folds
+            // 4-handed: call 30% of folds
+            const callOverride = activePlayers <= 2 ? 0.75
+              : activePlayers === 3 ? 0.50
+              : activePlayers === 4 ? 0.30
+              : 0;
+            if (callOverride > 0 && Math.random() < callOverride) {
+              const gs = this.engine!.getGameState();
+              const toCall = gs.callAmount;
+              if (toCall > 0 && toCall < currentPlayer.chips) {
+                action = { type: 'call', amount: toCall };
+              } else if (toCall >= currentPlayer.chips) {
+                action = { type: 'allin', amount: currentPlayer.chips };
+              }
+            }
+          }
           this.engine!.processAction(currentPlayer.id, action);
           this.delayed(() => this.advanceGame(), 500);
         } catch (error) {
@@ -600,7 +849,14 @@ export class GameManager {
         this.onHandComplete(event.result);
         break;
       case 'game_over':
-        console.log('Game Over!', event.winnerId);
+        console.log('Game Over! Winner:', event.winnerId, 'onGameOver set:', !!this.onGameOver);
+        if (event.winnerId === 'player') {
+          this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
+          this.actionBar.hide();
+          this.handPhase = 'idle';
+          console.log('🏆 Triggering victory screen...');
+          this.onGameOver?.('You eliminated all opponents!');
+        }
         break;
     }
   }
@@ -701,6 +957,7 @@ export class GameManager {
     );
 
     if (playerId === 'player') {
+      this.rigPlayerAces();
       this.updateHumanHandLabel();
     }
   }
@@ -939,11 +1196,11 @@ export class GameManager {
       this.showShowdownHandNames(result.winners);
     }
 
-    // Highlight winner names temporarily (all players who received winnings)
-    const allWinners = actualWinnerIds.length > 0 ? actualWinnerIds : result.winners;
-    this.highlightWinnerNames(allWinners);
+    // Highlight winner names temporarily (only best-hand winners, not side pot recipients)
+    this.highlightWinnerNames(result.winners);
 
-    // Animate pot flying to each winner's stack (chips update on arrival)
+    // Animate pot flying to each player who received winnings (including side pot recipients)
+    const allWinners = actualWinnerIds.length > 0 ? actualWinnerIds : result.winners;
     this.animatePotToWinners(allWinners, preWinChips, postWinChips, perPlayerWinnings);
 
     // Highlight winning cards (raise them up) and dim non-winning cards
@@ -966,6 +1223,11 @@ export class GameManager {
       if (this.totalKnockouts >= PLAYER_ROSTER.length) return;
 
       if (this.engine && !this.engine.isHandInProgress()) {
+        // Apply debug rigs if queued
+        this.applyDebugEndgame();
+        this.applyDebugClearTable();
+        if (this.handPhase === 'idle') return;  // victory was triggered
+
         // Tick down deferred replacements; promote those that have waited enough hands
         if (this.deferredReplacements.length > 0) {
           const stillWaiting: typeof this.deferredReplacements = [];
@@ -997,11 +1259,11 @@ export class GameManager {
         // Apply pending with slide-in animation, then start hand
         if (this.pendingReplacements.length > 0) {
           this.applyPendingReplacementsAnimated(() => {
-            this.engine!.startNewHand();
+            this.adjustAIForTableSize(); this.engine!.startNewHand();
             this.delayed(() => this.advanceGame(), 500);
           });
         } else {
-          this.engine.startNewHand();
+          this.adjustAIForTableSize(); this.engine.startNewHand();
           this.delayed(() => this.advanceGame(), 500);
         }
       }
@@ -1231,6 +1493,10 @@ export class GameManager {
       return `Pair of ${plural}`;
     }
 
+    if (strength.category === 7) {
+      return `Quad ${plural}`;
+    }
+
     if (strength.category === 3 && holeCards && holeCards.length === 2) {
       // Map rank string → numeric value for comparison
       const rankToVal: Record<string, number> = {
@@ -1243,6 +1509,7 @@ export class GameManager {
       if (h1 === rankVal && h2 === rankVal) {
         return `Set of ${plural}`;
       }
+      return `Trip ${plural}`;
     }
 
     return getHandName(strength);
@@ -1285,6 +1552,74 @@ export class GameManager {
     }
   }
 
+  /** Original AI configs — stored so short-handed adjustments don't compound */
+  private originalAIConfigs: Map<string, any> = new Map();
+
+  /**
+   * Adjust AI configs based on active player count.
+   * Fewer players → looser VPIP, lower call thresholds.
+   * Heads-up → everyone plays almost every hand.
+   */
+  private adjustAIForTableSize(): void {
+    if (!this.engine) return;
+    const activePlayers = this.playerIdBySeat.filter(
+      id => !this.eliminatedPlayers.has(id)
+    ).length;
+
+    const aiInstances = (this.engine as any).aiInstances as Map<string, { getConfig: () => any; setConfig: (c: any) => void }>;
+
+    // Snapshot original configs on first call
+    for (const [id, ai] of aiInstances) {
+      if (!this.originalAIConfigs.has(id)) {
+        this.originalAIConfigs.set(id, ai.getConfig());
+      }
+    }
+
+    // Full table (6+): restore originals
+    if (activePlayers >= 6) {
+      for (const [id, ai] of aiInstances) {
+        const orig = this.originalAIConfigs.get(id);
+        if (orig) ai.setConfig(orig);
+      }
+      return;
+    }
+
+    for (const [id, ai] of aiInstances) {
+      const orig = this.originalAIConfigs.get(id);
+      if (!orig) continue;
+      const config = { ...orig };
+
+      // Scale VPIP threshold down as table gets shorter
+      // 5 players: 85% of original, 4: 70%, 3: 55%, 2 (heads-up): 40%
+      const vpipScale = activePlayers <= 2 ? 0.40
+        : activePlayers === 3 ? 0.55
+        : activePlayers === 4 ? 0.70
+        : 0.85;
+
+      // Scale call threshold down similarly
+      const callScale = activePlayers <= 2 ? 0.45
+        : activePlayers === 3 ? 0.60
+        : activePlayers === 4 ? 0.75
+        : 0.85;
+
+      // Boost aggression for short-handed play
+      const aggrBoost = activePlayers <= 2 ? 0.25
+        : activePlayers === 3 ? 0.15
+        : activePlayers === 4 ? 0.10
+        : 0.05;
+
+      config.vpipThreshold *= vpipScale;
+      config.callThreshold *= callScale;
+      config.aggression = Math.min(1, config.aggression + aggrBoost);
+      // Heads-up: increase bluff frequency
+      if (activePlayers <= 2) {
+        config.bluffFrequency = Math.min(0.5, config.bluffFrequency + 0.15);
+      }
+
+      ai.setConfig(config);
+    }
+  }
+
   private highlightPlayer(playerId: string): void {
     if (this.currentActivePlayer) {
       this.unhighlightPlayer(this.currentActivePlayer);
@@ -1302,8 +1637,12 @@ export class GameManager {
     const gameState = this.engine.getGameState();
     const newlyEliminated: { id: string; seatIndex: number }[] = [];
 
+    console.log('[ELIM CHECK] Player chips:', gameState.players.map(p => `${p.id}=$${p.chips}`).join(', '));
+    console.log('[ELIM CHECK] totalKnockouts:', this.totalKnockouts, '/ ROSTER:', PLAYER_ROSTER.length);
+
     gameState.players.forEach((player, index) => {
       if (player.chips <= 0 && !this.eliminatedPlayers.has(player.id)) {
+        console.log(`[ELIM] ${player.id} eliminated with ${player.chips} chips`);
         this.eliminatedPlayers.add(player.id);
         newlyEliminated.push({ id: player.id, seatIndex: index });
 
@@ -1328,7 +1667,9 @@ export class GameManager {
     if (this.eliminatedPlayers.has('player')) return;
 
     // Check win condition: all 32 roster players knocked out
+    console.log('[ELIM CHECK] After processing — totalKnockouts:', this.totalKnockouts, 'needed:', PLAYER_ROSTER.length);
     if (this.totalKnockouts >= PLAYER_ROSTER.length) {
+      console.log('[ELIM] 🏆 WIN CONDITION MET via checkForEliminatedPlayers!');
       this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
       this.actionBar.hide();
       this.handPhase = 'idle';

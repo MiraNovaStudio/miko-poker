@@ -505,6 +505,12 @@ async function init() {
     currentScene = game;
     app.stage.addChild(game);
     layoutScene();
+
+    // Debug: expose test helpers on window
+    (window as any).debugEndgame = () => game.gameManager?.debugEndgame();
+    (window as any).debugClearTable = () => game.gameManager?.debugClearTable();
+    (window as any).debugSetChips = (n: number) => game.gameManager?.debugSetChips(n);
+    (window as any).debugAces = () => game.gameManager?.debugAces();
   }
 
   window.addEventListener('resize', layoutScene);
