@@ -43,9 +43,9 @@ export class PlayerSlot extends Container {
     this._betOffsetWide = getBetLabelOffset(seatIndex, seatPos);
     // Middle position: near the player, just inside toward center
     if (seatPos.x < 0) {
-      this._betOffsetMiddle = { x: 100, y: 10 };
+      this._betOffsetMiddle = { x: 125, y: 10 };
     } else if (seatPos.x > 0) {
-      this._betOffsetMiddle = { x: -100, y: 10 };
+      this._betOffsetMiddle = { x: -125, y: 10 };
     } else {
       this._betOffsetMiddle = this._betOffsetWide;
     }
