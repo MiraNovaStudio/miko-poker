@@ -202,6 +202,83 @@
       margin-right: 8px;
       image-rendering: auto;
     }
+    /* Card back picker modal */
+    #cardback-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.7);
+    }
+    #cardback-modal.open {
+      display: flex;
+    }
+    #cardback-panel {
+      background: #1e2a3a;
+      border: 2px solid #5588aa;
+      border-radius: 12px;
+      padding: 24px 32px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    #cardback-panel h3 {
+      margin: 0 0 16px;
+      font-size: 18px;
+    }
+    #cardback-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .cardback-option {
+      width: 60px;
+      height: 84px;
+      border: 3px solid #2a3a4a;
+      border-radius: 8px;
+      background: #1a1a2e;
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cardback-option:hover {
+      border-color: #5588aa;
+      transform: scale(1.08);
+    }
+    .cardback-option.selected {
+      border-color: #4ade80;
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+    }
+    .cardback-option canvas {
+      width: 48px;
+      height: 68px;
+    }
+    #cardback-preview {
+      width: 28px;
+      height: 40px;
+      border-radius: 4px;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    #cardback-choose-btn {
+      padding: 6px 14px;
+      border: 2px solid #5588aa;
+      border-radius: 6px;
+      background: transparent;
+      color: #aac;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    #cardback-choose-btn:hover {
+      background: rgba(85, 136, 170, 0.3);
+    }
     /* About modal */
     #about-modal {
       display: none;
@@ -417,6 +494,13 @@
           <button id="deck-unicode">Unicode</button>
         </div>
       </div>
+      <div class="setting-row">
+        <span class="setting-label">Card Back</span>
+        <div class="setting-options" style="align-items:center;">
+          <canvas id="cardback-preview" width="48" height="68"></canvas>
+          <button id="cardback-choose-btn">Choose</button>
+        </div>
+      </div>
       <div class="setting-row" id="four-color-row">
         <span class="setting-label">4-Color Deck</span>
         <div class="setting-options">
@@ -458,6 +542,14 @@
         <button id="quit-btn" class="gameover-btn" style="display:none;">Quit</button>
         <button id="new-game-btn" class="gameover-btn" style="display:none;">New Game</button>
       </div>
+    </div>
+  </div>
+  <!-- Card back picker modal -->
+  <div id="cardback-modal">
+    <div id="cardback-panel">
+      <h3>Choose Card Back</h3>
+      <div id="cardback-grid"></div>
+      <button id="cardback-close" style="padding:6px 24px; border:2px solid #5588aa; border-radius:6px; background:rgba(51,68,85,0.85); color:#fff; font-size:14px; cursor:pointer;">Done</button>
     </div>
   </div>
   <!-- Avatar picker modal -->

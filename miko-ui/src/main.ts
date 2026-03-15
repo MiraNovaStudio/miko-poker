@@ -6,6 +6,7 @@ import { SettingsManager, type DeckType } from './managers/SettingsManager.js';
 import { StartScene } from './scenes/StartScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { createAvatar, AVATAR_PRESETS } from './utils/createAvatar.js';
+import { CARD_BACK_DESIGNS, type CardBackDesign } from './components/Card.js';
 
 /** Design resolution the layout was authored for */
 const DESIGN_WIDTH = 960;
@@ -247,6 +248,132 @@ async function init() {
       if (e.target === avatarModal) avatarModal.classList.remove('open');
     });
 
+    // Card back picker
+    const cardbackPreview = document.getElementById('cardback-preview') as HTMLCanvasElement | null;
+    const cardbackChooseBtn = document.getElementById('cardback-choose-btn');
+    const cardbackModal = document.getElementById('cardback-modal');
+    const cardbackGrid = document.getElementById('cardback-grid');
+    const cardbackClose = document.getElementById('cardback-close');
+
+    /** Draw a card back design onto a 2D canvas. */
+    function drawCardBackToCanvas(design: CardBackDesign, canvas: HTMLCanvasElement): void {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      const r = 4;
+      const inset = w * 0.08;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Helper: hex number to CSS color
+      const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
+
+      // Outer shape
+      ctx.beginPath();
+      ctx.roundRect(0, 0, w, h, r);
+      ctx.fillStyle = hex(design.color);
+      ctx.fill();
+      ctx.strokeStyle = hex(design.border);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Inner border
+      ctx.beginPath();
+      ctx.roundRect(inset, inset, w - inset * 2, h - inset * 2, Math.max(r - 2, 2));
+      ctx.strokeStyle = hex(design.border);
+      ctx.globalAlpha = 0.4;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      const cx = w / 2;
+      const cy = h / 2;
+
+      // Pattern
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = hex(design.pattern);
+      switch (design.style) {
+        case 'diamond': {
+          const dw = w * 0.18;
+          const dh = h * 0.14;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - dh);
+          ctx.lineTo(cx + dw, cy);
+          ctx.lineTo(cx, cy + dh);
+          ctx.lineTo(cx - dw, cy);
+          ctx.closePath();
+          ctx.fill();
+          break;
+        }
+        case 'cross': {
+          const armW = w * 0.1;
+          const armH = h * 0.22;
+          ctx.fillRect(cx - armW / 2, cy - armH, armW, armH * 2);
+          ctx.fillRect(cx - armH * 0.6, cy - armW / 2, armH * 1.2, armW);
+          break;
+        }
+        case 'stripes': {
+          const sw = w * 0.07;
+          const gap = w * 0.16;
+          for (let i = -1; i <= 1; i++) {
+            ctx.fillRect(cx + i * gap - sw / 2, inset + 2, sw, h - inset * 2 - 4);
+          }
+          break;
+        }
+        case 'oval': {
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, w * 0.2, h * 0.16, 0, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function updateCardbackPreview(): void {
+      if (!cardbackPreview) return;
+      const design = CARD_BACK_DESIGNS.find(d => d.id === settings.cardBack) ?? CARD_BACK_DESIGNS[0];
+      drawCardBackToCanvas(design, cardbackPreview);
+    }
+
+    function buildCardbackGrid(): void {
+      if (!cardbackGrid) return;
+      cardbackGrid.innerHTML = '';
+      for (const design of CARD_BACK_DESIGNS) {
+        const cell = document.createElement('div');
+        cell.className = 'cardback-option';
+        if (design.id === settings.cardBack) cell.classList.add('selected');
+        const canvas = document.createElement('canvas');
+        canvas.width = 48;
+        canvas.height = 68;
+        cell.appendChild(canvas);
+        cardbackGrid.appendChild(cell);
+
+        drawCardBackToCanvas(design, canvas);
+
+        cell.addEventListener('click', () => {
+          settings.cardBack = design.id;
+          cardbackGrid!.querySelectorAll('.cardback-option').forEach(el => el.classList.remove('selected'));
+          cell.classList.add('selected');
+          updateCardbackPreview();
+        });
+      }
+    }
+
+    cardbackChooseBtn?.addEventListener('click', () => {
+      buildCardbackGrid();
+      cardbackModal?.classList.add('open');
+    });
+
+    cardbackClose?.addEventListener('click', () => {
+      cardbackModal?.classList.remove('open');
+    });
+
+    cardbackModal?.addEventListener('click', (e) => {
+      if (e.target === cardbackModal) cardbackModal.classList.remove('open');
+    });
+
     // Sync button state with saved preference on load
     updateDeckButtons();
     updateFourColorButtons();
@@ -254,6 +381,7 @@ async function init() {
     updateAnimButtons();
     updateTableButtons();
     updateAvatarPreview();
+    updateCardbackPreview();
   }
 
   // About modal (click page title to open)

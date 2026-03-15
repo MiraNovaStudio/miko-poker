@@ -32,9 +32,29 @@ const SUIT_COLORS_4: Record<string, number> = {
 
 const CARD_BG = 0xf5f5f0;
 const CARD_BORDER = 0x888888;
-const CARD_BACK_COLOR = 0x2255aa;
-const CARD_BACK_PATTERN = 0x1a4488;
 const CARD_RADIUS = 6;
+
+// ─── Card back designs ──────────────────────────────────────────
+
+export interface CardBackDesign {
+  id: string;
+  label: string;
+  color: number;       // main background
+  pattern: number;     // inner accent / diamond
+  border: number;      // inner border tint
+  style: 'diamond' | 'cross' | 'stripes' | 'oval';
+}
+
+export const CARD_BACK_DESIGNS: CardBackDesign[] = [
+  { id: 'classic-blue',  label: 'Classic Blue',  color: 0x2255aa, pattern: 0x1a4488, border: 0xffffff, style: 'diamond' },
+  { id: 'royal-red',     label: 'Royal Red',     color: 0x991b1b, pattern: 0x771515, border: 0xffd700, style: 'diamond' },
+  { id: 'emerald',       label: 'Emerald',       color: 0x166534, pattern: 0x0d4a22, border: 0xa7f3d0, style: 'cross' },
+  { id: 'midnight',      label: 'Midnight',      color: 0x1e1b4b, pattern: 0x312e81, border: 0x818cf8, style: 'stripes' },
+  { id: 'burgundy',      label: 'Burgundy',      color: 0x6b1e3a, pattern: 0x4a1528, border: 0xf9a8d4, style: 'oval' },
+  { id: 'charcoal',      label: 'Charcoal',      color: 0x2d2d2d, pattern: 0x444444, border: 0xaaaaaa, style: 'cross' },
+  { id: 'ocean',         label: 'Ocean',         color: 0x0e4d6e, pattern: 0x0a3a52, border: 0x7dd3fc, style: 'stripes' },
+  { id: 'purple-haze',   label: 'Purple Haze',   color: 0x581c87, pattern: 0x3b0764, border: 0xd8b4fe, style: 'diamond' },
+];
 
 export class Card extends Container {
   // PNG mode
@@ -243,29 +263,65 @@ export class Card extends Container {
     const r = Math.max(CARD_RADIUS * (w / 80), 3);
     const inset = w * 0.08;
 
+    const designId = SettingsManager.instance.cardBack;
+    const design = CARD_BACK_DESIGNS.find(d => d.id === designId) ?? CARD_BACK_DESIGNS[0];
+
     this.backBg.clear();
     // Outer card shape
     this.backBg.roundRect(-w / 2, -h / 2, w, h, r);
-    this.backBg.fill({ color: CARD_BACK_COLOR });
+    this.backBg.fill({ color: design.color });
     this.backBg.roundRect(-w / 2, -h / 2, w, h, r);
-    this.backBg.stroke({ color: 0xffffff, width: 1 });
+    this.backBg.stroke({ color: design.border, width: 1 });
 
     // Inner decorative border
     const innerR = Math.max(r - 2, 2);
     this.backBg.roundRect(-w / 2 + inset, -h / 2 + inset, w - inset * 2, h - inset * 2, innerR);
-    this.backBg.stroke({ color: 0xffffff, width: 1, alpha: 0.4 });
+    this.backBg.stroke({ color: design.border, width: 1, alpha: 0.4 });
 
-    // Diamond pattern
-    const cx = 0;
-    const cy = 0;
-    const dw = w * 0.18;
-    const dh = h * 0.14;
-    this.backBg.moveTo(cx, cy - dh);
-    this.backBg.lineTo(cx + dw, cy);
-    this.backBg.lineTo(cx, cy + dh);
-    this.backBg.lineTo(cx - dw, cy);
-    this.backBg.closePath();
-    this.backBg.fill({ color: CARD_BACK_PATTERN, alpha: 0.6 });
-    this.backBg.stroke({ color: 0xffffff, width: 1, alpha: 0.3 });
+    // Center pattern varies by style
+    switch (design.style) {
+      case 'diamond': {
+        const dw = w * 0.18;
+        const dh = h * 0.14;
+        this.backBg.moveTo(0, -dh);
+        this.backBg.lineTo(dw, 0);
+        this.backBg.lineTo(0, dh);
+        this.backBg.lineTo(-dw, 0);
+        this.backBg.closePath();
+        this.backBg.fill({ color: design.pattern, alpha: 0.6 });
+        this.backBg.stroke({ color: design.border, width: 1, alpha: 0.3 });
+        break;
+      }
+      case 'cross': {
+        const armW = w * 0.08;
+        const armH = h * 0.22;
+        // Vertical bar
+        this.backBg.roundRect(-armW / 2, -armH, armW, armH * 2, 2);
+        this.backBg.fill({ color: design.pattern, alpha: 0.5 });
+        // Horizontal bar
+        this.backBg.roundRect(-armH * 0.6, -armW / 2, armH * 1.2, armW, 2);
+        this.backBg.fill({ color: design.pattern, alpha: 0.5 });
+        break;
+      }
+      case 'stripes': {
+        const stripeW = w * 0.06;
+        const count = 3;
+        const gap = w * 0.14;
+        const startX = -(count - 1) * gap / 2;
+        for (let i = 0; i < count; i++) {
+          const sx = startX + i * gap;
+          this.backBg.roundRect(sx - stripeW / 2, -h / 2 + inset + 2, stripeW, h - inset * 2 - 4, 2);
+          this.backBg.fill({ color: design.pattern, alpha: 0.4 });
+        }
+        break;
+      }
+      case 'oval': {
+        this.backBg.ellipse(0, 0, w * 0.2, h * 0.16);
+        this.backBg.fill({ color: design.pattern, alpha: 0.5 });
+        this.backBg.ellipse(0, 0, w * 0.2, h * 0.16);
+        this.backBg.stroke({ color: design.border, width: 1, alpha: 0.3 });
+        break;
+      }
+    }
   }
 }
