@@ -80,6 +80,11 @@ export class ActionBar extends Container {
   private onMiddleClick: ActionCallback | null = null;
   private onRightClick: ActionCallback | null = null;
 
+  /** True when the player has interacted with the slider or pot-fraction buttons this turn. */
+  private _betInteracted = false;
+  /** True when fold confirmation is showing (second click folds for real). */
+  private _foldConfirming = false;
+
   constructor() {
     super();
 
@@ -98,7 +103,7 @@ export class ActionBar extends Container {
 
     this.rightBtn = new Button('Fold', 120, 44);
     this.rightBtn.x = 240;
-    this.rightBtn.on('pointerdown', () => this.onRightClick?.());
+    this.rightBtn.on('pointerdown', () => this.handleFoldClick());
     this.addChild(this.rightBtn);
 
     // Preaction button — same position as Fold, shown when not player's turn
@@ -209,6 +214,9 @@ export class ActionBar extends Container {
     this.visible = true;
     // Hide preaction when real action bar is shown
     this.preactionBtn.visible = false;
+    // Reset bet interaction tracking for this turn
+    this._betInteracted = false;
+    this._foldConfirming = false;
     // Reset bet input to empty each turn
     if (this.betInputEl) {
       this.betInputEl.value = '';
@@ -474,6 +482,8 @@ export class ActionBar extends Container {
         btn.style.color = '#cde';
       });
       btn.addEventListener('click', () => {
+        this._betInteracted = true;
+        this.resetFoldConfirm();
         if (fraction === 'allin') {
           this.setBetFromSlider(this.sliderMax);
         } else {
@@ -539,6 +549,8 @@ export class ActionBar extends Container {
     `;
 
     this.sliderEl.addEventListener('input', () => {
+      this._betInteracted = true;
+      this.resetFoldConfirm();
       const val = parseInt(this.sliderEl!.value, 10);
       this.setBetFromSlider(val);
     });
@@ -568,6 +580,27 @@ export class ActionBar extends Container {
   private updateSliderAmount(value: number): void {
     if (this.sliderAmountLabel) {
       this.sliderAmountLabel.textContent = formatChips(value);
+    }
+  }
+
+  /** Handle fold button click — confirm if player interacted with bet controls. */
+  private handleFoldClick(): void {
+    if (this._betInteracted && !this._foldConfirming) {
+      // First click: show confirmation
+      this._foldConfirming = true;
+      this.rightBtn.setText('Sure?');
+      return;
+    }
+    // No bet interaction, or second click confirms fold
+    this.resetFoldConfirm();
+    this.onRightClick?.();
+  }
+
+  /** Reset fold confirmation state back to normal. */
+  private resetFoldConfirm(): void {
+    if (this._foldConfirming) {
+      this._foldConfirming = false;
+      this.rightBtn.setText('Fold');
     }
   }
 
