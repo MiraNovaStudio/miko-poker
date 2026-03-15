@@ -51,11 +51,11 @@ export class HandHistory {
     document.body.appendChild(this.containerEl);
   }
 
-  /** Add a hand result message. Most recent appears at top. */
+  /** Add a hand result message. New entries appear at the bottom. */
   addEntry(message: string): void {
-    this.entries.unshift(message);
+    this.entries.push(message);
     if (this.entries.length > MAX_ENTRIES) {
-      this.entries.pop();
+      this.entries.shift();
     }
     if (this.isOpen) this.render();
   }
@@ -132,5 +132,7 @@ export class HandHistory {
       `;
       this.listEl.appendChild(line);
     }
+    // Auto-scroll to bottom so latest entry is visible
+    this.containerEl.scrollTop = this.containerEl.scrollHeight;
   }
 }
