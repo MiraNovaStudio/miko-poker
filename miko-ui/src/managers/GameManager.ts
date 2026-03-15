@@ -445,12 +445,12 @@ export class GameManager {
 
     const gameState = this.engine.getGameState();
 
-    // Check if all remaining players are all-in, or only one player can act
-    // (no point prompting if every opponent is all-in — board should auto-run)
+    // Check if all remaining players are all-in (no one left to act)
+    // — board should auto-run only when nobody can make a decision
     const activePlayers = gameState.players.filter((p: PlayerState) => !p.folded);
     const canActPlayers = activePlayers.filter((p: PlayerState) => !p.allIn);
 
-    if (canActPlayers.length <= 1 && activePlayers.length > 1
+    if (canActPlayers.length === 0 && activePlayers.length > 1
         && activePlayers.some((p: PlayerState) => p.allIn)) {
       if (!this.allInRunout) {
         // Show ALL IN label on every all-in player's slot
