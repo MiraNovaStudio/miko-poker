@@ -94,6 +94,18 @@ const EYE_COLORS = [
   0x6b7280, // gray
 ];
 
+const HAIR_COLORS = [
+  0x1a1209, // black
+  0x3b2314, // dark brown
+  0x6b3a1f, // brown
+  0x8b4513, // medium brown
+  0xb87333, // auburn
+  0xd4a44c, // dirty blonde
+  0xe8c872, // blonde
+  0xc0c0c0, // gray/silver
+  0x8b0000, // dark red
+];
+
 // ─── Avatar dimensions ────────────────────────────────────────────
 
 const AVATAR_SIZE = 48; // rendered size of the avatar container
@@ -196,6 +208,89 @@ function drawBeard(g: Graphics, skinColor: number, rng: () => number): void {
   }
 }
 
+// ─── Hair styles ─────────────────────────────────────────────────
+
+/** Short cropped hair — sits on top of the head like a cap. */
+function drawShortHair(g: Graphics, hairColor: number): void {
+  const top = HEAD_CY - HEAD_RADIUS;
+  // Rounded top section covering upper half of head
+  g.roundRect(-HEAD_RADIUS + 1, top - 2, HEAD_RADIUS * 2 - 2, HEAD_RADIUS * 0.9, 10);
+  g.fill(hairColor);
+}
+
+/** Side-parted medium hair — covers top and comes down the sides a bit. */
+function drawMediumHair(g: Graphics, hairColor: number, rng: () => number): void {
+  const top = HEAD_CY - HEAD_RADIUS;
+  const partLeft = rng() < 0.5;
+
+  // Top mass
+  g.roundRect(-HEAD_RADIUS, top - 3, HEAD_RADIUS * 2, HEAD_RADIUS * 0.8, 8);
+  g.fill(hairColor);
+
+  // Side that's fuller (opposite of part)
+  if (partLeft) {
+    g.roundRect(HEAD_RADIUS - 6, top + 2, 7, HEAD_RADIUS * 1.1, 3);
+    g.fill(hairColor);
+  } else {
+    g.roundRect(-HEAD_RADIUS - 1, top + 2, 7, HEAD_RADIUS * 1.1, 3);
+    g.fill(hairColor);
+  }
+}
+
+/** Longer hair — flows down past the ears, good for female avatars. */
+function drawLongHair(g: Graphics, hairColor: number): void {
+  const top = HEAD_CY - HEAD_RADIUS;
+
+  // Top volume
+  g.roundRect(-HEAD_RADIUS - 1, top - 4, HEAD_RADIUS * 2 + 2, HEAD_RADIUS * 0.9, 10);
+  g.fill(hairColor);
+
+  // Left side flowing down
+  g.roundRect(-HEAD_RADIUS - 3, top + 2, 8, HEAD_RADIUS * 1.8, 4);
+  g.fill(hairColor);
+
+  // Right side flowing down
+  g.roundRect(HEAD_RADIUS - 5, top + 2, 8, HEAD_RADIUS * 1.8, 4);
+  g.fill(hairColor);
+}
+
+/** Spiky / messy short hair. */
+function drawSpikyHair(g: Graphics, hairColor: number, rng: () => number): void {
+  const top = HEAD_CY - HEAD_RADIUS;
+
+  // Base
+  g.roundRect(-HEAD_RADIUS + 2, top - 2, HEAD_RADIUS * 2 - 4, HEAD_RADIUS * 0.7, 6);
+  g.fill(hairColor);
+
+  // Spikes
+  const spikeCount = 3 + Math.floor(rng() * 3);
+  const spread = (HEAD_RADIUS * 2 - 8) / spikeCount;
+  for (let i = 0; i < spikeCount; i++) {
+    const sx = -HEAD_RADIUS + 5 + i * spread + (rng() - 0.5) * 3;
+    const sHeight = 4 + rng() * 5;
+    g.moveTo(sx - 2, top);
+    g.lineTo(sx, top - sHeight);
+    g.lineTo(sx + 2, top);
+    g.closePath();
+    g.fill(hairColor);
+  }
+}
+
+/** Curly / afro-like volume. */
+function drawCurlyHair(g: Graphics, hairColor: number): void {
+  const top = HEAD_CY - HEAD_RADIUS;
+
+  // Big rounded puff on top
+  g.ellipse(0, top + 2, HEAD_RADIUS + 2, HEAD_RADIUS * 0.6);
+  g.fill(hairColor);
+
+  // Side volume
+  g.ellipse(-HEAD_RADIUS + 2, HEAD_CY - 4, 6, 10);
+  g.fill(hairColor);
+  g.ellipse(HEAD_RADIUS - 2, HEAD_CY - 4, 6, 10);
+  g.fill(hairColor);
+}
+
 function drawEarrings(g: Graphics): void {
   g.circle(-HEAD_RADIUS - 1, HEAD_CY + 2, 2);
   g.circle(HEAD_RADIUS + 1, HEAD_CY + 2, 2);
@@ -251,13 +346,40 @@ export function createAvatar(name: string, gender: Gender = 'male'): Container {
   const hasBeard = !isFemale && rng() < 0.30;
   const hasEarrings = isFemale ? rng() < 0.40 : false;
   const hasHeadband = !hasHat && rng() < 0.20;
+  // Hair: ~25% bald, rest get hair. Skip if hat or headband covers it.
+  const isBald = rng() < 0.25;
+  const hasHair = !isBald && !hasHat && !hasHeadband;
+  const hairColor = pick(HAIR_COLORS, rng);
+  // Pick hair style: females lean toward longer styles
+  const hairStyleRoll = rng();
+  const hairStyle = isFemale
+    ? (hairStyleRoll < 0.35 ? 'long' : hairStyleRoll < 0.55 ? 'curly' : hairStyleRoll < 0.75 ? 'medium' : 'short')
+    : (hairStyleRoll < 0.30 ? 'short' : hairStyleRoll < 0.55 ? 'spiky' : hairStyleRoll < 0.75 ? 'medium' : 'curly');
 
   const container = new Container();
   const g = new Graphics();
 
   // Draw back-to-front
   drawBody(g, shirtColor);
+
+  // Long/curly hair behind head (flows below the head circle)
+  if (hasHair && (hairStyle === 'long' || hairStyle === 'curly')) {
+    if (hairStyle === 'long') drawLongHair(g, hairColor);
+    else drawCurlyHair(g, hairColor);
+  }
+
   drawHead(g, skinColor);
+
+  // Hair on top of head (drawn after head so it sits on top)
+  if (hasHair) {
+    switch (hairStyle) {
+      case 'short': drawShortHair(g, hairColor); break;
+      case 'medium': drawMediumHair(g, hairColor, rng); break;
+      case 'spiky': drawSpikyHair(g, hairColor, rng); break;
+      case 'long': drawShortHair(g, hairColor); break;    // top cap for long hair
+      case 'curly': break;                                 // curly already drawn behind
+    }
+  }
 
   // Beard behind eyes/mouth
   if (hasBeard) drawBeard(g, skinColor, rng);
