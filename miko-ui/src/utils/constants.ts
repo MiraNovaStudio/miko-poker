@@ -54,7 +54,7 @@ export const COLORS = {
   black: 0x000000,
   darkGray: 0x333333,
   statusRed: 0xff6464,
-  activeGreen: 0x3cb58f,
+  activeHighlight: 0x666666,
   bgDark: 0x1a1a2e,
   betText: 0xffffff,
   potText: 0xffff00,

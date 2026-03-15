@@ -325,7 +325,7 @@ export class PlayerSlot extends Container {
 
   highlight(active: boolean): void {
     this._isHighlighted = active;
-    this.drawChipOverlay(active ? COLORS.activeGreen : COLORS.darkGray);
+    this.drawChipOverlay(active ? COLORS.activeHighlight : COLORS.darkGray);
   }
 
   /** Show an animated "WINNER!" label over the cards area */

@@ -857,6 +857,11 @@ export class GameManager {
     this.handPhase = 'showdown';
     this.actionBar.hide();
 
+    // Clear active player highlight — action is over
+    if (this.currentActivePlayer) {
+      this.unhighlightPlayer(this.currentActivePlayer);
+    }
+
     // Clear bets but do NOT update chip labels yet — wait for pot animation
     this.slotLayout.getAllSlots().forEach(s => s.clearBet());
 
