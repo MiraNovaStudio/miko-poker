@@ -27,8 +27,10 @@ const CHIP_DENOMS: ChipDenom[] = [
 ];
 
 const CHIP_RADIUS = 12;
-const CHIP_HEIGHT = 4;     // visible thickness of each disc
-const MAX_CHIPS = 12;      // cap how many discs we draw
+const CHIP_HEIGHT = 4;       // visible thickness of each disc
+const MAX_CHIPS = 15;        // cap how many discs we draw total
+const MAX_PER_STACK = 5;     // max chips per column before starting a new stack
+const STACK_SPACING = 28;    // horizontal gap between stack columns
 
 // ─── Component ───────────────────────────────────────────────────
 
@@ -112,17 +114,32 @@ export class PotChips extends Container {
     return chips;
   }
 
-  /** Redraw the entire chip stack. */
+  /** Redraw the chip stack, splitting into side-by-side columns. */
   private draw(): void {
     this.chipGraphics.clear();
 
-    if (this._chipStack.length === 0) return;
+    const total = this._chipStack.length;
+    if (total === 0) return;
 
-    // Draw bottom-up so lower chips are behind higher ones
-    for (let i = 0; i < this._chipStack.length; i++) {
-      const denom = this._chipStack[this._chipStack.length - 1 - i];
-      const cy = -i * CHIP_HEIGHT;
-      this.drawSingleChip(this.chipGraphics, denom, 0, cy);
+    // Decide how many columns: 1 if <=5, 2 if <=10, 3 if more
+    const numStacks = Math.min(3, Math.ceil(total / MAX_PER_STACK));
+    // Center the columns horizontally
+    const totalWidth = (numStacks - 1) * STACK_SPACING;
+    const startX = -totalWidth / 2;
+
+    // Distribute chips across columns (fill left to right, bottom up)
+    for (let col = 0; col < numStacks; col++) {
+      const colStart = col * MAX_PER_STACK;
+      const colEnd = Math.min(colStart + MAX_PER_STACK, total);
+      const colCount = colEnd - colStart;
+      const cx = startX + col * STACK_SPACING;
+
+      // Draw bottom-up within this column
+      for (let i = 0; i < colCount; i++) {
+        const denom = this._chipStack[colStart + colCount - 1 - i];
+        const cy = -i * CHIP_HEIGHT;
+        this.drawSingleChip(this.chipGraphics, denom, cx, cy);
+      }
     }
   }
 
