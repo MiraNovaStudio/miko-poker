@@ -106,7 +106,7 @@ Never skip the changelog or commit. Do not batch multiple tasks into one commit.
 
 ## Git Conventions
 
-- One commit per completed task
+- CLAUDE NO LONGER COMMIT AFTER COMPLETING YOUR TASK I WILL DO THE COMMIT MANUALLY
 - Commit message: short description (< 80 chars)
 - Run tests before committing
 - Do not commit `node_modules/`, `engine/dist/`, `miko-ui/dist/`, or `public/`

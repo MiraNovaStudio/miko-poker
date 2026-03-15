@@ -41,7 +41,7 @@ const ROSTER_DATA: [string, Playstyle, Gender, string?][] = [
   ['QuantumCaller',   'passive', 'male'],
   ['MiraNova',        'passive', 'male'],
   ['CardShark300',    'passive', 'male'],
-  ['RogueButton',     'passive', 'male'],
+  ['TigerRoute',      'passive', 'male'],
   ['NeonHeart7',      'passive', 'female'],
   ['LadyAllIn',       'passive', 'female'],
 
@@ -52,7 +52,7 @@ const ROSTER_DATA: [string, Playstyle, Gender, string?][] = [
   ['StackSniper',     'nit', 'male'],
   ['ChipEnchantress', 'nit', 'female'],
   ['Athena812',       'nit', 'female'],
-  ['gr8Qu33n',        'nit', 'male'],
+  ['EvenMoneyGirl',   'nit', 'female'],
   ['AcePilot99',      'nit', 'male'],
   ['MountainBiker22', 'nit', 'male'],
   ['AngelCupcake',    'nit', 'female'],
@@ -62,11 +62,11 @@ const ROSTER_DATA: [string, Playstyle, Gender, string?][] = [
   ['GoddessOfWar',    'shark', 'female'],
   ['AceHuntress44',   'shark', 'female'],
   ['GTO_Samurai',     'shark', 'male'],
-  ['user_984322',     'shark', 'male'],
+  ['StarWarsFan11',   'shark', 'male'],
   ['AceCrusher7',     'shark', 'male'],
   ['StackOverflow',   'shark', 'male'],
   ['FlopDonkey76',    'shark', 'male'],
-  ['crypt0zenith',    'shark', 'male'],
+  ['CryptOfHearts',   'shark', 'male'],
   ['HappyFish',       'shark', 'male'],
 
   // --- Maniac ---
