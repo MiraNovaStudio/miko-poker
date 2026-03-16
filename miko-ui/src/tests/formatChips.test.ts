@@ -112,13 +112,13 @@ describe('SettingsManager', () => {
     expect(cb).not.toHaveBeenCalled();
   });
 
-  it('should default playerName to "Player"', () => {
-    expect(SettingsManager.instance.playerName).toBe('Player');
+  it('should default playerName to "PokerPlayer"', () => {
+    expect(SettingsManager.instance.playerName).toBe('PokerPlayer');
   });
 
   it('should trim whitespace-only player names to default', () => {
     SettingsManager.instance.playerName = '   ';
-    expect(SettingsManager.instance.playerName).toBe('Player');
+    expect(SettingsManager.instance.playerName).toBe('PokerPlayer');
   });
 
   it('should default cardAnimations to true', () => {

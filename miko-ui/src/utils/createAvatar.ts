@@ -22,7 +22,7 @@ export interface AvatarPreset {
  * Each uses a deterministic seed so the avatar never changes.
  */
 export const AVATAR_PRESETS: AvatarPreset[] = [
-  { id: 'male1',    label: 'Guy 1',    seed: 'preset_male_light',    gender: 'male' },
+  { id: 'male1',    label: 'Guy 1',    seed: 'guy1_seed_16',          gender: 'male' },
   { id: 'male2',    label: 'Guy 2',    seed: 'preset_male_dark',     gender: 'male' },
   { id: 'male3',    label: 'Guy 3',    seed: 'preset_male_tan',      gender: 'male' },
   { id: 'female1',  label: 'Gal 1',    seed: 'preset_female_light',  gender: 'female' },

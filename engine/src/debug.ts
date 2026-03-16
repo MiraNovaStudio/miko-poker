@@ -4,7 +4,12 @@
  * Set DEBUG_ENABLED to true to enable detailed logging
  */
 
-export const DEBUG_ENABLED = true; // Set to false to disable all debug logging
+export let DEBUG_ENABLED = false; // Toggled at runtime via window.debugLogs()
+
+/** Enable or disable debug logging at runtime */
+export function setDebugEnabled(enabled: boolean): void {
+  DEBUG_ENABLED = enabled;
+}
 
 /**
  * Log debug message if debug is enabled

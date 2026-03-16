@@ -90,7 +90,7 @@ export class GameScene extends Container {
 
       // Player eliminated → show Rebuy + Quit; player won → show victory + New Game
       const eliminated = message?.includes('ran out of chips');
-      const victory = message?.includes('eliminated all opponents');
+      const victory = message?.includes('eliminated all opponents') || message?.includes('knocked out MikoPoker');
       if (rebuyBtn) rebuyBtn.style.display = eliminated ? 'inline-block' : 'none';
       if (quitBtn) quitBtn.style.display = eliminated ? 'inline-block' : 'none';
       if (newGameBtn) newGameBtn.style.display = eliminated ? 'none' : 'inline-block';

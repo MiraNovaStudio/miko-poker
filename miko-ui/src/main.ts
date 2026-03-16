@@ -7,6 +7,7 @@ import { StartScene } from './scenes/StartScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { createAvatar, AVATAR_PRESETS } from './utils/createAvatar.js';
 import { CARD_BACK_DESIGNS, type CardBackDesign } from './components/Card.js';
+import { DEBUG_ENABLED, setDebugEnabled } from '@engine/index.js';
 
 /** Set to true to show the music player button. Disabled pending music licensing review. */
 const SHOW_MUSIC_BUTTON = true;
@@ -552,9 +553,17 @@ async function init() {
     (window as any).debugClearTable = () => game.gameManager?.debugClearTable();
     (window as any).debugSetChips = (n: number) => game.gameManager?.debugSetChips(n);
     (window as any).debugAces = () => game.gameManager?.debugAces();
+    (window as any).debugMikoKO = () => game.gameManager?.debugMikoKO();
+    (window as any).debugFastMode = () => game.gameManager?.debugFastMode();
+    (window as any).debugHideCards = () => game.gameManager?.debugHideCards();
     (window as any).debugClearStorage = () => {
       localStorage.clear();
       console.log('🗑️ localStorage cleared. Reload the page to apply defaults.');
+    };
+    (window as any).debugLogs = () => {
+      const newState = !DEBUG_ENABLED;
+      setDebugEnabled(newState);
+      console.log(`🔧 Debug logs: ${newState ? 'ON' : 'OFF'}`);
     };
   }
 

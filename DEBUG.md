@@ -23,6 +23,14 @@ Queue an endgame scenario. After the current hand finishes, all AI opponents are
 - **Status bar**: `DEBUG: Final opponent — [name]`
 - **Code**: `GameManager.ts` — `debugEndgamePending` flag, `applyDebugEndgame()`
 
+### `window.debugMikoKO()`
+Queue a heads-up vs MikoPoker. After the current hand finishes, all AI opponents are eliminated except one seat, which is replaced with MikoPoker (maniac, 20 chips). Player gets 10,000 chips. Knocking out MikoPoker triggers the victory screen.
+
+- **Deferred**: Activates between hands, not mid-hand
+- **Console output**: `🎯 MikoPoker endgame will activate after the current hand finishes.`
+- **Status bar**: `DEBUG: Final opponent — MikoPoker`
+- **Code**: `GameManager.ts` — `debugMikoKOPending` flag, `applyDebugMikoKO()`
+
 ### `window.debugClearTable()`
 Queue a table clear. After the current hand finishes, ALL AI opponents are eliminated and victory is triggered immediately. Player gets 10,000 chips.
 
@@ -38,11 +46,25 @@ Immediately set the player's chip stack to the specified amount.
 - **Console output**: `💰 Player chips set to 5000`
 - **Code**: `GameManager.ts` — `debugSetChips()`
 
+### `window.debugFastMode()`
+Toggle fast mode — eliminates AI "thinking..." delays so AI acts instantly.
+
+- **Toggle**: Calling again turns it OFF
+- **Console output**: `⚡ Fast mode: ON` / `OFF`
+- **Code**: `GameManager.ts` — `_fastMode` flag
+
 ### `window.debugClearStorage()`
 Clear all localStorage (settings, mute state, shuffle preference, etc.). Reload the page after calling to apply defaults.
 
 - **Console output**: `🗑️ localStorage cleared. Reload the page to apply defaults.`
 - **Code**: `main.ts` — inline function
+
+### `window.debugLogs()`
+Toggle engine debug logging on/off at runtime. Off by default.
+
+- **Toggle**: Calling again flips the state
+- **Console output**: `🔧 Debug logs: ON` / `OFF`
+- **Code**: `main.ts` calls `setDebugEnabled()` from `engine/src/debug.ts`
 
 ---
 
@@ -50,8 +72,8 @@ Clear all localStorage (settings, mute state, shuffle preference, etc.). Reload 
 
 ### `DEBUG_ENABLED` flag
 - **File**: `engine/src/debug.ts`
-- **Current state**: `true` (ON)
-- **To disable**: Change to `false` and rebuild (`npm run build:engine`)
+- **Current state**: `false` (OFF by default, toggle with `window.debugLogs()`)
+- **To toggle**: Call `window.debugLogs()` in the browser console (no rebuild needed)
 
 ### Logging functions
 - `debugLog(category, message, data?)` — Timestamped `[HH:MM:SS] [CATEGORY] message` output

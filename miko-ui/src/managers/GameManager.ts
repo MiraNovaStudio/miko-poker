@@ -4,7 +4,7 @@
  * Engine code is NOT modified; only UI calls change.
  */
 
-import { PokerGameEngine, evaluateHand, getHandName, getRankName, Deck } from '@engine/index.js';
+import { PokerGameEngine, evaluateHand, getHandName, getRankName, Deck, DEBUG_ENABLED } from '@engine/index.js';
 import type { GameEvent, GameResult, GamePotResult, Card as EngineCard, PlayerState, HandStrength } from '@engine/index.js';
 
 import { SlotLayout } from '../components/SlotLayout.js';
@@ -265,6 +265,28 @@ export class GameManager {
     this.statusBar.setStatus('DEBUG: Endgame queued — finish this hand');
   }
 
+  /** Flag: apply MikoPoker KO rig between hands */
+  private debugMikoKOPending = false;
+  private _fastMode = false;
+
+  debugFastMode(): void {
+    this._fastMode = !this._fastMode;
+    console.log(`⚡ Fast mode: ${this._fastMode ? 'ON' : 'OFF'}`);
+  }
+
+  debugMikoKO(): void {
+    if (!this.engine) { console.warn('Engine not ready'); return; }
+    this.debugMikoKOPending = true;
+    console.log('🎯 MikoPoker endgame will activate after the current hand finishes. Play it out!');
+    this.statusBar.setStatus('DEBUG: MikoPoker KO queued — finish this hand');
+  }
+
+  debugHideCards(): void {
+    this.slotLayout.getAllSlots().forEach(s => s.clearCards());
+    this.communityCards.display([]);
+    console.log('🃏 Cards hidden');
+  }
+
   /** Flag: clear entire table between hands */
   private debugClearTablePending = false;
 
@@ -313,7 +335,7 @@ export class GameManager {
       }
     }
 
-    console.log('🏆 All opponents eliminated! Victory incoming...');
+    if (DEBUG_ENABLED) console.log('🏆 All opponents eliminated! Victory incoming...');
     this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
     this.actionBar.hide();
     this.handPhase = 'idle';
@@ -370,6 +392,71 @@ export class GameManager {
     const keepName = this.displayNameById.get(keepId) ?? keepId;
     console.log(`🎯 ENDGAME RIGGED: Only ${keepName} remains with 20 chips. You have 10,000.`);
     this.statusBar.setStatus(`DEBUG: Final opponent — ${keepName}`);
+  }
+
+  /** Called between hands to rig a heads-up vs MikoPoker */
+  private applyDebugMikoKO(): void {
+    if (!this.debugMikoKOPending || !this.engine) return;
+    this.debugMikoKOPending = false;
+
+    // Find MikoPoker in the roster
+    const mikoEntry = PLAYER_ROSTER.find(e => e.name === 'MikoPoker');
+    if (!mikoEntry) { console.warn('MikoPoker not found in roster'); return; }
+
+    // Pick one AI seat to keep and swap MikoPoker into it
+    const keepId = this.playerIdBySeat.find(
+      id => id !== 'player' && !this.eliminatedPlayers.has(id)
+    );
+    if (!keepId) { console.warn('No AI players left'); return; }
+
+    const keepSeat = this.seatByPlayerId.get(keepId);
+    if (keepSeat === undefined) return;
+
+    // Eliminate all other AI
+    for (const id of this.playerIdBySeat) {
+      if (id === 'player' || id === keepId) continue;
+      if (!this.eliminatedPlayers.has(id)) {
+        this.eliminatedPlayers.add(id);
+        this.totalKnockouts++;
+      }
+      const seat = this.seatByPlayerId.get(id);
+      if (seat !== undefined) {
+        const slot = this.slotLayout.getSlot(seat);
+        if (slot) slot.visible = false;
+      }
+    }
+
+    // Cancel any pending/deferred replacements
+    this.pendingReplacements = [];
+    this.deferredReplacements = [];
+    this.totalKnockouts = PLAYER_ROSTER.length - 1;
+
+    // Swap MikoPoker into the kept seat
+    this.engine.replacePlayer(keepSeat, keepId, mikoEntry.config);
+    this.displayNameById.set(keepId, mikoEntry.name);
+    this.usedRosterNames.add(mikoEntry.name);
+
+    // Set chips: MikoPoker → 20, player → 10000
+    const enginePlayers = (this.engine as any).players as { id: string; chips: number }[];
+    for (const ep of enginePlayers) {
+      if (ep.id === 'player') {
+        ep.chips = 10000;
+        this.getSlotForPlayer('player')?.setChips(10000);
+      } else if (ep.id === keepId) {
+        ep.chips = 20;
+        const slot = this.getSlotForPlayer(keepId);
+        if (slot) {
+          slot.setChips(20);
+          slot.setPlayerName(mikoEntry.name);
+          slot.setAvatar(this.getAvatarTexture(mikoEntry.avatarName ?? mikoEntry.name, mikoEntry.gender));
+        }
+      } else {
+        ep.chips = 0;
+      }
+    }
+
+    console.log('🎯 MIKO KO RIGGED: MikoPoker has 20 chips. You have 10,000. Knock them out to win!');
+    this.statusBar.setStatus('DEBUG: Final opponent — MikoPoker');
   }
 
   /** Reposition the hand history HTML overlay on resize */
@@ -669,7 +756,7 @@ export class GameManager {
       && activePlayers.some((p: PlayerState) => p.allIn)
       && (canActPlayers.length === 0 || (canActPlayers.length === 1 && !soloOwes));
     if (activePlayers.some((p: PlayerState) => p.allIn)) {
-      console.log(`[ALL-IN CHECK] canAct=${canActPlayers.length}, active=${activePlayers.length}, highBet=${highBet}, soloOwes=${soloOwes}, trigger=${allOpponentsAllIn}`,
+      if (DEBUG_ENABLED) console.log(`[ALL-IN CHECK] canAct=${canActPlayers.length}, active=${activePlayers.length}, highBet=${highBet}, soloOwes=${soloOwes}, trigger=${allOpponentsAllIn}`,
         canActPlayers.map(p => `${p.id} bet=${p.bet}`).join(', '));
     }
     if (allOpponentsAllIn) {
@@ -785,8 +872,9 @@ export class GameManager {
 
       this.statusBar.setStatus(`${this.getDisplayName(currentPlayer.id)} is thinking...`);
 
-      const delay = (GAME_CONFIG.aiThinkingDelayMin + Math.random() *
-        (GAME_CONFIG.aiThinkingDelayMax - GAME_CONFIG.aiThinkingDelayMin)) * 1000;
+      const delay = this._fastMode ? 0
+        : (GAME_CONFIG.aiThinkingDelayMin + Math.random() *
+          (GAME_CONFIG.aiThinkingDelayMax - GAME_CONFIG.aiThinkingDelayMin)) * 1000;
 
       this.delayed(() => {
         try {
@@ -1298,6 +1386,7 @@ export class GameManager {
       if (this.engine && !this.engine.isHandInProgress()) {
         // Apply debug rigs if queued
         this.applyDebugEndgame();
+        this.applyDebugMikoKO();
         this.applyDebugClearTable();
         if (this.handPhase === 'idle') return;  // victory was triggered
 
@@ -1322,10 +1411,15 @@ export class GameManager {
         const noReplacements = this.pendingReplacements.length === 0
           && this.deferredReplacements.length === 0;
         if (activeAI.length === 0 && noReplacements) {
-          this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
+          // Check if the last eliminated player was MikoPoker
+          const lastWasMiko = [...this.eliminatedPlayers].some(id =>
+            this.displayNameById.get(id) === 'MikoPoker'
+          );
+          const winMsg = lastWasMiko ? 'You knocked out MikoPoker!' : 'You eliminated all opponents!';
+          this.statusBar.setStatus(`YOU WIN! ${winMsg}`);
           this.actionBar.hide();
           this.handPhase = 'idle';
-          this.onGameOver?.('You eliminated all opponents!');
+          this.onGameOver?.(winMsg);
           return;
         }
 
@@ -1712,12 +1806,12 @@ export class GameManager {
     const gameState = this.engine.getGameState();
     const newlyEliminated: { id: string; seatIndex: number }[] = [];
 
-    console.log('[ELIM CHECK] Player chips:', gameState.players.map(p => `${p.id}=$${p.chips}`).join(', '));
-    console.log('[ELIM CHECK] totalKnockouts:', this.totalKnockouts, '/ ROSTER:', PLAYER_ROSTER.length);
+    if (DEBUG_ENABLED) console.log('[ELIM CHECK] Player chips:', gameState.players.map(p => `${p.id}=$${p.chips}`).join(', '));
+    if (DEBUG_ENABLED) console.log('[ELIM CHECK] totalKnockouts:', this.totalKnockouts, '/ ROSTER:', PLAYER_ROSTER.length);
 
     gameState.players.forEach((player, index) => {
       if (player.chips <= 0 && !this.eliminatedPlayers.has(player.id)) {
-        console.log(`[ELIM] ${player.id} eliminated with ${player.chips} chips`);
+        if (DEBUG_ENABLED) console.log(`[ELIM] ${player.id} eliminated with ${player.chips} chips`);
         this.eliminatedPlayers.add(player.id);
         newlyEliminated.push({ id: player.id, seatIndex: index });
 
@@ -1735,6 +1829,17 @@ export class GameManager {
         }
 
         this.totalKnockouts++;
+
+        // Special win condition: knocking out MikoPoker wins the game
+        const eliminatedName = this.displayNameById.get(player.id);
+        if (eliminatedName === 'MikoPoker') {
+          if (DEBUG_ENABLED) console.log('[ELIM] 🏆 MikoPoker knocked out! Victory!');
+          this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
+          this.actionBar.hide();
+          this.handPhase = 'idle';
+          this.onGameOver?.('You knocked out MikoPoker!');
+          return;
+        }
       }
     });
 
@@ -1742,13 +1847,17 @@ export class GameManager {
     if (this.eliminatedPlayers.has('player')) return;
 
     // Check win condition: all 32 roster players knocked out
-    console.log('[ELIM CHECK] After processing — totalKnockouts:', this.totalKnockouts, 'needed:', PLAYER_ROSTER.length);
+    if (DEBUG_ENABLED) console.log('[ELIM CHECK] After processing — totalKnockouts:', this.totalKnockouts, 'needed:', PLAYER_ROSTER.length);
     if (this.totalKnockouts >= PLAYER_ROSTER.length) {
-      console.log('[ELIM] 🏆 WIN CONDITION MET via checkForEliminatedPlayers!');
-      this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
+      if (DEBUG_ENABLED) console.log('[ELIM] 🏆 WIN CONDITION MET via checkForEliminatedPlayers!');
+      const lastWasMiko = [...this.eliminatedPlayers].some(id =>
+        this.displayNameById.get(id) === 'MikoPoker'
+      );
+      const winMsg = lastWasMiko ? 'You knocked out MikoPoker!' : 'You eliminated all opponents!';
+      this.statusBar.setStatus(`YOU WIN! ${winMsg}`);
       this.actionBar.hide();
       this.handPhase = 'idle';
-      this.onGameOver?.('You eliminated all opponents!');
+      this.onGameOver?.(winMsg);
       return;
     }
 

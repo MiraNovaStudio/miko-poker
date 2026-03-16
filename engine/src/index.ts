@@ -53,4 +53,4 @@ export type {
 } from './game-mode.js';
 
 // Debug utilities
-export { DEBUG_ENABLED } from './debug.js';
+export { DEBUG_ENABLED, setDebugEnabled } from './debug.js';

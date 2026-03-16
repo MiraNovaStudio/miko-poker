@@ -52,7 +52,7 @@ const ROSTER_DATA: [string, Playstyle, Gender, string?][] = [
   ['StackSniper',     'nit', 'male'],
   ['ChipEnchantress', 'nit', 'female'],
   ['Athena812',       'nit', 'female'],
-  ['EvenMoneyGirl',   'nit', 'female'],
+  ['Claude',   'nit', 'female'],
   ['AcePilot99',      'nit', 'male'],
   ['MountainBiker22', 'nit', 'male'],
   ['AngelCupcake',    'nit', 'female'],
@@ -63,7 +63,7 @@ const ROSTER_DATA: [string, Playstyle, Gender, string?][] = [
   ['AceHuntress44',   'shark', 'female'],
   ['GTO_Samurai',     'shark', 'male'],
   ['StarWarsFan11',   'shark', 'male'],
-  ['AceCrusher7',     'shark', 'male'],
+  ['ChatGPT',     'shark', 'male'],
   ['StackOverflow',   'shark', 'male'],
   ['FlopDonkey76',    'shark', 'male'],
   ['CryptOfHearts',   'shark', 'male'],
@@ -74,6 +74,7 @@ const ROSTER_DATA: [string, Playstyle, Gender, string?][] = [
   ['AllInGoblin',     'maniac', 'male'],
   ['UltraSage11',     'maniac', 'male'],
   ['JustABot4U2',     'maniac', 'male'],
+  ['MikoPoker',         'maniac', 'male', 'preset_male_light']
 ];
 
 /** Full roster with pre-computed AI configs (jittered per player). */
