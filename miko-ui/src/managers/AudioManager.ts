@@ -29,10 +29,28 @@ export class AudioManager {
   /** Current index in the playlist */
   private playlistIndex = 0;
 
+  /** When true, playlist order is randomized */
+  private _shuffle = false;
+
   /** Callback for UI to react to music state changes */
   onMusicStateChange?: (playing: boolean) => void;
 
   get musicPlaying(): boolean { return this._musicPlaying; }
+  get shuffle(): boolean { return this._shuffle; }
+
+  setShuffle(on: boolean): void {
+    this._shuffle = on;
+    if (on) {
+      this.shufflePlaylist();
+    } else {
+      // Restore original order, keep current track playing
+      const currentSrc = this.musicEl?.src ?? '';
+      this.playlist = this.buildPlaylist();
+      // Find the current track in the restored order
+      const idx = this.playlist.findIndex(t => currentSrc.endsWith(t.replace(/ /g, '%20')));
+      this.playlistIndex = idx >= 0 ? idx : 0;
+    }
+  }
 
   async initialize(): Promise<void> {
     this.audioCtx = new AudioContext();
@@ -59,9 +77,8 @@ export class AudioManager {
     this.loaded = true;
     console.log(`AudioManager: loaded ${this.buffers.size} sounds`);
 
-    // Build and shuffle playlist
+    // Build playlist (plays in filename order, loops)
     this.playlist = this.buildPlaylist();
-    this.shufflePlaylist();
 
     // Create the music audio element
     this.musicEl = document.createElement('audio');
@@ -85,19 +102,22 @@ export class AudioManager {
   playMusic(): void {
     if (!this.musicEl || this.playlist.length === 0) return;
     this._musicPlaying = true;
-    this.musicEl.src = this.playlist[this.playlistIndex];
+    // Load first track if nothing is loaded yet, or restart from beginning if playlist finished
+    if (!this.musicEl.src || this.playlistIndex >= this.playlist.length) {
+      this.playlistIndex = 0;
+      this.musicEl.src = this.playlist[this.playlistIndex];
+    }
     if (!this.muted) {
       this.musicEl.play().catch(() => {});
     }
     this.onMusicStateChange?.(true);
   }
 
-  /** Stop music playback */
+  /** Pause music playback (resumes from same position on next play) */
   stopMusic(): void {
     if (!this.musicEl) return;
     this._musicPlaying = false;
     this.musicEl.pause();
-    this.musicEl.currentTime = 0;
     this.onMusicStateChange?.(false);
   }
 
@@ -110,13 +130,25 @@ export class AudioManager {
     }
   }
 
-  /** Advance to the next track in the playlist */
+  /** Fisher-Yates shuffle, preserving current track position */
+  private shufflePlaylist(): void {
+    const currentSrc = this.musicEl?.src ?? '';
+    for (let i = this.playlist.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [this.playlist[i], this.playlist[j]] = [this.playlist[j], this.playlist[i]];
+    }
+    const idx = this.playlist.findIndex(t => currentSrc.endsWith(t.replace(/ /g, '%20')));
+    this.playlistIndex = idx >= 0 ? idx : 0;
+  }
+
+  /** Advance to the next track, or stop if playlist is finished */
   private nextTrack(): void {
     if (!this._musicPlaying || this.playlist.length === 0) return;
-    this.playlistIndex = (this.playlistIndex + 1) % this.playlist.length;
-    // Reshuffle when we loop back to the start
-    if (this.playlistIndex === 0) {
-      this.shufflePlaylist();
+    this.playlistIndex++;
+    if (this.playlistIndex >= this.playlist.length) {
+      // Playlist finished — stop instead of looping
+      this.stopMusic();
+      return;
     }
     this.musicEl!.src = this.playlist[this.playlistIndex];
     if (!this.muted) {
@@ -127,37 +159,13 @@ export class AudioManager {
   /** Build the list of music file paths */
   private buildPlaylist(): string[] {
     const tracks = [
-      '01 - Stellar Drift.mp3',
-      '02 - Nightfall.mp3',
-      '03 - Racing Through Time.mp3',
-      '04 - Midnight City Lights.mp3',
-      '05 - Ultravox.mp3',
-      '06 - Neon Voyager.mp3',
-      '07 - Shadows In Motion.mp3',
-      '08 - Dreamscore.mp3',
-      '09 - Holographic Love.mp3',
-      '10 - Future Vibes.mp3',
-      '11 - Through The Grid.mp3',
-      '12 - Eternal Waves.mp3',
-      '13 - Quantum Dancer.mp3',
-      '14 - Hyperion.mp3',
-      '15 - Cosmic Eclipse.mp3',
-      '16 - Lunar Frequencies.mp3',
-      '17 - Chasing Stars.mp3',
-      '18 - Retropolis.mp3',
-      '19 - The Galactic Pulse.mp3',
-      '20 - Lazerscape.mp3',
+      '01 - hitslab-chiptune-video-game-games-music-457939.mp3',
+      '02 - hitslab-game-gaming-video-game-music-459876.mp3',
+      '03 - viacheslavstarostin-gaming-game-video-game-music-474517.mp3',
+      '04 - mfcc-roblox-minecraft-fortnite-video-game-music-350759.mp3',
+      '05 - hitslab-game-gaming-minecraft-background-music-362185.mp3',
     ];
     return tracks.map(t => `assets/music/${t}`);
-  }
-
-  /** Fisher-Yates shuffle */
-  private shufflePlaylist(): void {
-    for (let i = this.playlist.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [this.playlist[i], this.playlist[j]] = [this.playlist[j], this.playlist[i]];
-    }
-    this.playlistIndex = 0;
   }
 
   // ─── Sound effects ─────────────────────────────────────────

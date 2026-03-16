@@ -68,6 +68,8 @@ html, body {
   border-radius: 12px;
   padding: 24px 32px;
   min-width: 280px;
+  max-height: 80vh;
+  overflow-y: auto;
   color: #fff;
   font-family: Arial, sans-serif;
 }

@@ -9,7 +9,7 @@ import { createAvatar, AVATAR_PRESETS } from './utils/createAvatar.js';
 import { CARD_BACK_DESIGNS, type CardBackDesign } from './components/Card.js';
 
 /** Set to true to show the music player button. Disabled pending music licensing review. */
-const SHOW_MUSIC_BUTTON = false;
+const SHOW_MUSIC_BUTTON = true;
 
 /** Design resolution the layout was authored for */
 const DESIGN_WIDTH = 960;
@@ -183,6 +183,22 @@ async function init() {
     table2Btn?.addEventListener('click', () => {
       settings.tableStyle = 'table2';
       updateTableButtons();
+    });
+
+    // Shuffle music setting
+    const shuffleOnBtn = document.getElementById('shuffle-on');
+    const shuffleOffBtn = document.getElementById('shuffle-off');
+    const updateShuffleButtons = () => {
+      shuffleOnBtn?.classList.toggle('active', audio.shuffle);
+      shuffleOffBtn?.classList.toggle('active', !audio.shuffle);
+    };
+    shuffleOnBtn?.addEventListener('click', () => {
+      audio.setShuffle(true);
+      updateShuffleButtons();
+    });
+    shuffleOffBtn?.addEventListener('click', () => {
+      audio.setShuffle(false);
+      updateShuffleButtons();
     });
 
     // Player name input
