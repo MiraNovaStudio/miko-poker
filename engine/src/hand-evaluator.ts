@@ -198,6 +198,9 @@ export function getHandName(hand: HandStrength): string {
     'Four of a Kind',
     'Straight Flush'
   ];
+  if (hand.category === 2 && hand.kickers[0] === 14) {
+    return 'Aces Up';
+  }
   return categoryNames[hand.category] || `Unknown Hand (${hand.category})`;
 }
 
