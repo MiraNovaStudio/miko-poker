@@ -40,9 +40,23 @@ async function init() {
       soundBtn.innerHTML = audio.muted ? '&#x1F507;' : '&#x1F50A;';
     };
     soundBtn.addEventListener('click', () => {
-      audio.muted = !audio.muted;
+      audio.setMuted(!audio.muted);
       updateIcon();
     });
+  }
+
+  // Music toggle button (HTML overlay, top-right — hidden on start screen)
+  const musicBtn = document.getElementById('music-toggle');
+  if (musicBtn) {
+    musicBtn.style.display = 'none';
+    const updateMusicLabel = (playing: boolean) => {
+      musicBtn.innerHTML = playing ? '&#x25A0; Music' : '&#x25B6; Music';
+      musicBtn.title = playing ? 'Stop Music' : 'Play Music';
+    };
+    musicBtn.addEventListener('click', () => {
+      audio.toggleMusic();
+    });
+    audio.onMusicStateChange = updateMusicLabel;
   }
 
   // Settings button and modal
@@ -420,6 +434,7 @@ async function init() {
       if (copyrightEl) copyrightEl.style.display = 'none';
       if (soundBtn) soundBtn.style.display = 'none';
       if (settingsBtn) settingsBtn.style.display = 'none';
+      if (musicBtn) musicBtn.style.display = 'none';
     } else {
       restoreUIForScreen();
     }
@@ -462,11 +477,13 @@ async function init() {
     if (activeScreen === 'start') {
       if (soundBtn) soundBtn.style.display = 'none';
       if (settingsBtn) settingsBtn.style.display = 'none';
+      if (musicBtn) musicBtn.style.display = 'none';
       if (pageTitle) pageTitle.style.display = 'none';
       if (copyrightEl) copyrightEl.style.display = 'block';
     } else {
       if (soundBtn) soundBtn.style.display = 'flex';
       if (settingsBtn) settingsBtn.style.display = 'flex';
+      if (musicBtn) musicBtn.style.display = 'flex';
       if (pageTitle) pageTitle.style.display = 'block';
       if (copyrightEl) copyrightEl.style.display = 'none';
     }
@@ -480,6 +497,7 @@ async function init() {
     activeScreen = 'start';
     if (soundBtn) soundBtn.style.display = 'none';
     if (settingsBtn) settingsBtn.style.display = 'none';
+    if (musicBtn) musicBtn.style.display = 'none';
     if (pageTitle) pageTitle.style.display = 'none';
     if (copyrightEl) copyrightEl.style.display = 'block';
     const start = new StartScene();
@@ -498,6 +516,7 @@ async function init() {
     activeScreen = 'game';
     if (soundBtn) soundBtn.style.display = 'flex';
     if (settingsBtn) settingsBtn.style.display = 'flex';
+    if (musicBtn) musicBtn.style.display = 'flex';
     if (pageTitle) pageTitle.style.display = 'block';
     if (copyrightEl) copyrightEl.style.display = 'none';
     const game = new GameScene(app.renderer);

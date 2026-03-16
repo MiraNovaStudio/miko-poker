@@ -14,8 +14,25 @@ export class AudioManager {
   private buffers: Map<string, AudioBuffer> = new Map();
   private loaded = false;
 
-  /** When true, all sound effects are suppressed */
+  /** When true, all sound effects and music are suppressed */
   muted = false;
+
+  /** Whether music is currently playing (independent of mute) */
+  private _musicPlaying = false;
+
+  /** The HTML audio element used for background music */
+  private musicEl: HTMLAudioElement | null = null;
+
+  /** Shuffled playlist of music file paths */
+  private playlist: string[] = [];
+
+  /** Current index in the playlist */
+  private playlistIndex = 0;
+
+  /** Callback for UI to react to music state changes */
+  onMusicStateChange?: (playing: boolean) => void;
+
+  get musicPlaying(): boolean { return this._musicPlaying; }
 
   async initialize(): Promise<void> {
     this.audioCtx = new AudioContext();
@@ -41,7 +58,109 @@ export class AudioManager {
 
     this.loaded = true;
     console.log(`AudioManager: loaded ${this.buffers.size} sounds`);
+
+    // Build and shuffle playlist
+    this.playlist = this.buildPlaylist();
+    this.shufflePlaylist();
+
+    // Create the music audio element
+    this.musicEl = document.createElement('audio');
+    this.musicEl.volume = 0.35;
+    this.musicEl.addEventListener('ended', () => this.nextTrack());
   }
+
+  /** Toggle mute. When muting, pause music; when unmuting, resume if was playing. */
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (this.musicEl) {
+      if (muted) {
+        this.musicEl.pause();
+      } else if (this._musicPlaying) {
+        this.musicEl.play().catch(() => {});
+      }
+    }
+  }
+
+  /** Start playing music from the playlist */
+  playMusic(): void {
+    if (!this.musicEl || this.playlist.length === 0) return;
+    this._musicPlaying = true;
+    this.musicEl.src = this.playlist[this.playlistIndex];
+    if (!this.muted) {
+      this.musicEl.play().catch(() => {});
+    }
+    this.onMusicStateChange?.(true);
+  }
+
+  /** Stop music playback */
+  stopMusic(): void {
+    if (!this.musicEl) return;
+    this._musicPlaying = false;
+    this.musicEl.pause();
+    this.musicEl.currentTime = 0;
+    this.onMusicStateChange?.(false);
+  }
+
+  /** Toggle music on/off */
+  toggleMusic(): void {
+    if (this._musicPlaying) {
+      this.stopMusic();
+    } else {
+      this.playMusic();
+    }
+  }
+
+  /** Advance to the next track in the playlist */
+  private nextTrack(): void {
+    if (!this._musicPlaying || this.playlist.length === 0) return;
+    this.playlistIndex = (this.playlistIndex + 1) % this.playlist.length;
+    // Reshuffle when we loop back to the start
+    if (this.playlistIndex === 0) {
+      this.shufflePlaylist();
+    }
+    this.musicEl!.src = this.playlist[this.playlistIndex];
+    if (!this.muted) {
+      this.musicEl!.play().catch(() => {});
+    }
+  }
+
+  /** Build the list of music file paths */
+  private buildPlaylist(): string[] {
+    const tracks = [
+      '01 - Stellar Drift.mp3',
+      '02 - Nightfall.mp3',
+      '03 - Racing Through Time.mp3',
+      '04 - Midnight City Lights.mp3',
+      '05 - Ultravox.mp3',
+      '06 - Neon Voyager.mp3',
+      '07 - Shadows In Motion.mp3',
+      '08 - Dreamscore.mp3',
+      '09 - Holographic Love.mp3',
+      '10 - Future Vibes.mp3',
+      '11 - Through The Grid.mp3',
+      '12 - Eternal Waves.mp3',
+      '13 - Quantum Dancer.mp3',
+      '14 - Hyperion.mp3',
+      '15 - Cosmic Eclipse.mp3',
+      '16 - Lunar Frequencies.mp3',
+      '17 - Chasing Stars.mp3',
+      '18 - Retropolis.mp3',
+      '19 - The Galactic Pulse.mp3',
+      '20 - Lazerscape.mp3',
+    ];
+    return tracks.map(t => `assets/music/${t}`);
+  }
+
+  /** Fisher-Yates shuffle */
+  private shufflePlaylist(): void {
+    for (let i = this.playlist.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [this.playlist[i], this.playlist[j]] = [this.playlist[j], this.playlist[i]];
+    }
+    this.playlistIndex = 0;
+  }
+
+  // ─── Sound effects ─────────────────────────────────────────
 
   private ensureResumed(): void {
     if (this.audioCtx?.state === 'suspended') {

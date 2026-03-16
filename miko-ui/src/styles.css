@@ -41,6 +41,13 @@ html, body {
 }
 #sound-toggle { right: 12px; }
 #settings-toggle { right: 64px; }
+#music-toggle {
+  right: 116px;
+  width: auto;
+  padding: 0 14px;
+  font-size: 14px;
+  gap: 4px;
+}
 
 /* Settings modal */
 #settings-modal {
