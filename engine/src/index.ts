@@ -8,7 +8,7 @@ export const version = '0.1.0';
 
 // Main game engine
 export { PokerGameEngine } from './game-engine.js';
-export type { GameState, GameResult, GameEvent } from './game-engine.js';
+export type { GameState, GameResult, GamePotResult, GameEvent } from './game-engine.js';
 
 // Types
 export type { 
@@ -34,6 +34,7 @@ export {
 export { Deck } from './deck.js';
 export { Player } from './player.js';
 export { PotManager } from './pot.js';
+export type { PotAwardResult } from './pot.js';
 export { BettingRound } from './betting.js';
 
 // AI

@@ -40,12 +40,22 @@ export interface GameState {
 /**
  * Hand result information
  */
+/** Per-pot result included in GameResult when side pots exist. */
+export interface GamePotResult {
+  potIndex: number;  // 0 = main pot, 1+ = side pots
+  potLabel: string;  // "Main Pot", "Side Pot 1", etc.
+  amount: number;
+  winnerIds: string[];
+  winningHand: string;
+}
+
 export interface GameResult {
   winners: string[];
   winningHand?: string;
   playerHand?: string;
   opponentHand?: string;
   potAmount: number;
+  potResults?: GamePotResult[];
 }
 
 /**
@@ -575,7 +585,7 @@ export class PokerGameEngine {
     const potAmount = this.pot.getTotalPot();
 
     // Award main pot and side pots separately based on eligibility
-    this.pot.awardPots(this.players, (eligible) => {
+    const potAwards = this.pot.awardPots(this.players, (eligible) => {
       // Among eligible players, find the best hand(s)
       const eligibleHands = handsWithPlayers.filter(h => eligible.includes(h.player));
       if (eligibleHands.length === 0) return [];
@@ -590,12 +600,26 @@ export class PokerGameEngine {
         .map(h => h.player);
     });
 
+    // Build per-pot results with hand names for each pot's winner
+    const potResults: GamePotResult[] = potAwards.map(award => {
+      // Find the winning hand name for this pot's winners
+      const winnerHand = handsWithPlayers.find(h => award.winnerIds.includes(h.player.id));
+      return {
+        potIndex: award.potIndex,
+        potLabel: award.potIndex === 0 ? 'Main Pot' : `Side Pot ${award.potIndex}`,
+        amount: award.amount,
+        winnerIds: award.winnerIds,
+        winningHand: winnerHand?.handName ?? bestHand.handName,
+      };
+    });
+
     const result: GameResult = {
       winners: winners.map(w => w.player.id),
       winningHand: bestHand.handName,
       playerHand: handsWithPlayers.find(h => h.player.id === this.players[0].id)?.handName,
       opponentHand: handsWithPlayers.find(h => h.player.id === this.players[1]?.id)?.handName,
-      potAmount
+      potAmount,
+      potResults: potResults.length > 1 ? potResults : undefined,
     };
 
     this.emitEvent({ type: 'hand_complete', result });

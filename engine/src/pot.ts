@@ -14,6 +14,13 @@ export interface PotInfo {
   eligiblePlayers: string[]; // player IDs
 }
 
+/** Result of awarding a single pot layer. */
+export interface PotAwardResult {
+  potIndex: number;  // 0 = main pot, 1+ = side pots
+  amount: number;
+  winnerIds: string[];
+}
+
 /** Internal record of a player's cumulative contribution and fold status. */
 interface ContributionRecord {
   totalBet: number;
@@ -143,7 +150,7 @@ export class PotManager {
    * contributed at least that much. Each pot is eligible only to non-folded
    * players at that level. Best hand among eligible wins the pot.
    */
-  awardPots(players: Player[], getWinners: (eligiblePlayers: Player[]) => Player[]): void {
+  awardPots(players: Player[], getWinners: (eligiblePlayers: Player[]) => Player[]): PotAwardResult[] {
     // Sync contributions with final player state before computing layers
     for (const player of players) {
       this.contributions.set(player.id, {
@@ -153,41 +160,43 @@ export class PotManager {
     }
 
     const layers = this.computeLayers();
+    const results: PotAwardResult[] = [];
 
-    for (const layer of layers) {
+    for (let i = 0; i < layers.length; i++) {
+      const layer = layers[i];
       // Resolve eligible Player objects for this layer
       const eligible = players.filter(p => layer.eligiblePlayers.includes(p.id));
 
+      let winners: Player[] = [];
       if (eligible.length > 0) {
-        const winners = getWinners(eligible);
-        if (winners.length > 0) {
-          const share = Math.floor(layer.amount / winners.length);
-          let remainder = layer.amount % winners.length;
-          for (const w of winners) {
-            let amount = share;
-            if (remainder > 0) { amount += 1; remainder--; }
-            w.addChips(amount);
-          }
-        }
+        winners = getWinners(eligible);
       } else {
         // All eligible players folded — give to any non-folded player
         const nonFolded = players.filter(p => !p.folded);
         if (nonFolded.length > 0) {
-          const winners = getWinners(nonFolded);
-          if (winners.length > 0) {
-            const share = Math.floor(layer.amount / winners.length);
-            let remainder = layer.amount % winners.length;
-            for (const w of winners) {
-              let amount = share;
-              if (remainder > 0) { amount += 1; remainder--; }
-              w.addChips(amount);
-            }
-          }
+          winners = getWinners(nonFolded);
         }
+      }
+
+      if (winners.length > 0) {
+        const share = Math.floor(layer.amount / winners.length);
+        let remainder = layer.amount % winners.length;
+        for (const w of winners) {
+          let amount = share;
+          if (remainder > 0) { amount += 1; remainder--; }
+          w.addChips(amount);
+        }
+
+        results.push({
+          potIndex: i,
+          amount: layer.amount,
+          winnerIds: winners.map(w => w.id),
+        });
       }
     }
 
     this.reset();
+    return results;
   }
 
   /**

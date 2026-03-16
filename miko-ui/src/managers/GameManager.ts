@@ -5,7 +5,7 @@
  */
 
 import { PokerGameEngine, evaluateHand, getHandName, getRankName, Deck } from '@engine/index.js';
-import type { GameEvent, GameResult, Card as EngineCard, PlayerState, HandStrength } from '@engine/index.js';
+import type { GameEvent, GameResult, GamePotResult, Card as EngineCard, PlayerState, HandStrength } from '@engine/index.js';
 
 import { SlotLayout } from '../components/SlotLayout.js';
 import { PlayerSlot } from '../components/PlayerSlot.js';
@@ -1173,50 +1173,115 @@ export class GameManager {
       this.revealAllCardsAtShowdown();
     }
 
-    // Build status message showing per-player winnings
-    const actualWinnerIds = Array.from(perPlayerWinnings.keys());
-    const winnerParts: string[] = [];
-    for (const pid of actualWinnerIds) {
-      const amt = perPlayerWinnings.get(pid) ?? 0;
-      winnerParts.push(`${this.getDisplayName(pid)} wins ${formatChips(amt)}`);
-    }
-    let statusMsg = winnerParts.length > 0
-      ? winnerParts.join(', ')
-      : `${result.winners.map(id => this.getDisplayName(id)).join(', ')} wins ${formatChips(result.potAmount)}!`;
-    if (result.winningHand && this.engine) {
-      const handDesc = this.getWinningHandDescription(result.winners[0]);
-      statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
-    }
-    this.statusBar.setStatus(statusMsg);
-    const handNum = String(this.handCounter).padStart(3, '0');
-    this.handHistory.addEntry(`Hand ${handNum}: ${statusMsg}`);
-
     // Show hand names on bet labels at showdown
     if (result.winningHand) {
       this.showShowdownHandNames(result.winners);
     }
 
-    // Highlight winner names temporarily (only best-hand winners, not side pot recipients)
-    this.highlightWinnerNames(result.winners);
+    const handNum = String(this.handCounter).padStart(3, '0');
+    let extraDelay = 0;
 
-    // Animate pot flying to each player who received winnings (including side pot recipients)
-    const allWinners = actualWinnerIds.length > 0 ? actualWinnerIds : result.winners;
-    this.animatePotToWinners(allWinners, preWinChips, postWinChips, perPlayerWinnings);
+    if (result.potResults && result.potResults.length > 1) {
+      // ── SEQUENTIAL POT AWARDS ──
+      // Award side pots first (reverse order), then main pot
+      const orderedPots = [...result.potResults].reverse();
+      const POT_DELAY = 2500;
+      extraDelay = (orderedPots.length - 1) * POT_DELAY;
 
-    // Highlight winning cards (raise them up) and dim non-winning cards
-    if (result.winningHand) {
-      result.winners.forEach(wid => {
-        this.highlightWinningBoardCards(wid);
-        this.highlightWinningHoleCards(wid);
+      // Log combined result to hand history
+      const fullMsg = orderedPots.map(pr => {
+        const names = pr.winnerIds.map(id => this.getDisplayName(id)).join(', ');
+        return `${pr.potLabel}: ${names} wins ${formatChips(pr.amount)} — ${pr.winningHand}`;
+      }).join(' | ');
+      this.handHistory.addEntry(`Hand ${handNum}: ${fullMsg}`);
+
+      // Track running chip totals for incremental display
+      const runningChips = new Map<string, number>();
+      preWinChips.forEach((chips, id) => runningChips.set(id, chips));
+
+      // Hide pot label immediately
+      this.statusBar.setPot('');
+
+      // Award each pot sequentially
+      orderedPots.forEach((potResult, idx) => {
+        this.delayed(() => {
+          // Update status bar
+          const names = potResult.winnerIds.map(id => this.getDisplayName(id)).join(', ');
+          this.statusBar.setStatus(
+            `${potResult.potLabel} (${formatChips(potResult.amount)}): ${names} wins — ${potResult.winningHand}`
+          );
+
+          // Show WINNER! on this pot's winners
+          this.highlightWinnerNames(potResult.winnerIds);
+
+          // Calculate per-winner share for this pot
+          const perWinner = Math.floor(potResult.amount / potResult.winnerIds.length);
+          let remainder = potResult.amount % potResult.winnerIds.length;
+
+          // Animate chips flying to each winner of this pot
+          potResult.winnerIds.forEach((pid, widx) => {
+            const winAmount = perWinner + (widx < remainder ? 1 : 0);
+            const fromChips = runningChips.get(pid) ?? 0;
+            const toChips = fromChips + winAmount;
+            runningChips.set(pid, toChips);
+
+            this.animateSinglePotAward(pid, winAmount, fromChips, toChips);
+          });
+
+          // On last pot, highlight winning cards
+          if (idx === orderedPots.length - 1) {
+            this.delayed(() => {
+              if (result.winningHand) {
+                result.winners.forEach(wid => {
+                  this.highlightWinningBoardCards(wid);
+                  this.highlightWinningHoleCards(wid);
+                });
+                this.dimNonWinningCards(result.winners);
+              }
+            }, 1500);
+          }
+        }, idx * POT_DELAY);
       });
-      this.dimNonWinningCards(result.winners);
+    } else {
+      // ── SINGLE POT — existing display logic ──
+      const actualWinnerIds = Array.from(perPlayerWinnings.keys());
+      const winnerParts: string[] = [];
+      for (const pid of actualWinnerIds) {
+        const amt = perPlayerWinnings.get(pid) ?? 0;
+        winnerParts.push(`${this.getDisplayName(pid)} wins ${formatChips(amt)}`);
+      }
+      let statusMsg = winnerParts.length > 0
+        ? winnerParts.join(', ')
+        : `${result.winners.map(id => this.getDisplayName(id)).join(', ')} wins ${formatChips(result.potAmount)}!`;
+      if (result.winningHand && this.engine) {
+        const handDesc = this.getWinningHandDescription(result.winners[0]);
+        statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
+      }
+      this.statusBar.setStatus(statusMsg);
+      this.handHistory.addEntry(`Hand ${handNum}: ${statusMsg}`);
+
+      // Highlight winner names
+      this.highlightWinnerNames(result.winners);
+
+      // Animate pot flying to each player who received winnings
+      const allWinners = actualWinnerIds.length > 0 ? actualWinnerIds : result.winners;
+      this.animatePotToWinners(allWinners, preWinChips, postWinChips, perPlayerWinnings);
+
+      // Highlight winning cards (raise them up) and dim non-winning cards
+      if (result.winningHand) {
+        result.winners.forEach(wid => {
+          this.highlightWinningBoardCards(wid);
+          this.highlightWinningHoleCards(wid);
+        });
+        this.dimNonWinningCards(result.winners);
+      }
     }
 
     // Clear tracking state
     this.currentCommunityCards = [];
     this.playerHoleCards.clear();
 
-    // Schedule next hand
+    // Schedule next hand (extra delay for multi-pot sequential display)
     this.delayed(() => {
       if (this.eliminatedPlayers.has('player')) return;
       // Check win condition before starting next hand
@@ -1267,7 +1332,7 @@ export class GameManager {
           this.delayed(() => this.advanceGame(), 500);
         }
       }
-    }, 8000);
+    }, 8000 + extraDelay);
   }
 
   // ─── Player Actions ──────────────────────────────────────
@@ -2051,6 +2116,94 @@ export class GameManager {
         requestAnimationFrame(animate);
       }, delay);
     });
+  }
+
+  /** Animate a single pot award: chips fly from pot position to one player. */
+  private animateSinglePotAward(
+    pid: string,
+    winAmount: number,
+    fromChips: number,
+    toChips: number,
+  ): void {
+    const potPos = this.statusBar.getPotLabelScenePosition();
+    const scene = this.statusBar.parent;
+    if (!scene) return;
+
+    const slot = this.getSlotForPlayer(pid);
+    if (!slot) return;
+
+    const targetX = slot.x;
+    const targetY = slot.y + CHIP_OVERLAY_Y;
+
+    // Create floating text showing the pot award amount
+    const floatingText = new Text({
+      text: `+${formatChips(winAmount)}`,
+      style: FONTS.potLabel as TextStyleOptions,
+    });
+    floatingText.anchor.set(0.5);
+    floatingText.x = potPos.x;
+    floatingText.y = potPos.y;
+    scene.addChild(floatingText);
+
+    // Create a few flying chip graphics
+    const flyingChips = this.potChips.createFlyingChips(3);
+    const chipStartX = this.potChips.x;
+    const chipStartY = this.potChips.y;
+    const chipOrigins: { x: number; y: number }[] = [];
+    flyingChips.forEach((chip, ci) => {
+      const ox = chipStartX + (Math.random() - 0.5) * 16;
+      const oy = chipStartY - ci * 3;
+      chip.x = ox;
+      chip.y = oy;
+      chipOrigins.push({ x: ox, y: oy });
+      scene.addChild(chip);
+    });
+
+    // Animate text and chips flying to the winner
+    const startX = floatingText.x;
+    const startY = floatingText.y;
+    const startTime = performance.now();
+    const flyDuration = 1400;
+
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / flyDuration, 1);
+      const ease = t < 0.5
+        ? 4 * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+      floatingText.x = startX + (targetX - startX) * ease;
+      floatingText.y = startY + (targetY - startY) * ease;
+      floatingText.scale.set(1 - 0.3 * ease);
+      floatingText.alpha = 1 - 0.2 * ease;
+
+      flyingChips.forEach((chip, ci) => {
+        const chipDelay = ci * 0.06;
+        const chipT = Math.max(0, Math.min((t - chipDelay) / (1 - chipDelay), 1));
+        const chipEase = chipT < 0.5
+          ? 4 * chipT * chipT * chipT
+          : 1 - Math.pow(-2 * chipT + 2, 3) / 2;
+
+        const origin = chipOrigins[ci] ?? { x: chipStartX, y: chipStartY };
+        chip.x = origin.x + (targetX - origin.x) * chipEase;
+        chip.y = origin.y + (targetY - origin.y) * chipEase;
+        chip.alpha = 1 - 0.3 * chipEase;
+        chip.scale.set(1 - 0.4 * chipEase);
+      });
+
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        scene.removeChild(floatingText);
+        floatingText.destroy();
+        flyingChips.forEach(chip => {
+          scene.removeChild(chip);
+          chip.destroy();
+        });
+        slot.pulseChipOverlay();
+        slot.animateChipsTo(fromChips, toChips);
+      }
+    };
+    requestAnimationFrame(animate);
   }
 
   // ─── Winning card highlighting ─────────────────────────────
