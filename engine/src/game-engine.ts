@@ -546,6 +546,15 @@ export class PokerGameEngine {
   }
 
   /**
+   * Check whether pot award results have at least two pots won by different player sets.
+   */
+  private static hasDistinctWinners(pots: GamePotResult[]): boolean {
+    if (pots.length <= 1) return false;
+    const first = pots[0].winnerIds.slice().sort().join(',');
+    return pots.some(p => p.winnerIds.slice().sort().join(',') !== first);
+  }
+
+  /**
    * Handle showdown
    */
   private doShowdown(): void {
@@ -619,7 +628,11 @@ export class PokerGameEngine {
       playerHand: handsWithPlayers.find(h => h.player.id === this.players[0].id)?.handName,
       opponentHand: handsWithPlayers.find(h => h.player.id === this.players[1]?.id)?.handName,
       potAmount,
-      potResults: potResults.length > 1 ? potResults : undefined,
+      // Only include per-pot results when different players win different pots.
+      // Folded blind contributions can create multiple layers with the same winner —
+      // those should be treated as a single pot for display purposes.
+      potResults: potResults.length > 1 && PokerGameEngine.hasDistinctWinners(potResults)
+        ? potResults : undefined,
     };
 
     this.emitEvent({ type: 'hand_complete', result });
