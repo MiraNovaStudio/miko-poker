@@ -8,6 +8,9 @@ import { GameScene } from './scenes/GameScene.js';
 import { createAvatar, AVATAR_PRESETS } from './utils/createAvatar.js';
 import { CARD_BACK_DESIGNS, type CardBackDesign } from './components/Card.js';
 
+/** Set to true to show the music player button. Disabled pending music licensing review. */
+const SHOW_MUSIC_BUTTON = false;
+
 /** Design resolution the layout was authored for */
 const DESIGN_WIDTH = 960;
 const DESIGN_HEIGHT = 720;
@@ -483,7 +486,7 @@ async function init() {
     } else {
       if (soundBtn) soundBtn.style.display = 'flex';
       if (settingsBtn) settingsBtn.style.display = 'flex';
-      if (musicBtn) musicBtn.style.display = 'flex';
+      if (musicBtn) musicBtn.style.display = SHOW_MUSIC_BUTTON ? 'flex' : 'none';
       if (pageTitle) pageTitle.style.display = 'block';
       if (copyrightEl) copyrightEl.style.display = 'none';
     }
@@ -516,7 +519,7 @@ async function init() {
     activeScreen = 'game';
     if (soundBtn) soundBtn.style.display = 'flex';
     if (settingsBtn) settingsBtn.style.display = 'flex';
-    if (musicBtn) musicBtn.style.display = 'flex';
+    if (musicBtn) musicBtn.style.display = SHOW_MUSIC_BUTTON ? 'flex' : 'none';
     if (pageTitle) pageTitle.style.display = 'block';
     if (copyrightEl) copyrightEl.style.display = 'none';
     const game = new GameScene(app.renderer);
