@@ -1,6 +1,10 @@
 // (c) 2025 MiraNova Studios
 /**
- * Pot management including side pots
+ * Pot management including side pots.
+ *
+ * Tracks per-player contributions across all streets so that pot layers
+ * (main pot + side pots) can be computed on demand at any point during
+ * a hand — not only at showdown.
  */
 
 import type { Player } from './player.js';
@@ -10,43 +14,59 @@ export interface PotInfo {
   eligiblePlayers: string[]; // player IDs
 }
 
+/** Internal record of a player's cumulative contribution and fold status. */
+interface ContributionRecord {
+  totalBet: number;
+  folded: boolean;
+}
+
 export class PotManager {
-  private mainPot: number;
-  private sidePots: PotInfo[];
+  /** Running total of chips collected into the pot (for fast getTotalPot). */
+  private totalCollected: number;
+
+  /** Per-player contribution tracking, updated each time collectBets is called. */
+  private contributions: Map<string, ContributionRecord>;
 
   constructor() {
-    this.mainPot = 0;
-    this.sidePots = [];
+    this.totalCollected = 0;
+    this.contributions = new Map();
   }
 
   /**
    * Reset pot for new hand
    */
   reset(): void {
-    this.mainPot = 0;
-    this.sidePots = [];
+    this.totalCollected = 0;
+    this.contributions.clear();
   }
 
   /**
    * Get total pot size
    */
   getTotalPot(): number {
-    const sideTotal = this.sidePots.reduce((sum, pot) => sum + pot.amount, 0);
-    return this.mainPot + sideTotal;
+    return this.totalCollected;
   }
 
   /**
-   * Get main pot amount
+   * Get main pot amount (the first / lowest pot layer).
    */
   getMainPot(): number {
-    return this.mainPot;
+    const layers = this.computeLayers();
+    if (layers.length > 0) return layers[0].amount;
+    return this.totalCollected;
   }
 
   /**
-   * Get all side pots
+   * Get all pot layers (main pot + side pots).
+   * Returns an array where index 0 is the main pot and subsequent entries
+   * are side pots in ascending contribution order. Each entry includes
+   * the pot amount and the IDs of non-folded players eligible to win it.
+   *
+   * This can be called at any point during a hand to get the current
+   * pot structure based on contributions collected so far.
    */
   getSidePots(): PotInfo[] {
-    return [...this.sidePots];
+    return this.computeLayers();
   }
 
   /**
@@ -54,6 +74,9 @@ export class PotManager {
    * Before collecting, returns any uncalled bet portion to the bettor.
    * If one player bet more than any other active player matched,
    * the unmatched excess is returned (standard poker rule).
+   *
+   * Also updates per-player contribution records so that getSidePots()
+   * returns accurate layer information during gameplay.
    */
   collectBets(players: Player[]): void {
     // Return uncalled bet: find the highest bet that was matched by 2+ players
@@ -80,13 +103,18 @@ export class PotManager {
     let total = 0;
     for (const player of players) {
       total += player.bet;
+      // Update contribution tracking with latest cumulative state
+      this.contributions.set(player.id, {
+        totalBet: player.totalBet,
+        folded: player.folded,
+      });
       player.resetBetForStreet();
     }
-    this.mainPot += total;
+    this.totalCollected += total;
   }
 
   /**
-   * Award pot to winner(s)
+   * Award pot to winner(s) — simple version for fold wins.
    */
   awardPot(winners: Player[]): void {
     if (winners.length === 0) return;
@@ -107,7 +135,8 @@ export class PotManager {
   }
 
   /**
-   * Award pot(s) to winner(s), building layered side pots from totalBet.
+   * Award pot(s) to winner(s), using layered side pots built from
+   * per-player totalBet contributions.
    *
    * Algorithm: sort contributors by totalBet ascending, then for each
    * contribution level create a pot = increment × number of players who
@@ -115,49 +144,30 @@ export class PotManager {
    * players at that level. Best hand among eligible wins the pot.
    */
   awardPots(players: Player[], getWinners: (eligiblePlayers: Player[]) => Player[]): void {
-    // Build layered pots from totalBet
-    const contributors = players
-      .filter(p => p.totalBet > 0)
-      .sort((a, b) => a.totalBet - b.totalBet);
-
-    if (contributors.length === 0) {
-      this.reset();
-      return;
+    // Sync contributions with final player state before computing layers
+    for (const player of players) {
+      this.contributions.set(player.id, {
+        totalBet: player.totalBet,
+        folded: player.folded,
+      });
     }
 
-    // Deduplicate contribution levels
-    const levels: number[] = [];
-    for (const p of contributors) {
-      if (levels.length === 0 || levels[levels.length - 1] !== p.totalBet) {
-        levels.push(p.totalBet);
-      }
-    }
+    const layers = this.computeLayers();
 
-    let previousLevel = 0;
-    let awarded = 0;
-
-    for (const level of levels) {
-      const increment = level - previousLevel;
-      if (increment <= 0) continue;
-
-      // Every contributor who put in at least this level contributes 'increment'
-      const numContributors = contributors.filter(p => p.totalBet >= level).length;
-      const potAmount = increment * numContributors;
-
-      // Eligible to win = contributed at this level AND not folded
-      const eligible = contributors.filter(p => p.totalBet >= level && !p.folded);
+    for (const layer of layers) {
+      // Resolve eligible Player objects for this layer
+      const eligible = players.filter(p => layer.eligiblePlayers.includes(p.id));
 
       if (eligible.length > 0) {
         const winners = getWinners(eligible);
         if (winners.length > 0) {
-          const share = Math.floor(potAmount / winners.length);
-          let remainder = potAmount % winners.length;
+          const share = Math.floor(layer.amount / winners.length);
+          let remainder = layer.amount % winners.length;
           for (const w of winners) {
             let amount = share;
             if (remainder > 0) { amount += 1; remainder--; }
             w.addChips(amount);
           }
-          awarded += potAmount;
         }
       } else {
         // All eligible players folded — give to any non-folded player
@@ -165,22 +175,62 @@ export class PotManager {
         if (nonFolded.length > 0) {
           const winners = getWinners(nonFolded);
           if (winners.length > 0) {
-            const share = Math.floor(potAmount / winners.length);
-            let remainder = potAmount % winners.length;
+            const share = Math.floor(layer.amount / winners.length);
+            let remainder = layer.amount % winners.length;
             for (const w of winners) {
               let amount = share;
               if (remainder > 0) { amount += 1; remainder--; }
               w.addChips(amount);
             }
-            awarded += potAmount;
           }
         }
       }
-
-      previousLevel = level;
     }
 
     this.reset();
   }
-}
 
+  /**
+   * Compute pot layers from stored contribution records.
+   *
+   * Sorts contributors by totalBet ascending and creates one layer per
+   * distinct contribution level. Each layer's amount = increment × number
+   * of contributors at that level or above.
+   */
+  private computeLayers(): PotInfo[] {
+    const contribs = Array.from(this.contributions.entries())
+      .filter(([_, info]) => info.totalBet > 0)
+      .sort((a, b) => a[1].totalBet - b[1].totalBet);
+
+    if (contribs.length === 0) return [];
+
+    // Deduplicate contribution levels
+    const levels: number[] = [];
+    for (const [_, info] of contribs) {
+      if (levels.length === 0 || levels[levels.length - 1] !== info.totalBet) {
+        levels.push(info.totalBet);
+      }
+    }
+
+    const pots: PotInfo[] = [];
+    let previousLevel = 0;
+
+    for (const level of levels) {
+      const increment = level - previousLevel;
+      if (increment <= 0) continue;
+
+      const numContributors = contribs.filter(([_, info]) => info.totalBet >= level).length;
+      const amount = increment * numContributors;
+
+      // Eligible to win = contributed at this level AND not folded
+      const eligible = contribs
+        .filter(([_, info]) => info.totalBet >= level && !info.folded)
+        .map(([id]) => id);
+
+      pots.push({ amount, eligiblePlayers: eligible });
+      previousLevel = level;
+    }
+
+    return pots;
+  }
+}
