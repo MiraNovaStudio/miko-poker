@@ -1173,6 +1173,14 @@ export class GameManager {
       this.revealAllCardsAtShowdown();
     }
 
+    // Clear ALL-IN state on winners before shipping the pot
+    const allWinnerIds = result.potResults
+      ? result.potResults.flatMap(pr => pr.winnerIds)
+      : result.winners;
+    for (const wid of new Set(allWinnerIds)) {
+      this.getSlotForPlayer(wid)?.clearAllIn();
+    }
+
     // Show hand names on bet labels at showdown
     if (result.winningHand) {
       this.showShowdownHandNames(result.winners);
