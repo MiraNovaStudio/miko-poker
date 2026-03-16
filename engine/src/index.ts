@@ -4,7 +4,7 @@
  * UI-agnostic poker game logic
  */
 
-export const version = '0.1.0';
+export const version = '0.5.1';
 
 // Main game engine
 export { PokerGameEngine } from './game-engine.js';

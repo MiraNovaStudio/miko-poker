@@ -1,4 +1,8 @@
 // (c) 2026 MiraNova Studios
+
+const MUTE_KEY = 'miko_muted';
+const SHUFFLE_KEY = 'miko_shuffleMusic';
+
 export class AudioManager {
   private static _instance: AudioManager | null = null;
 
@@ -15,7 +19,7 @@ export class AudioManager {
   private loaded = false;
 
   /** When true, all sound effects and music are suppressed */
-  muted = false;
+  muted = localStorage.getItem(MUTE_KEY) === 'true';
 
   /** Whether music is currently playing (independent of mute) */
   private _musicPlaying = false;
@@ -30,7 +34,7 @@ export class AudioManager {
   private playlistIndex = 0;
 
   /** When true, playlist order is randomized */
-  private _shuffle = false;
+  private _shuffle = localStorage.getItem(SHUFFLE_KEY) === 'true';
 
   /** Callback for UI to react to music state changes */
   onMusicStateChange?: (playing: boolean) => void;
@@ -40,15 +44,10 @@ export class AudioManager {
 
   setShuffle(on: boolean): void {
     this._shuffle = on;
-    if (on) {
-      this.shufflePlaylist();
-    } else {
-      // Restore original order, keep current track playing
-      const currentSrc = this.musicEl?.src ?? '';
-      this.playlist = this.buildPlaylist();
-      // Find the current track in the restored order
-      const idx = this.playlist.findIndex(t => currentSrc.endsWith(t.replace(/ /g, '%20')));
-      this.playlistIndex = idx >= 0 ? idx : 0;
+    localStorage.setItem(SHUFFLE_KEY, String(on));
+    // If music is playing and shuffle was just turned on, jump to a random track
+    if (on && this._musicPlaying && this.musicEl && !this.muted) {
+      this.playRandomTrack();
     }
   }
 
@@ -89,6 +88,7 @@ export class AudioManager {
   /** Toggle mute. When muting, pause music; when unmuting, resume if was playing. */
   setMuted(muted: boolean): void {
     this.muted = muted;
+    localStorage.setItem(MUTE_KEY, String(muted));
     if (this.musicEl) {
       if (muted) {
         this.musicEl.pause();
@@ -102,9 +102,13 @@ export class AudioManager {
   playMusic(): void {
     if (!this.musicEl || this.playlist.length === 0) return;
     this._musicPlaying = true;
-    // Load first track if nothing is loaded yet, or restart from beginning if playlist finished
+    // Load a track if nothing is loaded yet, or playlist finished
     if (!this.musicEl.src || this.playlistIndex >= this.playlist.length) {
-      this.playlistIndex = 0;
+      if (this._shuffle) {
+        this.playlistIndex = Math.floor(Math.random() * this.playlist.length);
+      } else {
+        this.playlistIndex = 0;
+      }
       this.musicEl.src = this.playlist[this.playlistIndex];
     }
     if (!this.muted) {
@@ -130,23 +134,31 @@ export class AudioManager {
     }
   }
 
-  /** Fisher-Yates shuffle, preserving current track position */
-  private shufflePlaylist(): void {
-    const currentSrc = this.musicEl?.src ?? '';
-    for (let i = this.playlist.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [this.playlist[i], this.playlist[j]] = [this.playlist[j], this.playlist[i]];
+  /** Pick a random track (different from current if possible) and play it */
+  private playRandomTrack(): void {
+    if (!this.musicEl || this.playlist.length === 0) return;
+    if (this.playlist.length > 1) {
+      let idx: number;
+      do {
+        idx = Math.floor(Math.random() * this.playlist.length);
+      } while (idx === this.playlistIndex);
+      this.playlistIndex = idx;
     }
-    const idx = this.playlist.findIndex(t => currentSrc.endsWith(t.replace(/ /g, '%20')));
-    this.playlistIndex = idx >= 0 ? idx : 0;
+    this.musicEl.src = this.playlist[this.playlistIndex];
+    if (!this.muted) {
+      this.musicEl.play().catch(() => {});
+    }
   }
 
   /** Advance to the next track, or stop if playlist is finished */
   private nextTrack(): void {
     if (!this._musicPlaying || this.playlist.length === 0) return;
+    if (this._shuffle) {
+      this.playRandomTrack();
+      return;
+    }
     this.playlistIndex++;
     if (this.playlistIndex >= this.playlist.length) {
-      // Playlist finished — stop instead of looping
       this.stopMusic();
       return;
     }

@@ -1448,10 +1448,12 @@ export class GameManager {
       previousLevel = level;
     }
 
-    // Side pot: everything above the highest all-in level (only non-all-in players)
+    // Side pot: everything above the highest all-in level.
+    // Exists whenever any player has bet above the all-in amount — even if only
+    // 1 player remains (they win the side pot by default).
     const highestAllIn = allInLevels[allInLevels.length - 1];
     const sideContributors = contributors.filter(p => p.totalBet > highestAllIn && !p.allIn);
-    if (sideContributors.length >= 2) {
+    if (sideContributors.length >= 1) {
       const sideAmount = sideContributors.reduce((sum, p) => sum + (p.totalBet - highestAllIn), 0);
       if (sideAmount > 0) {
         pots.push({ amount: sideAmount, eligible: sideContributors.filter(p => !p.folded).map(p => p.id) });

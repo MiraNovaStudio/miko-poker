@@ -1,6 +1,6 @@
 {
   "name": "@miko/engine",
-  "version": "0.4.1",
+  "version": "0.5.1",
   "description": "Pure TypeScript Texas Hold'em engine for MikoPoker (UI-agnostic).",
   "type": "module",
   "main": "dist/index.js",

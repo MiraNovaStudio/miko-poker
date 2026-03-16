@@ -38,6 +38,12 @@ Immediately set the player's chip stack to the specified amount.
 - **Console output**: `💰 Player chips set to 5000`
 - **Code**: `GameManager.ts` — `debugSetChips()`
 
+### `window.debugClearStorage()`
+Clear all localStorage (settings, mute state, shuffle preference, etc.). Reload the page after calling to apply defaults.
+
+- **Console output**: `🗑️ localStorage cleared. Reload the page to apply defaults.`
+- **Code**: `main.ts` — inline function
+
 ---
 
 ## Engine Debug Logging

@@ -42,6 +42,7 @@ async function init() {
     const updateIcon = () => {
       soundBtn.innerHTML = audio.muted ? '&#x1F507;' : '&#x1F50A;';
     };
+    updateIcon(); // reflect persisted mute state
     soundBtn.addEventListener('click', () => {
       audio.setMuted(!audio.muted);
       updateIcon();
@@ -200,6 +201,7 @@ async function init() {
       audio.setShuffle(false);
       updateShuffleButtons();
     });
+    updateShuffleButtons(); // reflect persisted shuffle state
 
     // Player name input
     const nameInput = document.getElementById('player-name') as HTMLInputElement | null;
@@ -514,6 +516,7 @@ async function init() {
       currentScene.destroy();
     }
     activeScreen = 'start';
+    audio.stopMusic();
     if (soundBtn) soundBtn.style.display = 'none';
     if (settingsBtn) settingsBtn.style.display = 'none';
     if (musicBtn) musicBtn.style.display = 'none';
@@ -549,6 +552,10 @@ async function init() {
     (window as any).debugClearTable = () => game.gameManager?.debugClearTable();
     (window as any).debugSetChips = (n: number) => game.gameManager?.debugSetChips(n);
     (window as any).debugAces = () => game.gameManager?.debugAces();
+    (window as any).debugClearStorage = () => {
+      localStorage.clear();
+      console.log('🗑️ localStorage cleared. Reload the page to apply defaults.');
+    };
   }
 
   window.addEventListener('resize', layoutScene);
