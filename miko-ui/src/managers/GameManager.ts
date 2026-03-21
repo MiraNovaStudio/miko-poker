@@ -1431,24 +1431,19 @@ export class GameManager {
       const runningChips = new Map<string, number>();
       preWinChips.forEach((chips, id) => runningChips.set(id, chips));
 
-      // Build the initial pot breakdown label (Main first, then sides)
-      // orderedPots is reversed (side pots first, main last) for award order,
-      // but the label should read Main → Side 1 → Side 2 etc.
-      const remainingPots = [...orderedPots].reverse(); // back to potIndex order
-      const buildPotLabel = () => {
-        return remainingPots
-          .map(pr => `${pr.potLabel}: ${formatChips(pr.amount)}`)
-          .join('\n');
-      };
-      this.statusBar.setPot(buildPotLabel());
+      // Keep the existing pot breakdown label (already on screen from gameplay).
+      // We'll peel off lines from the bottom as each pot is awarded.
+      // The label uses "Main: $X\nSide: $Y\nSide: $Z" format.
+      let currentPotLines = this.statusBar.getPotText().split('\n');
 
       // Award each pot sequentially
       orderedPots.forEach((potResult, idx) => {
         this.delayed(() => {
           // Update status bar
           const names = potResult.winnerIds.map(id => this.getDisplayName(id)).join(', ');
+          const potName = potResult.potIndex === 0 ? 'Main' : 'Side';
           this.statusBar.setStatus(
-            `${potResult.potLabel} (${formatChips(potResult.amount)}): ${names} wins — ${potResult.winningHand}`
+            `${potName}: ${formatChips(potResult.amount)} → ${names} wins — ${potResult.winningHand}`
           );
 
           // Show WINNER! on this pot's winners
@@ -1468,14 +1463,10 @@ export class GameManager {
             this.animateSinglePotAward(pid, winAmount, fromChips, toChips);
           });
 
-          // Remove awarded pot from the label so remaining pots are still visible
-          const potIdx = remainingPots.indexOf(potResult);
-          if (potIdx >= 0) remainingPots.splice(potIdx, 1);
-          if (remainingPots.length > 0) {
-            this.statusBar.setPot(buildPotLabel());
-          } else {
-            this.statusBar.setPot('');
-          }
+          // Remove the last line from the pot label (side pots are awarded
+          // bottom-up, so the last line corresponds to the current award)
+          currentPotLines = currentPotLines.slice(0, -1);
+          this.statusBar.setPot(currentPotLines.join('\n'));
 
           // On last pot, highlight winning cards
           if (idx === orderedPots.length - 1) {
