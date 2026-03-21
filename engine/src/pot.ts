@@ -34,9 +34,13 @@ export class PotManager {
   /** Per-player contribution tracking, updated each time collectBets is called. */
   private contributions: Map<string, ContributionRecord>;
 
+  /** Player IDs who already received uncontested pot awards (skipped in awardPots). */
+  private preAwardedPlayerIds: Set<string> = new Set();
+
   constructor() {
     this.totalCollected = 0;
     this.contributions = new Map();
+    this.preAwardedPlayerIds = new Set();
   }
 
   /**
@@ -45,6 +49,7 @@ export class PotManager {
   reset(): void {
     this.totalCollected = 0;
     this.contributions.clear();
+    this.preAwardedPlayerIds.clear();
   }
 
   /**
@@ -142,6 +147,45 @@ export class PotManager {
   }
 
   /**
+   * Award uncontested pot layers (where only 1 player is eligible).
+   * Standard poker rule: side pots with a single eligible player are
+   * awarded immediately, not held until showdown.
+   * Returns awarded results and removes awarded chips from the pot.
+   */
+  awardUncontestedLayers(players: Player[]): PotAwardResult[] {
+    // Sync contributions
+    for (const player of players) {
+      this.contributions.set(player.id, {
+        totalBet: player.totalBet,
+        folded: player.folded,
+      });
+    }
+
+    const layers = this.computeLayers();
+    const results: PotAwardResult[] = [];
+
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const layer = layers[i];
+      if (layer.eligiblePlayers.length === 1) {
+        const winnerId = layer.eligiblePlayers[0];
+        const winner = players.find(p => p.id === winnerId);
+        if (winner) {
+          winner.addChips(layer.amount);
+          this.totalCollected -= layer.amount;
+          this.preAwardedPlayerIds.add(winnerId);
+          results.push({
+            potIndex: i,
+            amount: layer.amount,
+            winnerIds: [winnerId],
+          });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
    * Award pot(s) to winner(s), using layered side pots built from
    * per-player totalBet contributions.
    *
@@ -164,6 +208,10 @@ export class PotManager {
 
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i];
+
+      // Skip layers already awarded via awardUncontestedLayers
+      // (uncontested layer = 1 eligible player who was already pre-awarded)
+      if (layer.eligiblePlayers.length === 1 && this.preAwardedPlayerIds.has(layer.eligiblePlayers[0])) continue;
       // Resolve eligible Player objects for this layer
       const eligible = players.filter(p => layer.eligiblePlayers.includes(p.id));
 

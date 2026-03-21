@@ -69,6 +69,7 @@ export type GameEvent =
   | { type: 'pot_updated'; amount: number }
   | { type: 'hand_complete'; result: GameResult }
   | { type: 'game_over'; winnerId: string }
+  | { type: 'side_pot_awarded'; winnerId: string; amount: number; potIndex: number }
   | { type: 'blind_posted'; playerId: string; amount: number; isAnte?: boolean }
   | { type: 'level_changed'; level: number; smallBlind: number; bigBlind: number; ante: number }
   | { type: 'game_mode_changed'; gameType: 'cash' | 'sng' | 'tournament' };
@@ -419,6 +420,18 @@ export class PokerGameEngine {
     this.players.forEach(p => {
       debugLog('END_ROUND', `   ${p.id}: bet=$${p.bet} (should be 0)`);
     });
+
+    // Award any side pots that have only 1 eligible player (uncontested)
+    const uncontestedAwards = this.pot.awardUncontestedLayers(this.players);
+    for (const award of uncontestedAwards) {
+      this.emitEvent({
+        type: 'side_pot_awarded',
+        winnerId: award.winnerIds[0],
+        amount: award.amount,
+        potIndex: award.potIndex,
+      });
+      this.emitEvent({ type: 'pot_updated', amount: this.getCurrentPot() });
+    }
 
     // Reset betting round state
     this.bettingRound.reset();

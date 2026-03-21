@@ -215,11 +215,9 @@ export class PlayerSlot extends Container {
     if (this._allIn) return;
     if (this.flashTimer) clearTimeout(this.flashTimer);
     this.chipsLabel.text = text;
-    this.chipsLabel.style.fill = COLORS.white;
     this.flashTimer = setTimeout(() => {
       this.flashTimer = null;
       if (this._allIn) return;
-      this.chipsLabel.style.fill = (FONTS.chipStack as { fill: number }).fill;
       this.chipsLabel.text = formatChips(chips);
     }, duration);
   }

@@ -1069,6 +1069,9 @@ export class GameManager {
       case 'pot_updated':
         this.updatePotLabel();
         break;
+      case 'side_pot_awarded':
+        this.onSidePotAwarded(event.winnerId, event.amount);
+        break;
       case 'hand_complete':
         this.onHandComplete(event.result);
         break;
@@ -1138,6 +1141,26 @@ export class GameManager {
     this.updatePotLabel();
     this.statusBar.setStatus('New Hand - Dealing Cards...');
     this.handPhase = 'dealing';
+  }
+
+  /** Handle immediate award of an uncontested side pot */
+  private onSidePotAwarded(winnerId: string, amount: number): void {
+    const slot = this.getSlotForPlayer(winnerId);
+    if (!slot) return;
+    const displayName = this.getDisplayName(winnerId);
+    this.statusBar.setStatus(`Side pot (${formatChips(amount)}) awarded to ${displayName} — uncontested`);
+    // Animate the award
+    if (this.engine) {
+      const player = this.engine.getGameState().players.find(p => p.id === winnerId);
+      if (player) {
+        const toChips = player.chips;
+        const fromChips = toChips - amount;
+        this.animateSinglePotAward(winnerId, amount, fromChips, toChips);
+      }
+    }
+    // Update chip labels and pot display
+    this.updateAllChipLabels();
+    this.updatePotLabel();
   }
 
   private onBlindPosted(playerId: string, amount: number): void {
@@ -1298,15 +1321,6 @@ export class GameManager {
       // bet, call, raise, allin
       slot.setBet(player.bet);
       this.audioManager.playBetSound();
-      // Flash the action name in the chip overlay for 1 second
-      const actionName = action.type === 'call' ? 'Call'
-        : action.type === 'raise' ? 'Raise'
-        : action.type === 'bet' ? 'Bet'
-        : action.type === 'allin' ? 'All In'
-        : '';
-      if (actionName) {
-        slot.flashAction(actionName, player.chips);
-      }
 
       // A raise reopens action — clear stale "Check" labels from players
       // who will need to act again (they haven't folded and aren't all-in)
@@ -1328,6 +1342,12 @@ export class GameManager {
     // Update all chip labels
     this.updateAllChipLabels();
     this.updatePotLabel();
+
+    // Flash action name in chip overlay AFTER chip labels are updated
+    if (action.type === 'call' || action.type === 'raise' || action.type === 'bet') {
+      const actionName = action.type === 'call' ? 'Call' : action.type === 'raise' ? 'Raise' : 'Bet';
+      slot.flashAction(actionName, player.chips);
+    }
 
     // Detect all-in condition: engine will auto-call forceHandComplete() inside
     // processAction when canAct === 0, so street_changed events fire synchronously.
