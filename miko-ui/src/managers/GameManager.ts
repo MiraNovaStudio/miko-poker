@@ -976,11 +976,13 @@ export class GameManager {
       if (!this.humanFolded) {
         const humanPlayer = gameState.players.find((p: PlayerState) => p.id === 'player');
         if (humanPlayer && !humanPlayer.folded) {
+          const highBet = gameState.players.reduce((max: number, p: PlayerState) => Math.max(max, p.bet), 0);
           if (!this.humanActedThisStreet) {
             // Human hasn't acted yet — show Check/Fold or Fold
-            const canCheck = gameState.callAmount === 0;
+            // Check if human can check: their bet >= the current highest bet
+            const canCheck = humanPlayer.bet >= highBet;
             this.actionBar.showPreaction(canCheck);
-          } else if (gameState.callAmount > (humanPlayer.bet || 0)) {
+          } else if (highBet > (humanPlayer.bet || 0)) {
             // Human already acted but someone raised — new decision needed, show Fold
             this.humanActedThisStreet = false;
             this.actionBar.showPreaction(false);
