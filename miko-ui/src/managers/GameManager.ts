@@ -1431,8 +1431,16 @@ export class GameManager {
       const runningChips = new Map<string, number>();
       preWinChips.forEach((chips, id) => runningChips.set(id, chips));
 
-      // Hide pot label immediately
-      this.statusBar.setPot('');
+      // Build the initial pot breakdown label (Main first, then sides)
+      // orderedPots is reversed (side pots first, main last) for award order,
+      // but the label should read Main → Side 1 → Side 2 etc.
+      const remainingPots = [...orderedPots].reverse(); // back to potIndex order
+      const buildPotLabel = () => {
+        return remainingPots
+          .map(pr => `${pr.potLabel}: ${formatChips(pr.amount)}`)
+          .join('\n');
+      };
+      this.statusBar.setPot(buildPotLabel());
 
       // Award each pot sequentially
       orderedPots.forEach((potResult, idx) => {
@@ -1459,6 +1467,15 @@ export class GameManager {
 
             this.animateSinglePotAward(pid, winAmount, fromChips, toChips);
           });
+
+          // Remove awarded pot from the label so remaining pots are still visible
+          const potIdx = remainingPots.indexOf(potResult);
+          if (potIdx >= 0) remainingPots.splice(potIdx, 1);
+          if (remainingPots.length > 0) {
+            this.statusBar.setPot(buildPotLabel());
+          } else {
+            this.statusBar.setPot('');
+          }
 
           // On last pot, highlight winning cards
           if (idx === orderedPots.length - 1) {
