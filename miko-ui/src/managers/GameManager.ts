@@ -2065,6 +2065,26 @@ export class GameManager {
       }
     });
 
+    // Replace eliminated AI players with new roster players (always, even when deferring game-over)
+    for (const { id, seatIndex } of newlyEliminated) {
+      if (id === 'player') continue;
+
+      const newEntry = pickNewPlayer(this.usedRosterNames);
+      if (!newEntry) {
+        // No more roster players — hide the seat
+        const slot = this.getSlotForPlayer(id);
+        if (slot) slot.visible = false;
+        continue;
+      }
+
+      this.usedRosterNames.add(newEntry.name);
+      const engineId = id; // reuse same engine slot ID (ai1, ai2, etc.)
+
+      // Defer replacement: wait 1-3 hands before new player joins
+      const handsRemaining = 1 + Math.floor(Math.random() * 3); // 1, 2, or 3 hands before joining
+      this.deferredReplacements.push({ seatIndex, engineId, entry: newEntry, handsRemaining });
+    }
+
     if (deferGameOver) return;
 
     // If human is eliminated, stop here
@@ -2082,27 +2102,6 @@ export class GameManager {
       this.actionBar.hide();
       this.handPhase = 'idle';
       this.onGameOver?.(winMsg);
-      return;
-    }
-
-    // Replace eliminated AI players with new roster players
-    for (const { id, seatIndex } of newlyEliminated) {
-      if (id === 'player') continue;
-
-      const newEntry = pickNewPlayer(this.usedRosterNames);
-      if (!newEntry) {
-        // No more roster players — hide the seat
-        const slot = this.getSlotForPlayer(id);
-        if (slot) slot.visible = false;
-        continue;
-      }
-
-      this.usedRosterNames.add(newEntry.name);
-      const engineId = id; // reuse same engine slot ID (ai1, ai2, etc.)
-
-      // Defer replacement: wait 1-3 hands before new player joins
-      const handsRemaining = 2 + Math.floor(Math.random() * 3); // 2, 3, or 4 (1-3 hands played short-handed)
-      this.deferredReplacements.push({ seatIndex, engineId, entry: newEntry, handsRemaining });
     }
   }
 
