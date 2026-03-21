@@ -1366,7 +1366,9 @@ export class GameManager {
       }
     });
 
-    this.checkForEliminatedPlayers();
+    // Detect eliminations (show knockout labels) but defer game-over modal
+    // until after pot award animations finish
+    this.checkForEliminatedPlayers(true);
 
     // Reveal cards at showdown (not fold wins)
     if (result.winningHand) {
@@ -1492,6 +1494,11 @@ export class GameManager {
     // Clear tracking state
     this.currentCommunityCards = [];
     this.playerHoleCards.clear();
+
+    // After award animations finish, trigger any deferred game-over
+    // (extra 3s pause so the player can see what happened)
+    const gameOverDelay = extraDelay + 3000;
+    this.delayed(() => this.triggerDeferredGameOver(), gameOverDelay);
 
     // Schedule next hand (extra delay for multi-pot sequential display)
     this.delayed(() => {
@@ -1925,7 +1932,12 @@ export class GameManager {
     this.getSlotForPlayer(playerId)?.highlight(false);
   }
 
-  private checkForEliminatedPlayers(): void {
+  /**
+   * Check for eliminated players. When deferGameOver is true, knockout labels
+   * and history entries are recorded but the game-over modal is NOT shown —
+   * call triggerDeferredGameOver() later after animations finish.
+   */
+  private checkForEliminatedPlayers(deferGameOver = false): void {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
     const newlyEliminated: { id: string; seatIndex: number }[] = [];
@@ -1948,6 +1960,12 @@ export class GameManager {
         const handNum = String(this.handCounter).padStart(3, '0');
         this.handHistory.addEntry(`Hand ${handNum}: Player ${eliminatedName} eliminated.`);
 
+        if (deferGameOver) {
+          // Just track elimination — game-over modal will be shown later
+          if (player.id !== 'player') this.totalKnockouts++;
+          return;
+        }
+
         if (player.id === 'player') {
           this.statusBar.setStatus('GAME OVER — You ran out of chips!');
           this.actionBar.hide();
@@ -1967,6 +1985,8 @@ export class GameManager {
         }
       }
     });
+
+    if (deferGameOver) return;
 
     // If human is eliminated, stop here
     if (this.eliminatedPlayers.has('player')) return;
@@ -2004,6 +2024,41 @@ export class GameManager {
       // Defer replacement: wait 1-3 hands before new player joins
       const handsRemaining = 2 + Math.floor(Math.random() * 3); // 2, 3, or 4 (1-3 hands played short-handed)
       this.deferredReplacements.push({ seatIndex, engineId, entry: newEntry, handsRemaining });
+    }
+  }
+
+  /**
+   * Trigger game-over modal after pot award animations have finished.
+   * Only fires if the player (or MikoPoker) was eliminated during the
+   * deferred checkForEliminatedPlayers call.
+   */
+  private triggerDeferredGameOver(): void {
+    if (this.eliminatedPlayers.has('player')) {
+      this.statusBar.setStatus('GAME OVER — You ran out of chips!');
+      this.actionBar.hide();
+      this.handPhase = 'idle';
+      this.onGameOver?.('You ran out of chips!');
+      return;
+    }
+
+    // Check MikoPoker knockout win
+    const mikoEliminated = [...this.eliminatedPlayers].some(id =>
+      this.displayNameById.get(id) === 'MikoPoker'
+    );
+    if (mikoEliminated) {
+      this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
+      this.actionBar.hide();
+      this.handPhase = 'idle';
+      this.onGameOver?.('You knocked out MikoPoker!');
+      return;
+    }
+
+    // Check all-opponents-eliminated win
+    if (this.totalKnockouts >= PLAYER_ROSTER.length) {
+      this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
+      this.actionBar.hide();
+      this.handPhase = 'idle';
+      this.onGameOver?.('You eliminated all opponents!');
     }
   }
 
