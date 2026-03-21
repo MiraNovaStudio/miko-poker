@@ -80,6 +80,8 @@ async function init() {
   const fourColorRow = document.getElementById('four-color-row');
   const table1Btn = document.getElementById('table-1');
   const table2Btn = document.getElementById('table-2');
+  const avatarsOnBtn = document.getElementById('avatars-on');
+  const avatarsOffBtn = document.getElementById('avatars-off');
 
   if (settingsBtn && settingsModal) {
     settingsBtn.style.display = 'none'; // hidden on start screen
@@ -153,6 +155,22 @@ async function init() {
     animsOffBtn?.addEventListener('click', () => {
       settings.cardAnimations = false;
       updateAnimButtons();
+    });
+
+    // Show Avatars toggle
+    const updateAvatarToggle = () => {
+      avatarsOnBtn?.classList.toggle('active', settings.showAvatars);
+      avatarsOffBtn?.classList.toggle('active', !settings.showAvatars);
+    };
+
+    avatarsOnBtn?.addEventListener('click', () => {
+      settings.showAvatars = true;
+      updateAvatarToggle();
+    });
+
+    avatarsOffBtn?.addEventListener('click', () => {
+      settings.showAvatars = false;
+      updateAvatarToggle();
     });
 
     // 4-Color Deck toggle (Unicode only)
@@ -415,6 +433,7 @@ async function init() {
     updateFourColorButtons();
     updateChipButtons();
     updateAnimButtons();
+    updateAvatarToggle();
     updateTableButtons();
     updateAvatarPreview();
     updateCardbackPreview();

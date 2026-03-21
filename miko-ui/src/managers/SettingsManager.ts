@@ -11,6 +11,7 @@ const FOUR_COLOR_KEY = 'miko_fourColorDeck';
 const TABLE_STYLE_KEY = 'miko_tableStyle';
 const AVATAR_KEY = 'miko_avatarPreset';
 const CARD_BACK_KEY = 'miko_cardBack';
+const SHOW_AVATARS_KEY = 'miko_showAvatars';
 const DEFAULT_NAME = 'PokerPlayer';
 const DEFAULT_AVATAR = 'female2';
 const DEFAULT_CARD_BACK = 'classic-blue';
@@ -44,6 +45,7 @@ export class SettingsManager {
   private _tableStyle: TableStyle;
   private _avatarPreset: string;
   private _cardBack: string;
+  private _showAvatars: boolean;
   private _onChangeListeners: (() => void)[] = [];
 
   private constructor() {
@@ -60,6 +62,8 @@ export class SettingsManager {
     this._tableStyle = (savedTable === 'table1' || savedTable === 'table2') ? savedTable : 'table1';
     this._avatarPreset = localStorage.getItem(AVATAR_KEY) || DEFAULT_AVATAR;
     this._cardBack = localStorage.getItem(CARD_BACK_KEY) || DEFAULT_CARD_BACK;
+    const savedShowAvatars = localStorage.getItem(SHOW_AVATARS_KEY);
+    this._showAvatars = savedShowAvatars !== 'false'; // default: on
   }
 
   get deckType(): DeckType {
@@ -148,6 +152,17 @@ export class SettingsManager {
     if (this._cardBack === value) return;
     this._cardBack = value;
     localStorage.setItem(CARD_BACK_KEY, value);
+    this._onChangeListeners.forEach(cb => cb());
+  }
+
+  get showAvatars(): boolean {
+    return this._showAvatars;
+  }
+
+  set showAvatars(value: boolean) {
+    if (this._showAvatars === value) return;
+    this._showAvatars = value;
+    localStorage.setItem(SHOW_AVATARS_KEY, String(value));
     this._onChangeListeners.forEach(cb => cb());
   }
 

@@ -775,11 +775,25 @@ export class PokerGameEngine {
       // Heads-up: Dealer (small blind) acts first preflop
       return this.dealerIndex;
     } else {
-      // Multiplayer: UTG (player after big blind) acts first
-      let firstIndex = (this.dealerIndex + 3) % this.players.length;
-
-      // Find first active player
+      // Multiplayer: UTG (player after big blind) acts first.
+      // Find BB the same way postBlinds does (skipping eliminated players),
+      // then UTG is the next active player after BB.
+      let sbIndex = (this.dealerIndex + 1) % this.players.length;
       let attempts = 0;
+      while (!this.players[sbIndex].isActive && attempts < this.players.length) {
+        sbIndex = (sbIndex + 1) % this.players.length;
+        attempts++;
+      }
+      let bbIndex = (sbIndex + 1) % this.players.length;
+      attempts = 0;
+      while (!this.players[bbIndex].isActive && attempts < this.players.length) {
+        bbIndex = (bbIndex + 1) % this.players.length;
+        attempts++;
+      }
+
+      // UTG = first active player after BB
+      let firstIndex = (bbIndex + 1) % this.players.length;
+      attempts = 0;
       while (!this.players[firstIndex].canAct() && attempts < this.players.length) {
         firstIndex = (firstIndex + 1) % this.players.length;
         attempts++;

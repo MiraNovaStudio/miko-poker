@@ -176,7 +176,6 @@ export class AudioManager {
       '03 - viacheslavstarostin-gaming-game-video-game-music-474517.mp3',
       '04 - mfcc-roblox-minecraft-fortnite-video-game-music-350759.mp3',
       '05 - hitslab-game-gaming-minecraft-background-music-362185.mp3',
-      '06- choose-me-pecan-pie-main-version-31913-01-57.mp3',
     ];
     return tracks.map(t => `assets/music/${t}`);
   }

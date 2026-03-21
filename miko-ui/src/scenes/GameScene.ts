@@ -240,6 +240,7 @@ export class GameScene extends Container {
     // Close modal if open
     document.getElementById('gameover-modal')?.classList.remove('open', 'victory');
     this.actionBar.destroy();
+    this.gameManager?.destroy();
     super.destroy();
   }
 }

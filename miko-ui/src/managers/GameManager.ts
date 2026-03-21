@@ -114,8 +114,12 @@ export class GameManager {
       const slot = this.slotLayout.getSlot(0);
       if (slot) {
         slot.setPlayerName(SettingsManager.instance.playerName);
-        this.applyAvatar(slot, 'player');
       }
+      // Refresh all avatars (handles show/hide toggle and preset changes)
+      this.playerIdBySeat.forEach((pid, idx) => {
+        const s = this.slotLayout.getSlot(idx);
+        if (s) this.applyAvatar(s, pid);
+      });
       // Refresh chip labels and pot when chip display mode changes
       this.updateAllChipLabels();
       this.updatePotLabel();
@@ -138,6 +142,10 @@ export class GameManager {
 
   /** Apply avatar to a slot for the given player ID. */
   private applyAvatar(slot: PlayerSlot, playerId: string): void {
+    if (!SettingsManager.instance.showAvatars) {
+      slot.clearAvatar();
+      return;
+    }
     if (playerId === 'player') {
       // Human player uses the selected avatar preset
       const presetId = SettingsManager.instance.avatarPreset;
@@ -775,13 +783,23 @@ export class GameManager {
         this.streetQueue = [];
         this.pendingHandResult = null;
         this.actionBar.hide();
-        // Snapshot pot before forceHandComplete resets it
+        // Snapshot pot label (including side pots) before forceHandComplete resets it
+        const gameStateBefore = this.engine.getGameState();
+        const potsBefore = this.computeSidePots(gameStateBefore.players);
         const potBeforeAward = this.engine.getCurrentPot();
         this.engine.forceHandComplete();
         // Refresh chip labels — uncalled bets have been returned by collectBets
         this.updateAllChipLabels();
-        // Show the frozen pot total (engine pot is 0 after awardPots)
-        this.statusBar.setPot(`Pot: ${formatChips(potBeforeAward)}`);
+        // Show the frozen pot breakdown (engine pot is 0 after awardPots)
+        if (potsBefore.length > 1) {
+          let text = `Main: ${formatChips(potsBefore[0].amount)}`;
+          for (let i = 1; i < potsBefore.length; i++) {
+            text += `\nSide: ${formatChips(potsBefore[i].amount)}`;
+          }
+          this.statusBar.setPot(text);
+        } else {
+          this.statusBar.setPot(`Pot: ${formatChips(potBeforeAward)}`);
+        }
       }
       return;
     }
@@ -1064,9 +1082,6 @@ export class GameManager {
     this.streetJustChanged = true;
     this.updatePotLabel();
 
-    // Move side-seat bet labels based on street (middle preflop–turn, wide on river)
-    this.slotLayout.getAllSlots().forEach(s => s.updateBetLabelForStreet(street));
-
     // Delay clearing previous round's bets so the last action label stays visible for 1s
     this.delayed(() => {
       this.slotLayout.getAllSlots().forEach(s => s.clearBet());
@@ -1080,6 +1095,8 @@ export class GameManager {
         cards.map(c => ({ rank: c.rank, suit: c.suit })),
       );
       this.updateHumanHandLabel();
+      // Move side-seat bet labels when cards actually appear (middle preflop/flop, wide on turn/river)
+      this.slotLayout.getAllSlots().forEach(s => s.updateBetLabelForStreet(street));
     }, 1500);
   }
 
@@ -1340,15 +1357,20 @@ export class GameManager {
       });
     } else {
       // ── SINGLE POT — existing display logic ──
-      const actualWinnerIds = Array.from(perPlayerWinnings.keys());
+      // Only show awards for actual hand winners (not uncalled-bet returns)
+      const winnerSet = new Set(result.winners);
+      const actualWinnerIds = result.winners.filter(pid => {
+        const w = perPlayerWinnings.get(pid);
+        return w !== undefined && w > 0;
+      });
+      // Use result.winners if perPlayerWinnings has no matching entries
+      const displayWinners = actualWinnerIds.length > 0 ? actualWinnerIds : result.winners;
       const winnerParts: string[] = [];
-      for (const pid of actualWinnerIds) {
-        const amt = perPlayerWinnings.get(pid) ?? 0;
+      for (const pid of displayWinners) {
+        const amt = perPlayerWinnings.get(pid) ?? result.potAmount;
         winnerParts.push(`${this.getDisplayName(pid)} wins ${formatChips(amt)}`);
       }
-      let statusMsg = winnerParts.length > 0
-        ? winnerParts.join(', ')
-        : `${result.winners.map(id => this.getDisplayName(id)).join(', ')} wins ${formatChips(result.potAmount)}!`;
+      let statusMsg = winnerParts.join(', ');
       if (result.winningHand && this.engine) {
         const handDesc = this.getWinningHandDescription(result.winners[0]);
         statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
@@ -1359,9 +1381,8 @@ export class GameManager {
       // Highlight winner names
       this.highlightWinnerNames(result.winners);
 
-      // Animate pot flying to each player who received winnings
-      const allWinners = actualWinnerIds.length > 0 ? actualWinnerIds : result.winners;
-      this.animatePotToWinners(allWinners, preWinChips, postWinChips, perPlayerWinnings);
+      // Animate pot flying only to actual winners
+      this.animatePotToWinners(displayWinners, preWinChips, postWinChips, perPlayerWinnings);
 
       // Highlight winning cards (raise them up) and dim non-winning cards
       if (result.winningHand) {
@@ -1637,7 +1658,14 @@ export class GameManager {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
     gameState.players.forEach(player => {
-      this.getSlotForPlayer(player.id)?.setChips(player.chips);
+      const slot = this.getSlotForPlayer(player.id);
+      if (!slot) return;
+      // If engine says player is no longer all-in (e.g. uncalled bet returned),
+      // clear the ALL IN label so the chip count is shown instead
+      if (!player.allIn) {
+        slot.clearAllIn();
+      }
+      slot.setChips(player.chips);
     });
   }
 
@@ -1820,6 +1848,10 @@ export class GameManager {
           slot.showKnockedOutLabel(7000);
         }
 
+        const eliminatedName = this.getDisplayName(player.id);
+        const handNum = String(this.handCounter).padStart(3, '0');
+        this.handHistory.addEntry(`Hand ${handNum}: Player ${eliminatedName} eliminated.`);
+
         if (player.id === 'player') {
           this.statusBar.setStatus('GAME OVER — You ran out of chips!');
           this.actionBar.hide();
@@ -1829,9 +1861,6 @@ export class GameManager {
         }
 
         this.totalKnockouts++;
-
-        // Special win condition: knocking out MikoPoker wins the game
-        const eliminatedName = this.displayNameById.get(player.id);
         if (eliminatedName === 'MikoPoker') {
           if (DEBUG_ENABLED) console.log('[ELIM] 🏆 MikoPoker knocked out! Victory!');
           this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
@@ -2526,5 +2555,9 @@ export class GameManager {
     }
 
     return [...new Set(indices)];
+  }
+
+  destroy(): void {
+    this.handHistory.destroy();
   }
 }

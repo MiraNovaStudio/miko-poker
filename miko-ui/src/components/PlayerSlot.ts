@@ -96,12 +96,12 @@ export class PlayerSlot extends Container {
 
   /**
    * Move the bet label for side seats based on the current street.
-   * Preflop/flop/turn → middle position (toward center, clear of board).
-   * River → wide position (below the board, clear of 5th community card).
+   * Preflop/flop → middle position (toward center, clear of board).
+   * Turn/river → wide position (below the board, clear of 4th/5th community card).
    */
   updateBetLabelForStreet(street: string): void {
     if (!this._isSideSeat) return;
-    const offset = street === 'river' ? this._betOffsetWide : this._betOffsetMiddle;
+    const offset = (street === 'turn' || street === 'river') ? this._betOffsetWide : this._betOffsetMiddle;
     this.betLabel.x = offset.x;
     this.betLabel.y = offset.y;
   }
@@ -470,6 +470,7 @@ export class PlayerSlot extends Container {
     this.chipOverlay.cursor = 'default';
     this.chipOverlay.removeAllListeners();
     this.cardsContainer.visible = true;
+    this.cardsContainer.alpha = 1;
     // Reset side seat bet label to middle position for new hand
     if (this._isSideSeat) {
       this.betLabel.x = this._betOffsetMiddle.x;
