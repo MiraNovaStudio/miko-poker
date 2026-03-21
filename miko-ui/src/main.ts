@@ -573,7 +573,7 @@ async function init() {
     (window as any).debugSetChips = (n: number) => game.gameManager?.debugSetChips(n);
     (window as any).debugAces = () => game.gameManager?.debugAces();
     (window as any).debugMikoKO = () => game.gameManager?.debugMikoKO();
-    (window as any).debugSidePots = () => game.gameManager?.debugSidePots();
+    (window as any).debugSidePots = (n: number) => game.gameManager?.debugSidePots(n);
     (window as any).debugFastMode = () => game.gameManager?.debugFastMode();
     (window as any).debugHideCards = () => game.gameManager?.debugHideCards();
     (window as any).debugClearStorage = () => {

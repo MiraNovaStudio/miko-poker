@@ -263,32 +263,50 @@ export class GameManager {
     console.log(`🅰️ Rigged: ${player.cards.map(c => c.rank + c.suit).join(', ')}`);
   }
 
-  /** Flag: side pot debug mode — 3 players, AI always calls */
-  private debugSidePotsPending = false;
+  /** Flag: side pot debug mode — AI always calls */
+  private debugSidePotsPending: number | false = false;
   private debugSidePotsCallOnly = false;
 
   /**
-   * DEBUG: Set up a 3-player side pot scenario.
-   * Player = 500, ai1 = 800 (more), ai2 = 200 (less).
-   * Both AI will call any bet (never fold, never raise).
-   * Call from browser console: window.debugSidePots()
+   * DEBUG: Set up a side pot scenario with 1, 2, or 3 side pots.
+   * AI will always call any bet (never fold, never raise).
+   * Call from browser console: window.debugSidePots(1), debugSidePots(2), or debugSidePots(3)
+   *
+   * Scenario 1 (1 side pot, 3 players):
+   *   You=500, ai1=800, ai2=200
+   *
+   * Scenario 2 (2 side pots, 4 players):
+   *   You=500, ai1=800, ai2=200, ai3=100
+   *
+   * Scenario 3 (3 side pots, 5 players):
+   *   You=500, ai1=800, ai2=200, ai3=100, ai4=50
    */
-  debugSidePots(): void {
+  debugSidePots(scenario: number): void {
     if (!this.engine) { console.warn('Engine not ready'); return; }
-    this.debugSidePotsPending = true;
-    console.log('🎯 Side pot debug will activate after the current hand finishes.');
-    this.statusBar.setStatus('DEBUG: Side pot scenario queued — finish this hand');
+    if (scenario !== 1 && scenario !== 2 && scenario !== 3) {
+      console.error('❌ debugSidePots() requires parameter 1, 2, or 3. Example: debugSidePots(2)');
+      return;
+    }
+    this.debugSidePotsPending = scenario;
+    console.log(`🎯 Side pot debug (${scenario} side pot${scenario > 1 ? 's' : ''}) will activate after the current hand finishes.`);
+    this.statusBar.setStatus(`DEBUG: Side pot scenario ${scenario} queued — finish this hand`);
   }
 
-  /** Called between hands to set up the 3-player side pot scenario */
+  /** Called between hands to set up the side pot scenario */
   private applyDebugSidePots(): void {
-    if (!this.debugSidePotsPending || !this.engine) return;
+    if (this.debugSidePotsPending === false || !this.engine) return;
+    const scenario = this.debugSidePotsPending;
     this.debugSidePotsPending = false;
     this.debugSidePotsCallOnly = true;
 
-    // Keep ai1 and ai2, eliminate all others
+    // Determine which AI to keep based on scenario
+    const keepIds: Set<string> = new Set(['player', 'ai1', 'ai2']);
+    if (scenario >= 2) keepIds.add('ai3');
+    if (scenario >= 3) keepIds.add('ai4');
+
+    // Eliminate all others
     for (const id of this.playerIdBySeat) {
-      if (id === 'player' || id === 'ai1' || id === 'ai2') continue;
+      if (keepIds.has(id)) continue;
       if (!this.eliminatedPlayers.has(id)) {
         this.eliminatedPlayers.add(id);
       }
@@ -304,27 +322,31 @@ export class GameManager {
     this.deferredReplacements = [];
     this.totalKnockouts = PLAYER_ROSTER.length;
 
-    // Set chip stacks: player=500, ai1=800, ai2=200
+    // Chip stacks per scenario (all have distinct amounts to create side pots)
+    const chipConfig: Record<string, number> = {
+      player: 500,
+      ai1: 800,
+      ai2: 200,
+    };
+    if (scenario >= 2) chipConfig.ai3 = 100;
+    if (scenario >= 3) chipConfig.ai4 = 50;
+
     const enginePlayers = (this.engine as any).players as { id: string; chips: number }[];
     for (const ep of enginePlayers) {
-      if (ep.id === 'player') {
-        ep.chips = 500;
-        this.getSlotForPlayer('player')?.setChips(500);
-      } else if (ep.id === 'ai1') {
-        ep.chips = 800;
-        this.getSlotForPlayer('ai1')?.setChips(800);
-      } else if (ep.id === 'ai2') {
-        ep.chips = 200;
-        this.getSlotForPlayer('ai2')?.setChips(200);
+      const chips = chipConfig[ep.id];
+      if (chips !== undefined) {
+        ep.chips = chips;
+        this.getSlotForPlayer(ep.id)?.setChips(chips);
       } else {
         ep.chips = 0;
       }
     }
 
-    const ai1Name = this.displayNameById.get('ai1') ?? 'ai1';
-    const ai2Name = this.displayNameById.get('ai2') ?? 'ai2';
-    console.log(`🎯 SIDE POT DEBUG: You=500, ${ai1Name}=800, ${ai2Name}=200. AI will always call.`);
-    this.statusBar.setStatus('DEBUG: Side pot scenario — 3 players, AI calls everything');
+    const names = Object.entries(chipConfig)
+      .map(([id, chips]) => `${id === 'player' ? 'You' : (this.displayNameById.get(id) ?? id)}=$${chips}`)
+      .join(', ');
+    console.log(`🎯 SIDE POT DEBUG (${scenario}): ${names}. AI will always call.`);
+    this.statusBar.setStatus(`DEBUG: ${scenario} side pot${scenario > 1 ? 's' : ''} — AI calls everything`);
   }
 
   /** Flag: apply endgame rig between hands */
