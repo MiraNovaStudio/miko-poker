@@ -221,7 +221,7 @@ export class PotManager {
       }
     }
 
-    const pots: PotInfo[] = [];
+    const rawPots: PotInfo[] = [];
     let previousLevel = 0;
 
     for (const level of levels) {
@@ -236,8 +236,23 @@ export class PotManager {
         .filter(([_, info]) => info.totalBet >= level && !info.folded)
         .map(([id]) => id);
 
-      pots.push({ amount, eligiblePlayers: eligible });
+      rawPots.push({ amount, eligiblePlayers: eligible });
       previousLevel = level;
+    }
+
+    // Merge adjacent layers with identical eligible players (e.g. folded
+    // blind contributions can create extra layers that aren't real side pots)
+    const pots: PotInfo[] = [];
+    for (const pot of rawPots) {
+      const prev = pots[pots.length - 1];
+      const sameEligible = prev
+        && prev.eligiblePlayers.length === pot.eligiblePlayers.length
+        && prev.eligiblePlayers.every(id => pot.eligiblePlayers.includes(id));
+      if (sameEligible) {
+        prev.amount += pot.amount;
+      } else {
+        pots.push({ amount: pot.amount, eligiblePlayers: [...pot.eligiblePlayers] });
+      }
     }
 
     return pots;

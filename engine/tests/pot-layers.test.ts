@@ -181,15 +181,13 @@ describe('Multi-street contribution tracking', () => {
 
     expect(pot.getTotalPot()).toBe(350);
 
-    // C contributed 50 but folded — not eligible
+    // C contributed 50 but folded — not eligible.
+    // Both layers have same eligible players [A, B], so they're merged into one.
     const layers = pot.getSidePots();
-    // totalBets: A=150, B=150, C=50 → 2 layers
-    expect(layers).toHaveLength(2);
-    // Main: 50 × 3 = 150 (only A, B eligible since C folded)
+    expect(layers).toHaveLength(1);
+    expect(layers[0].amount).toBe(350);
     expect(layers[0].eligiblePlayers).toEqual(expect.arrayContaining(['A', 'B']));
     expect(layers[0].eligiblePlayers).not.toContain('C');
-    // Side: 100 × 2 = 200 (A, B eligible)
-    expect(layers[1].amount).toBe(200);
   });
 
   it('bug report scenario: A=50 all-in, B calls 50, C raises to 200, B calls', () => {
