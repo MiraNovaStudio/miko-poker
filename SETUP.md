@@ -2,138 +2,116 @@
 
 ## Prerequisites
 
-- **Server**: AWS EC2 (or any Linux host) with Ubuntu 22.04+
-- **User**: `miko` (non-root, no sudo required)
-- **Software**: Node.js 20+, npm, git
+- **Build machine**: Node.js 20+, npm, `dpkg-deb` (any Linux/WSL)
+- **Server**: Ubuntu 22.04+ / Debian 12+ with Node.js 20+ installed
 - **Domain**: DNS pointed to the server (e.g., `poker.yourdomain.com`)
 
-> **Note**: Nginx, systemd service installation, and certbot require root/sudo access. These are one-time tasks that should be performed by a server admin before handing off to the `miko` user.
+## 1. Build the Debian Package
 
-## 1. Admin Setup (requires sudo — one-time)
-
-An administrator should perform these steps once:
+On your dev machine:
 
 ```bash
-# Create the miko user (if not exists)
-sudo useradd -m -s /bin/bash miko
-
-# Install nginx
-sudo apt-get install -y nginx
-
-# Install certbot for HTTPS (optional)
-sudo apt-get install -y certbot python3-certbot-nginx
-
-# Copy the systemd service file
-sudo cp deploy/mikopoker.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable mikopoker
-
-# Copy nginx config (edit domain first)
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/mikopoker
-sudo ln -s /etc/nginx/sites-available/mikopoker /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-
-# Set up HTTPS (optional)
-sudo certbot --nginx -d poker.yourdomain.com
-
-# Ensure miko owns the project directory
-sudo chown -R miko:miko /home/miko/miko-poker
-```
-
-## 2. Node.js Setup (as miko user — no sudo)
-
-```bash
-# Install nvm (Node Version Manager)
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-source ~/.bashrc
-
-# Install Node.js 20
-nvm install 20
-nvm use 20
-```
-
-## Alternative: Install via Debian Package
-
-If you cannot clone the repo on the production server, build a `.deb` package on your dev machine and transfer it:
-
-```bash
-# On your dev machine (requires dpkg-deb)
 bash deploy/build-dpkg.sh
+```
 
-# Transfer the .deb to the server
+This runs the production build (engine + UI with obfuscation), bundles the `serve` static file server, and produces `deploy/mikopoker_<version>_all.deb`.
+
+## 2. Transfer to Server
+
+```bash
 scp deploy/mikopoker_*.deb user@server:/tmp/
+```
 
-# On the server (requires sudo)
+## 3. Install the Package
+
+On the server (requires sudo):
+
+```bash
 sudo dpkg -i /tmp/mikopoker_*.deb
 ```
 
-The package creates the `miko` user, installs the app to `/home/miko/miko-poker/`, sets up the systemd service, and installs the nginx config. Node.js must be installed on the target (the `serve` static file server is bundled in the package).
+The package automatically:
+- Creates the `miko` user (if not exists)
+- Installs the app to `/home/miko/miko-poker/`
+- Bundles the `serve` static file server (no internet needed)
+- Installs the systemd service (`mikopoker`) and enables it
+- Installs the nginx config to `/etc/nginx/sites-available/mikopoker`
 
-## 3. Clone and Build
+## 4. Configure Nginx
 
 ```bash
-cd ~
-git clone <your-repo-url> miko-poker
-cd miko-poker
+# Edit the domain in the config
+sudo nano /etc/nginx/sites-available/mikopoker
+# Change: server_name poker.yourdomain.com;
 
-# Install dependencies
-npm install
-
-# Build the engine and UI (output goes to public/)
-npm run build
+# Enable the site
+sudo ln -sf /etc/nginx/sites-available/mikopoker /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-The production build obfuscates all JavaScript. The deployable files are in `public/`.
-
-## 4. Start the Service
-
-The systemd service (installed by the admin) runs `npx serve -l 9555 -s` as the `miko` user, serving the static `public/` directory on port 9555.
+### HTTPS (Recommended)
 
 ```bash
-bash deploy/start.sh
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d poker.yourdomain.com
+```
+
+## 5. Start the Service
+
+```bash
+sudo systemctl start mikopoker
 ```
 
 Verify it's running:
 
 ```bash
-bash deploy/status.sh
+sudo systemctl status mikopoker
 ```
 
 Visit `http://poker.yourdomain.com` (or `https://` if certbot is set up).
 
 ## Deploying Updates
 
+On your dev machine:
+
 ```bash
-cd ~/miko-poker
+# Pull latest code, build new package
 git pull
-bash deploy/deploy.sh
+bash deploy/build-dpkg.sh
+
+# Transfer and install
+scp deploy/mikopoker_*.deb user@server:/tmp/
+ssh user@server 'sudo dpkg -i /tmp/mikopoker_*.deb && sudo systemctl restart mikopoker'
 ```
 
-This rebuilds the engine and UI with obfuscation, copies output to `public/`, and restarts the service.
+The package preserves admin-edited config files (nginx, systemd service) during upgrades.
 
-## Management Scripts
+## Uninstalling
 
-All scripts are in the `deploy/` directory and do not require sudo:
+```bash
+sudo dpkg -r mikopoker
+```
 
-| Script | Description |
-|--------|-------------|
-| `bash deploy/start.sh` | Start the service |
-| `bash deploy/stop.sh` | Stop the service |
-| `bash deploy/restart.sh` | Restart and show status |
-| `bash deploy/status.sh` | Show status and last 20 log lines |
-| `bash deploy/deploy.sh` | Full deploy: build + restart |
+This stops the service and removes the app files. The `miko` user and `/home/miko` are NOT removed. To remove them: `sudo userdel -r miko`.
+
+## Management
+
+| Command | Description |
+|---------|-------------|
+| `sudo systemctl start mikopoker` | Start the service |
+| `sudo systemctl stop mikopoker` | Stop the service |
+| `sudo systemctl restart mikopoker` | Restart the service |
+| `sudo systemctl status mikopoker` | Show status |
 
 ## Logs
 
 ```bash
 # View live logs
-journalctl --user -u mikopoker -f
+sudo journalctl -u mikopoker -f
 
 # View last 50 lines
-journalctl --user -u mikopoker -n 50 --no-pager
+sudo journalctl -u mikopoker -n 50 --no-pager
 ```
-
-> If the service is managed system-wide (not as a user service), logs require `sudo journalctl -u mikopoker`. Ask your admin to grant access if needed.
 
 ## Ports
 
@@ -147,30 +125,23 @@ journalctl --user -u mikopoker -n 50 --no-pager
 
 **Service won't start:**
 ```bash
-bash deploy/status.sh
-# Check if serve is available: npx serve --version
-# Check if public/ exists: ls ~/miko-poker/public/
+sudo journalctl -u mikopoker -n 30 --no-pager
+# Check if Node.js is installed: node --version
+# Check if public/ exists: ls /home/miko/miko-poker/public/
 ```
 
 **502 Bad Gateway from nginx:**
 ```bash
-# Check if the service is running
-bash deploy/status.sh
-# Check if port 9555 is listening
+sudo systemctl status mikopoker
 ss -tlnp | grep 9555
 ```
 
-**Build fails:**
+**Package install fails with missing dependencies:**
 ```bash
-# Make sure engine builds first
-npm run build:engine
-# Then UI
-npm run build:ui
-```
+# Install Node.js if not present
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
-**Node.js not found after login:**
-```bash
-# Ensure nvm is loaded
-source ~/.bashrc
-nvm use 20
+# Retry
+sudo dpkg -i /tmp/mikopoker_*.deb
 ```
