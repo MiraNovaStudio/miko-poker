@@ -1959,6 +1959,8 @@ export class GameManager {
       this.eliminatedPlayers.delete(engineId);
 
       this.statusBar.setStatus(`${entry.name} has joined the table!`);
+      const handNum = String(this.handCounter).padStart(3, '0');
+      this.handHistory.addEntry(`Hand ${handNum}: ${entry.name} has entered the game.`);
       console.log(`New player joined: ${entry.name} at seat ${seatIndex}`);
     }
 
@@ -2014,6 +2016,8 @@ export class GameManager {
       this.eliminatedPlayers.delete(engineId);
 
       this.statusBar.setStatus(`${entry.name} has joined the table!`);
+      const handNum = String(this.handCounter).padStart(3, '0');
+      this.handHistory.addEntry(`Hand ${handNum}: ${entry.name} has entered the game.`);
     }
 
     this.pendingReplacements = [];
