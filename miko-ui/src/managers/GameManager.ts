@@ -1428,8 +1428,8 @@ export class GameManager {
     const handNum = String(this.handCounter).padStart(3, '0');
     let extraDelay = 0;
 
-    console.log('[POT AWARD] potResults:', JSON.stringify(result.potResults), 'length:', result.potResults?.length);
-    console.log('[POT AWARD] potLabel on screen:', JSON.stringify(this.statusBar.getPotText()));
+    if (DEBUG_ENABLED) console.log('[POT AWARD] potResults:', JSON.stringify(result.potResults), 'length:', result.potResults?.length);
+    if (DEBUG_ENABLED) console.log('[POT AWARD] potLabel on screen:', JSON.stringify(this.statusBar.getPotText()));
 
     if (result.potResults && result.potResults.length > 1) {
       // ── SEQUENTIAL POT AWARDS ──

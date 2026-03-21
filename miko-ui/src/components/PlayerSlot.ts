@@ -353,6 +353,7 @@ export class PlayerSlot extends Container {
     const animDuration = 300;
     const label = this.winnerLabel;
     const animate = (now: number) => {
+      if (label.destroyed) return;
       const t = Math.min((now - startTime) / animDuration, 1);
       // Ease-out back for a slight overshoot bounce
       const ease = 1 - Math.pow(1 - t, 3);
@@ -386,18 +387,19 @@ export class PlayerSlot extends Container {
     this.winnerLabel.alpha = 0;
     this.addChild(this.winnerLabel);
 
-    const startTime = performance.now();
-    const animDuration = 300;
-    const label = this.winnerLabel;
-    const animate = (now: number) => {
-      const t = Math.min((now - startTime) / animDuration, 1);
+    const startTime2 = performance.now();
+    const animDuration2 = 300;
+    const label2 = this.winnerLabel;
+    const animate2 = (now: number) => {
+      if (label2.destroyed) return;
+      const t = Math.min((now - startTime2) / animDuration2, 1);
       const ease = 1 - Math.pow(1 - t, 3);
       const overshoot = t < 1 ? 1 + 0.3 * Math.sin(t * Math.PI) : 1;
-      label.scale.set(ease * overshoot);
-      label.alpha = ease;
-      if (t < 1) requestAnimationFrame(animate);
+      label2.scale.set(ease * overshoot);
+      label2.alpha = ease;
+      if (t < 1) requestAnimationFrame(animate2);
     };
-    requestAnimationFrame(animate);
+    requestAnimationFrame(animate2);
 
     this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
   }
@@ -423,23 +425,24 @@ export class PlayerSlot extends Container {
     this.addChild(this.winnerLabel);
 
     // Animate: shake + scale up
-    const startTime = performance.now();
-    const animDuration = 500;
-    const label = this.winnerLabel;
-    const animate = (now: number) => {
-      const t = Math.min((now - startTime) / animDuration, 1);
+    const startTime3 = performance.now();
+    const animDuration3 = 500;
+    const label3 = this.winnerLabel;
+    const animate3 = (now: number) => {
+      if (label3.destroyed) return;
+      const t = Math.min((now - startTime3) / animDuration3, 1);
       const ease = 1 - Math.pow(1 - t, 3);
-      label.scale.set(ease);
-      label.alpha = ease;
+      label3.scale.set(ease);
+      label3.alpha = ease;
       // Shake effect during animation
       if (t < 0.8) {
-        label.x = (Math.random() - 0.5) * 6 * (1 - t);
+        label3.x = (Math.random() - 0.5) * 6 * (1 - t);
       } else {
-        label.x = 0;
+        label3.x = 0;
       }
-      if (t < 1) requestAnimationFrame(animate);
+      if (t < 1) requestAnimationFrame(animate3);
     };
-    requestAnimationFrame(animate);
+    requestAnimationFrame(animate3);
 
     this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
   }
