@@ -6,9 +6,42 @@ export class HandHistory {
   private containerEl: HTMLDivElement;
   private listEl: HTMLDivElement;
   private toggleBtn: HTMLButtonElement;
+  private sitOutEl: HTMLLabelElement;
+  private sitOutCheckbox: HTMLInputElement;
   private isOpen = false;
+  private _sitOut = false;
+
+  /** Callback fired when sit-out state changes */
+  onSitOutChanged: ((active: boolean) => void) | null = null;
+
+  get sitOut(): boolean { return this._sitOut; }
 
   constructor() {
+    // Sit Out checkbox — above the History button
+    this.sitOutEl = document.createElement('label');
+    this.sitOutEl.style.cssText = `
+      position: absolute;
+      z-index: 6;
+      display: none;
+      align-items: center;
+      gap: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      color: #88ccff;
+      cursor: pointer;
+      user-select: none;
+    `;
+    this.sitOutCheckbox = document.createElement('input');
+    this.sitOutCheckbox.type = 'checkbox';
+    this.sitOutCheckbox.style.cssText = 'cursor: pointer; accent-color: #5588aa;';
+    this.sitOutCheckbox.addEventListener('change', () => {
+      this._sitOut = this.sitOutCheckbox.checked;
+      this.onSitOutChanged?.(this._sitOut);
+    });
+    this.sitOutEl.appendChild(this.sitOutCheckbox);
+    this.sitOutEl.appendChild(document.createTextNode('Sit Out'));
+    document.body.appendChild(this.sitOutEl);
+
     // Toggle button — bottom-left corner
     this.toggleBtn = document.createElement('button');
     this.toggleBtn.textContent = 'History';
@@ -66,9 +99,10 @@ export class HandHistory {
     if (this.isOpen) this.render();
   }
 
-  /** Show the toggle button (call on game start). */
+  /** Show the toggle button and sit-out checkbox (call on game start). */
   enable(): void {
     this.toggleBtn.style.display = 'block';
+    this.sitOutEl.style.display = 'flex';
   }
 
   private toggle(): void {
@@ -95,6 +129,11 @@ export class HandHistory {
     this.toggleBtn.style.top = `${btnTop}px`;
     this.toggleBtn.style.fontSize = `${Math.max(11, 12 * scale)}px`;
 
+    // Sit Out checkbox — above the History button
+    this.sitOutEl.style.left = `${btnLeft}px`;
+    this.sitOutEl.style.top = `${btnTop - 22 * scale}px`;
+    this.sitOutEl.style.fontSize = `${Math.max(11, 12 * scale)}px`;
+
     // Panel — above the toggle button, anchored bottom-left
     const panelWidth = 420 * scale;
     const panelHeight = 200 * scale;
@@ -112,6 +151,7 @@ export class HandHistory {
   destroy(): void {
     this.containerEl.remove();
     this.toggleBtn.remove();
+    this.sitOutEl.remove();
   }
 
   private render(): void {

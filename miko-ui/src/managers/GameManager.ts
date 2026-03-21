@@ -907,6 +907,21 @@ export class GameManager {
     this.highlightPlayer(currentPlayer.id);
 
     if (currentPlayer.id === 'player') {
+      // Sit out mode — auto-check in BB when possible, auto-fold otherwise
+      if (this.handHistory.sitOut) {
+        this.actionBar.hidePreaction();
+        this.humanActedThisStreet = true;
+        if (gameState.canCheck) {
+          this.engine.processAction('player', { type: 'check' });
+        } else {
+          this.engine.processAction('player', { type: 'fold' });
+          this.humanFolded = true;
+          this.statusBar.setHand('');
+        }
+        this.delayed(() => this.advanceGame(), 500);
+        return;
+      }
+
       // Human player's turn — check if preaction should auto-execute
       if (this.actionBar.preactionActive) {
         const preType = this.actionBar.preactionType;
@@ -1412,6 +1427,9 @@ export class GameManager {
 
     const handNum = String(this.handCounter).padStart(3, '0');
     let extraDelay = 0;
+
+    console.log('[POT AWARD] potResults:', JSON.stringify(result.potResults), 'length:', result.potResults?.length);
+    console.log('[POT AWARD] potLabel on screen:', JSON.stringify(this.statusBar.getPotText()));
 
     if (result.potResults && result.potResults.length > 1) {
       // ── SEQUENTIAL POT AWARDS ──
