@@ -634,6 +634,40 @@ export class GameManager {
     }, 1500);
   }
 
+  /** Keep playing after a victory — fill table with new opponents and continue */
+  keepPlaying(): void {
+    if (!this.engine) return;
+
+    this.handPhase = 'betting';
+    this.totalKnockouts = 0;
+    this.pendingReplacements = [];
+    this.deferredReplacements = [];
+
+    // Queue replacements for all eliminated AI seats
+    for (const id of this.playerIdBySeat) {
+      if (id === 'player') continue;
+      if (!this.eliminatedPlayers.has(id)) continue;
+
+      const seatIndex = this.seatByPlayerId.get(id);
+      if (seatIndex === undefined) continue;
+
+      const newEntry = pickNewPlayer(this.usedRosterNames);
+      if (!newEntry) continue;
+
+      this.usedRosterNames.add(newEntry.name);
+      this.pendingReplacements.push({ seatIndex, engineId: id, entry: newEntry });
+    }
+
+    this.statusBar.setStatus('New opponents joining...');
+
+    // Apply replacements with animation, then start the next hand
+    this.applyPendingReplacementsAnimated(() => {
+      this.adjustAIForTableSize();
+      this.engine!.startNewHand();
+      this.delayed(() => this.advanceGame(), 500);
+    });
+  }
+
   /** Schedule a callback that auto-cancels if the game restarts */
   private delayed(fn: () => void, ms: number): void {
     const gen = this.generation;

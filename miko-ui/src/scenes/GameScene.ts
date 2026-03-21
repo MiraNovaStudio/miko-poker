@@ -84,15 +84,17 @@ export class GameScene extends Container {
     const newGameBtn = document.getElementById('new-game-btn');
     const rebuyBtn = document.getElementById('rebuy-btn');
     const quitBtn = document.getElementById('quit-btn');
+    const keepPlayingBtn = document.getElementById('keep-playing-btn');
 
     this.gameManager.onGameOver = (message?: string) => {
       if (gameoverMessage && message) gameoverMessage.textContent = message;
 
-      // Player eliminated → show Rebuy + Quit; player won → show victory + New Game
+      // Player eliminated → show Rebuy + Quit; player won → show victory + Keep Playing + New Game
       const eliminated = message?.includes('ran out of chips');
       const victory = message?.includes('eliminated all opponents') || message?.includes('knocked out MikoPoker');
       if (rebuyBtn) rebuyBtn.style.display = eliminated ? 'inline-block' : 'none';
       if (quitBtn) quitBtn.style.display = eliminated ? 'inline-block' : 'none';
+      if (keepPlayingBtn) keepPlayingBtn.style.display = victory ? 'inline-block' : 'none';
       if (newGameBtn) newGameBtn.style.display = eliminated ? 'none' : 'inline-block';
 
       if (victory && gameoverModal) {
@@ -114,6 +116,12 @@ export class GameScene extends Container {
         gameoverModal.classList.remove('open', 'victory');
         this.stopFireworks();
         this.gameManager?.rebuy();
+      });
+
+      keepPlayingBtn?.addEventListener('click', () => {
+        gameoverModal.classList.remove('open', 'victory');
+        this.stopFireworks();
+        this.gameManager?.keepPlaying();
       });
 
       quitBtn?.addEventListener('click', () => {
