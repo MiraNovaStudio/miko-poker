@@ -1298,6 +1298,15 @@ export class GameManager {
       // bet, call, raise, allin
       slot.setBet(player.bet);
       this.audioManager.playBetSound();
+      // Flash the action name in the chip overlay for 1 second
+      const actionName = action.type === 'call' ? 'Call'
+        : action.type === 'raise' ? 'Raise'
+        : action.type === 'bet' ? 'Bet'
+        : action.type === 'allin' ? 'All In'
+        : '';
+      if (actionName) {
+        slot.flashAction(actionName, player.chips);
+      }
 
       // A raise reopens action — clear stale "Check" labels from players
       // who will need to act again (they haven't folded and aren't all-in)

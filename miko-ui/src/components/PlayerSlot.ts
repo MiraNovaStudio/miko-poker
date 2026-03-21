@@ -207,6 +207,23 @@ export class PlayerSlot extends Container {
     this.chipsLabel.style.fill = (FONTS.chipStack as { fill: number }).fill;
   }
 
+  private flashTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Briefly show an action name (e.g. "Call", "Raise") in the chip overlay,
+   *  then restore the chip amount after the given duration. */
+  flashAction(text: string, chips: number, duration = 1000): void {
+    if (this._allIn) return;
+    if (this.flashTimer) clearTimeout(this.flashTimer);
+    this.chipsLabel.text = text;
+    this.chipsLabel.style.fill = COLORS.white;
+    this.flashTimer = setTimeout(() => {
+      this.flashTimer = null;
+      if (this._allIn) return;
+      this.chipsLabel.style.fill = (FONTS.chipStack as { fill: number }).fill;
+      this.chipsLabel.text = formatChips(chips);
+    }, duration);
+  }
+
   /** Deal hole cards. faceUp = true only for human player.
    *  When card animations are on, cards slide in from the table center (0,0 in scene coords).
    *  Pass skipAnim=true to bypass animation (e.g. showdown reveal). */
