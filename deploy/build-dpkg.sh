@@ -8,7 +8,7 @@
 #   - Install the nginx config snippet
 #
 # Usage: bash deploy/build-dpkg.sh
-# Output: deploy/mikopoker_<version>_amd64.deb
+# Output: deploy/mikopoker_<version>_all.deb
 
 set -euo pipefail
 
@@ -18,7 +18,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Read version from package.json
 VERSION=$(node -p "require('$PROJECT_ROOT/package.json').version")
 PKG_NAME="mikopoker"
-PKG_DIR="$SCRIPT_DIR/${PKG_NAME}_${VERSION}_amd64"
+PKG_DIR="$SCRIPT_DIR/${PKG_NAME}_${VERSION}_all"
 
 echo "=== Building MikoPoker v${VERSION} .deb package ==="
 
@@ -70,7 +70,7 @@ Version: ${VERSION}
 Section: games
 Priority: optional
 Architecture: all
-Depends: nodejs (>= 18), npm
+Depends: nodejs (>= 18)
 Recommends: nginx
 Maintainer: MiraNova Studios
 Description: MikoPoker — Texas Hold'em poker game
@@ -78,6 +78,17 @@ Description: MikoPoker — Texas Hold'em poker game
  procedural avatars, and a PixiJS browser UI.
  Installs to /home/miko/miko-poker and runs on port 9555.
 EOF
+
+# conffiles — protect admin-edited config files during upgrades
+cat > "$PKG_DIR/DEBIAN/conffiles" << EOF
+/etc/nginx/sites-available/mikopoker
+/etc/systemd/system/mikopoker.service
+EOF
+
+# Bundle 'serve' into the package so no internet is needed on target
+echo "    Bundling 'serve' static file server..."
+mkdir -p "$APP_DIR/node_modules"
+(cd "$APP_DIR" && npm install --no-save serve 2>/dev/null)
 
 # postinst — runs after package is installed
 cat > "$PKG_DIR/DEBIAN/postinst" << 'POSTINST'
@@ -93,12 +104,6 @@ fi
 
 # Ensure miko owns the app directory
 chown -R miko:miko /home/miko/miko-poker
-
-# Install 'serve' globally if not present
-if ! command -v serve &>/dev/null; then
-  echo "Installing 'serve' globally..."
-  npm install -g serve
-fi
 
 # Reload systemd and enable service
 systemctl daemon-reload
@@ -158,7 +163,7 @@ chmod 755 "$PKG_DIR/DEBIAN/postrm"
 
 # ── Step 4: Build the .deb ────────────────────────────────────────
 echo "[4/4] Building .deb package..."
-DEB_FILE="$SCRIPT_DIR/${PKG_NAME}_${VERSION}_amd64.deb"
+DEB_FILE="$SCRIPT_DIR/${PKG_NAME}_${VERSION}_all.deb"
 dpkg-deb --build "$PKG_DIR" "$DEB_FILE" 2>/dev/null || {
   # dpkg-deb may not be available on Windows/macOS — try fakeroot
   echo "dpkg-deb not found locally. Package structure ready at:"

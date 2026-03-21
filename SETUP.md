@@ -52,6 +52,23 @@ nvm install 20
 nvm use 20
 ```
 
+## Alternative: Install via Debian Package
+
+If you cannot clone the repo on the production server, build a `.deb` package on your dev machine and transfer it:
+
+```bash
+# On your dev machine (requires dpkg-deb)
+bash deploy/build-dpkg.sh
+
+# Transfer the .deb to the server
+scp deploy/mikopoker_*.deb user@server:/tmp/
+
+# On the server (requires sudo)
+sudo dpkg -i /tmp/mikopoker_*.deb
+```
+
+The package creates the `miko` user, installs the app to `/home/miko/miko-poker/`, sets up the systemd service, and installs the nginx config. Node.js must be installed on the target (the `serve` static file server is bundled in the package).
+
 ## 3. Clone and Build
 
 ```bash
