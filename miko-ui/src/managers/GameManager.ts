@@ -263,6 +263,70 @@ export class GameManager {
     console.log(`🅰️ Rigged: ${player.cards.map(c => c.rank + c.suit).join(', ')}`);
   }
 
+  /** Flag: side pot debug mode — 3 players, AI always calls */
+  private debugSidePotsPending = false;
+  private debugSidePotsCallOnly = false;
+
+  /**
+   * DEBUG: Set up a 3-player side pot scenario.
+   * Player = 500, ai1 = 800 (more), ai2 = 200 (less).
+   * Both AI will call any bet (never fold, never raise).
+   * Call from browser console: window.debugSidePots()
+   */
+  debugSidePots(): void {
+    if (!this.engine) { console.warn('Engine not ready'); return; }
+    this.debugSidePotsPending = true;
+    console.log('🎯 Side pot debug will activate after the current hand finishes.');
+    this.statusBar.setStatus('DEBUG: Side pot scenario queued — finish this hand');
+  }
+
+  /** Called between hands to set up the 3-player side pot scenario */
+  private applyDebugSidePots(): void {
+    if (!this.debugSidePotsPending || !this.engine) return;
+    this.debugSidePotsPending = false;
+    this.debugSidePotsCallOnly = true;
+
+    // Keep ai1 and ai2, eliminate all others
+    for (const id of this.playerIdBySeat) {
+      if (id === 'player' || id === 'ai1' || id === 'ai2') continue;
+      if (!this.eliminatedPlayers.has(id)) {
+        this.eliminatedPlayers.add(id);
+      }
+      const seat = this.seatByPlayerId.get(id);
+      if (seat !== undefined) {
+        const slot = this.slotLayout.getSlot(seat);
+        if (slot) slot.visible = false;
+      }
+    }
+
+    // Cancel replacements so no new players join
+    this.pendingReplacements = [];
+    this.deferredReplacements = [];
+    this.totalKnockouts = PLAYER_ROSTER.length;
+
+    // Set chip stacks: player=500, ai1=800, ai2=200
+    const enginePlayers = (this.engine as any).players as { id: string; chips: number }[];
+    for (const ep of enginePlayers) {
+      if (ep.id === 'player') {
+        ep.chips = 500;
+        this.getSlotForPlayer('player')?.setChips(500);
+      } else if (ep.id === 'ai1') {
+        ep.chips = 800;
+        this.getSlotForPlayer('ai1')?.setChips(800);
+      } else if (ep.id === 'ai2') {
+        ep.chips = 200;
+        this.getSlotForPlayer('ai2')?.setChips(200);
+      } else {
+        ep.chips = 0;
+      }
+    }
+
+    const ai1Name = this.displayNameById.get('ai1') ?? 'ai1';
+    const ai2Name = this.displayNameById.get('ai2') ?? 'ai2';
+    console.log(`🎯 SIDE POT DEBUG: You=500, ${ai1Name}=800, ${ai2Name}=200. AI will always call.`);
+    this.statusBar.setStatus('DEBUG: Side pot scenario — 3 players, AI calls everything');
+  }
+
   /** Flag: apply endgame rig between hands */
   private debugEndgamePending = false;
 
@@ -897,6 +961,21 @@ export class GameManager {
       this.delayed(() => {
         try {
           let action = this.engine!.getAIAction(currentPlayer.id);
+
+          // Side pot debug: force AI to always call/check
+          if (this.debugSidePotsCallOnly) {
+            const gs = this.engine!.getGameState();
+            if (gs.canCheck) {
+              action = { type: 'check' };
+            } else if (gs.callAmount > 0) {
+              if (gs.callAmount >= currentPlayer.chips) {
+                action = { type: 'allin', amount: currentPlayer.chips };
+              } else {
+                action = { type: 'call', amount: gs.callAmount };
+              }
+            }
+          }
+
           // Short-handed override: AI folds too often against raises
           // due to hardcoded engine thresholds. Override folds based on table size.
           if (action.type === 'fold') {
@@ -1422,6 +1501,7 @@ export class GameManager {
 
       if (this.engine && !this.engine.isHandInProgress()) {
         // Apply debug rigs if queued
+        this.applyDebugSidePots();
         this.applyDebugEndgame();
         this.applyDebugMikoKO();
         this.applyDebugClearTable();
