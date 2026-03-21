@@ -231,12 +231,22 @@ export class PokerGameEngine {
 
     this.emitEvent({ type: 'hand_started' });
 
-    // Deal hole cards (skip eliminated players with 0 chips)
-    for (const player of this.players) {
-      if (!player.isActive) continue;
-      const cards = this.deck.dealMultiple(2);
-      player.dealCards(cards);
-      this.emitEvent({ type: 'cards_dealt', playerId: player.id, cards });
+    // Deal hole cards one at a time, starting left of dealer (realistic dealing order)
+    // Build dealing order: start at dealerIndex+1, skip inactive players
+    const dealOrder: number[] = [];
+    for (let offset = 1; offset <= this.players.length; offset++) {
+      const idx = (this.dealerIndex + offset) % this.players.length;
+      if (this.players[idx].isActive) dealOrder.push(idx);
+    }
+    // First card to each player, then second card to each player
+    for (let round = 0; round < 2; round++) {
+      for (const idx of dealOrder) {
+        this.players[idx].cards.push(this.deck.deal());
+      }
+    }
+    // Emit cards_dealt events after both rounds (UI needs both cards together)
+    for (const idx of dealOrder) {
+      this.emitEvent({ type: 'cards_dealt', playerId: this.players[idx].id, cards: this.players[idx].cards });
     }
 
     // Post blinds
