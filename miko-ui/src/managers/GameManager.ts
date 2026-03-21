@@ -1180,6 +1180,22 @@ export class GameManager {
       // bet, call, raise, allin
       slot.setBet(player.bet);
       this.audioManager.playBetSound();
+
+      // A raise reopens action — clear stale "Check" labels from players
+      // who will need to act again (they haven't folded and aren't all-in)
+      if (action.type === 'raise' || action.type === 'bet') {
+        gameState.players.forEach(p => {
+          if (p.id === playerId || p.folded || p.allIn) return;
+          const s = this.getSlotForPlayer(p.id);
+          if (!s) return;
+          // Restore their current bet amount, or clear if no bet
+          if (p.bet > 0) {
+            s.setBet(p.bet);
+          } else {
+            s.clearBet();
+          }
+        });
+      }
     }
 
     // Update all chip labels
