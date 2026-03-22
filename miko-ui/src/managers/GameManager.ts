@@ -56,6 +56,9 @@ export class GameManager {
   private handCounter = 0;
   private handPhase: HandPhase = 'idle';
   private lastHandWinners: string[] = [];
+  private _paused = false;
+  private _pausedQueue: { fn: () => void; ms: number }[] = [];
+  private _pauseOverlay: HTMLDivElement | null = null;
 
   // Hand tracking
   private playerHoleCards: Map<string, EngineCard[]> = new Map();
@@ -397,6 +400,8 @@ export class GameManager {
     this.debugEndgamePending = false;
     this.debugMikoKOPending = false;
     this.debugClearTablePending = false;
+    // Unpause if paused
+    if (this._paused) this.unpause();
   }
 
   /** Flag: clear entire table between hands */
@@ -697,11 +702,71 @@ export class GameManager {
 
   /** Schedule a callback that auto-cancels if the game restarts */
   private delayed(fn: () => void, ms: number): void {
+    if (this._paused) {
+      this._pausedQueue.push({ fn, ms });
+      return;
+    }
     const gen = this.generation;
     setTimeout(() => {
       if (this.generation !== gen) return;
+      if (this._paused) {
+        this._pausedQueue.push({ fn, ms: 0 });
+        return;
+      }
       fn();
     }, ms);
+  }
+
+  /** Toggle pause state. P key handler calls this. */
+  togglePause(): void {
+    if (this._paused) {
+      this.unpause();
+    } else {
+      this.pause();
+    }
+  }
+
+  private pause(): void {
+    this._paused = true;
+    // Create overlay
+    if (!this._pauseOverlay) {
+      const overlay = document.createElement('div');
+      overlay.id = 'pause-overlay';
+      overlay.style.cssText = `
+        position: fixed; inset: 0; z-index: 8000;
+        background: rgba(0, 0, 0, 0.45);
+        display: flex; align-items: center; justify-content: center;
+        pointer-events: none;
+      `;
+      const label = document.createElement('div');
+      label.style.cssText = `
+        color: rgba(255, 255, 255, 0.7);
+        font-family: Arial, sans-serif;
+        font-size: 48px; font-weight: bold;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        letter-spacing: 8px;
+      `;
+      label.textContent = 'PAUSED';
+      overlay.appendChild(label);
+      document.body.appendChild(overlay);
+      this._pauseOverlay = overlay;
+    }
+    console.log('⏸️ Game paused');
+  }
+
+  private unpause(): void {
+    this._paused = false;
+    // Remove overlay
+    if (this._pauseOverlay) {
+      this._pauseOverlay.remove();
+      this._pauseOverlay = null;
+    }
+    // Flush queued callbacks
+    const queue = this._pausedQueue.splice(0);
+    for (const { fn, ms } of queue) {
+      this.delayed(fn, ms);
+    }
+    console.log('▶️ Game resumed');
   }
 
   // ─── Engine Init ───────────────────────────────────────────
@@ -1135,6 +1200,7 @@ export class GameManager {
         this.onPlayerAction(event.playerId, event.action);
         break;
       case 'pot_updated':
+        this.updateAllChipLabels();
         this.updatePotLabel();
         break;
       case 'side_pot_awarded':
@@ -1289,6 +1355,8 @@ export class GameManager {
     this.humanActedThisStreet = false;
 
     this.streetJustChanged = true;
+    // Refresh chip labels — uncalled bets may have been returned by collectBets
+    this.updateAllChipLabels();
     this.updatePotLabel();
 
     // Delay clearing previous round's bets so the last action label stays visible for 1s
@@ -1860,12 +1928,25 @@ export class GameManager {
     const allInPlayers = gameState.players.filter((p: PlayerState) => p.allIn);
     const hasSidePot = allInPlayers.length > 0 && (() => {
       const lowestAllIn = Math.min(...allInPlayers.map((p: PlayerState) => p.totalBet));
-      // Side pot exists if any non-all-in, non-folded player bet above the all-in level,
-      // OR if there are multiple all-in levels
+      const lowestAllInBet = Math.min(...allInPlayers.map((p: PlayerState) => p.bet));
+      // Side pot exists if:
+      // 1) Multiple all-in levels
       const allInLevels = new Set(allInPlayers.map((p: PlayerState) => p.totalBet));
       if (allInLevels.size > 1) return true;
-      return gameState.players.some((p: PlayerState) =>
+      // 2) Any non-all-in, non-folded player has bet above the all-in level (across all streets)
+      if (gameState.players.some((p: PlayerState) =>
         !p.allIn && !p.folded && p.totalBet > lowestAllIn
+      )) return true;
+      // 3) Any non-all-in, non-folded player has a current-street bet higher
+      //    than the all-in player's current-street bet (they bet more than the
+      //    all-in player could match — e.g. all-in for $39 into a $409 bet)
+      if (gameState.players.some((p: PlayerState) =>
+        !p.allIn && !p.folded && p.bet > lowestAllInBet
+      )) return true;
+      // 4) Any non-all-in, non-folded player has any current-street bet
+      //    when all-in player has no street bet (all-in from previous street)
+      return gameState.players.some((p: PlayerState) =>
+        !p.allIn && !p.folded && p.bet > 0
       );
     })();
 
@@ -1875,31 +1956,47 @@ export class GameManager {
       const contributors = gameState.players.filter((p: PlayerState) => p.totalBet > 0);
 
       // Compute each pot layer by summing each player's actual contribution
-      // at that level. This correctly handles partial bets (e.g., a $728 bet
-      // into a $803 all-in level contributes $716 to that layer, not $791).
+      // at that level. Only include layers where at least 2 non-folded players
+      // are eligible (otherwise the excess gets returned, no real side pot).
       const boundaries = [...allInLevels];
-      const potLayers: number[] = [];
+      const rawLayers: { amount: number; eligible: number }[] = [];
       let prevBound = 0;
+      const nonFolded = gameState.players.filter((p: PlayerState) => !p.folded && p.totalBet > 0);
 
       for (const bound of boundaries) {
         let layerTotal = 0;
         for (const p of contributors) {
-          // Each player contributes min(totalBet, bound) - min(totalBet, prevBound)
           const contrib = Math.min(p.totalBet, bound) - Math.min(p.totalBet, prevBound);
           if (contrib > 0) layerTotal += contrib;
         }
-        if (layerTotal > 0) potLayers.push(layerTotal);
+        // Count non-folded players eligible at this level
+        const eligibleCount = nonFolded.filter((p: PlayerState) => p.totalBet >= bound).length;
+        if (layerTotal > 0) rawLayers.push({ amount: layerTotal, eligible: eligibleCount });
         prevBound = bound;
       }
 
-      // Anything above the highest all-in level is the final side pot
+      // Anything above the highest all-in level
       const highestAllIn = boundaries[boundaries.length - 1];
       let topLayer = 0;
       for (const p of contributors) {
         const excess = p.totalBet - highestAllIn;
         if (excess > 0) topLayer += excess;
       }
-      if (topLayer > 0) potLayers.push(topLayer);
+      if (topLayer > 0) {
+        const topEligible = nonFolded.filter((p: PlayerState) => p.totalBet > highestAllIn).length;
+        rawLayers.push({ amount: topLayer, eligible: topEligible });
+      }
+
+      // Merge layers with < 2 eligible players into the previous layer
+      // (uncontested pots get returned, so don't show them as side pots)
+      const potLayers: number[] = [];
+      for (const layer of rawLayers) {
+        if (layer.eligible < 2 && potLayers.length > 0) {
+          potLayers[potLayers.length - 1] += layer.amount;
+        } else {
+          potLayers.push(layer.amount);
+        }
+      }
 
       // Display: first layer is Main, rest are Side pots
       if (potLayers.length >= 2) {
@@ -2422,7 +2519,13 @@ export class GameManager {
         const handName = this.getDetailedHandName(strength, p.cards as EngineCard[]);
         const slot = this.getSlotForPlayer(p.id);
         if (!slot) return;
-        slot.setBetSmallItalic(handName);
+        // Top-row seats: show hand name as a scene-level label above the
+        // community cards, since bet labels inside slots get occluded
+        if (slot.seatIndex === 3 || slot.seatIndex === 4 || slot.seatIndex === 5) {
+          this.showWinningHandAtSlot(handName, slot);
+        } else {
+          slot.setBetSmallItalic(handName);
+        }
       } catch (err) {
         console.warn('Failed to set showdown hand for', p.id, err);
       }

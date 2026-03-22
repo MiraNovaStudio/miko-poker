@@ -10,6 +10,7 @@ export class HandHistory {
   private sitOutCheckbox: HTMLInputElement;
   private isOpen = false;
   private _sitOut = false;
+  private autoScroll = true;
 
   /** Callback fired when sit-out state changes */
   onSitOutChanged: ((active: boolean) => void) | null = null;
@@ -83,6 +84,14 @@ export class HandHistory {
     this.containerEl.appendChild(this.listEl);
     document.body.appendChild(this.containerEl);
 
+    // Track scroll position: disable auto-scroll when user scrolls up,
+    // re-enable when they scroll back to the bottom
+    this.containerEl.addEventListener('scroll', () => {
+      const el = this.containerEl;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 10;
+      this.autoScroll = atBottom;
+    });
+
     // Click outside the history panel or toggle button to dismiss
     document.addEventListener('click', (e) => {
       if (!this.isOpen) return;
@@ -98,8 +107,28 @@ export class HandHistory {
     this.entries.push(message);
     if (this.entries.length > MAX_ENTRIES) {
       this.entries.shift();
+      // Full re-render needed since we removed the first entry
+      if (this.isOpen) this.render();
+      return;
     }
-    if (this.isOpen) this.render();
+    if (this.isOpen) {
+      // Remove "No hands played yet" placeholder if present
+      const placeholder = this.listEl.querySelector('div[style*="font-style: italic"]');
+      if (placeholder) placeholder.remove();
+
+      // Append incrementally instead of full re-render
+      const line = document.createElement('div');
+      line.textContent = message;
+      line.style.cssText = `
+        padding: 2px 0;
+        border-bottom: 1px solid rgba(85, 136, 170, 0.2);
+      `;
+      this.listEl.appendChild(line);
+
+      if (this.autoScroll) {
+        this.containerEl.scrollTop = this.containerEl.scrollHeight;
+      }
+    }
   }
 
   /** Clear all history (e.g. on restart). */
@@ -119,6 +148,7 @@ export class HandHistory {
       this.close();
     } else {
       this.isOpen = true;
+      this.autoScroll = true;
       this.render();
       this.containerEl.style.display = 'block';
       this.sitOutEl.style.display = 'none';
@@ -189,6 +219,8 @@ export class HandHistory {
       this.listEl.appendChild(line);
     }
     // Auto-scroll to bottom so latest entry is visible
-    this.containerEl.scrollTop = this.containerEl.scrollHeight;
+    if (this.autoScroll) {
+      this.containerEl.scrollTop = this.containerEl.scrollHeight;
+    }
   }
 }

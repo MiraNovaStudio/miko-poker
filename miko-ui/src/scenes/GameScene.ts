@@ -26,6 +26,7 @@ export class GameScene extends Container {
 
   constructor(renderer: Renderer) {
     super();
+    this.sortableChildren = true;
 
     // Table background
     const tableAlias = SettingsManager.instance.tableStyle === 'table2' ? 'table2' : 'table';

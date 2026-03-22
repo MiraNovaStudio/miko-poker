@@ -584,8 +584,9 @@ async function init() {
     if (pageTitle) pageTitle.style.display = 'block';
     if (copyrightEl) copyrightEl.style.display = 'none';
     const game = new GameScene(app.renderer);
-    game.onQuit = () => showStartScene();
+    game.onQuit = () => { currentGameScene = null; showStartScene(); };
     currentScene = game;
+    currentGameScene = game;
     app.stage.addChild(game);
     layoutScene();
 
@@ -608,6 +609,16 @@ async function init() {
       console.log(`🔧 Debug logs: ${newState ? 'ON' : 'OFF'}`);
     };
   }
+
+  // P key to pause/unpause the game
+  let currentGameScene: GameScene | null = null;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'p' || e.key === 'P') {
+      // Don't pause if typing in an input field
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      currentGameScene?.gameManager?.togglePause();
+    }
+  });
 
   window.addEventListener('resize', layoutScene);
   app.renderer.on('resize', layoutScene);
