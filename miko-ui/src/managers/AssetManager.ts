@@ -1,12 +1,14 @@
 // (c) 2026 MiraNova Studios
 import { Assets, Texture } from 'pixi.js';
 import { RANK_TO_FILENAME } from '../utils/constants.js';
+import { SettingsManager } from './SettingsManager.js';
 
 const SUITS = ['spades', 'hearts', 'diamonds', 'clubs'] as const;
 const RANKS = Object.keys(RANK_TO_FILENAME);
 
 export class AssetManager {
   private static loaded = false;
+  private static cardPngsLoaded = false;
 
   /** Preload all game textures. Call once at startup. */
   static async load(onProgress?: (progress: number) => void): Promise<void> {
@@ -14,13 +16,17 @@ export class AssetManager {
 
     const manifest: { alias: string; src: string }[] = [];
 
-    // Card faces (deck4)
-    for (const rank of RANKS) {
-      for (const suit of SUITS) {
-        const rankName = RANK_TO_FILENAME[rank];
-        const alias = `card_${rank}_${suit}`;
-        manifest.push({ alias, src: `assets/cards/${rankName}_of_${suit}.png` });
+    // Only load card face PNGs if the user is using the PNG deck
+    const usePngDeck = SettingsManager.instance.deckType === 'png';
+    if (usePngDeck) {
+      for (const rank of RANKS) {
+        for (const suit of SUITS) {
+          const rankName = RANK_TO_FILENAME[rank];
+          const alias = `card_${rank}_${suit}`;
+          manifest.push({ alias, src: `assets/cards/${rankName}_of_${suit}.png` });
+        }
       }
+      this.cardPngsLoaded = true;
     }
 
     // Card back
@@ -43,6 +49,27 @@ export class AssetManager {
 
     this.loaded = true;
     console.log(`AssetManager: loaded ${manifest.length} textures`);
+  }
+
+  /** Load card face PNGs on demand (when user switches to PNG deck mid-game) */
+  static async loadCardPngs(): Promise<void> {
+    if (this.cardPngsLoaded) return;
+
+    const manifest: { alias: string; src: string }[] = [];
+    for (const rank of RANKS) {
+      for (const suit of SUITS) {
+        const rankName = RANK_TO_FILENAME[rank];
+        const alias = `card_${rank}_${suit}`;
+        manifest.push({ alias, src: `assets/cards/${rankName}_of_${suit}.png` });
+      }
+    }
+
+    for (const item of manifest) {
+      Assets.add(item);
+    }
+    await Assets.load(manifest.map(m => m.alias));
+    this.cardPngsLoaded = true;
+    console.log('AssetManager: loaded 52 card PNG textures on demand');
   }
 
   /** Get a card face texture by rank and suit */

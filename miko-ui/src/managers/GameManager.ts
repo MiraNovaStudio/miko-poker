@@ -1828,13 +1828,45 @@ export class GameManager {
 
     let lineCount = 1;
     if (pots.length > 1) {
-      // Show main pot + side pots stacked vertically
-      let text = `Main: ${formatChips(pots[0].amount)}`;
+      // Use computed breakdown for relative sizing, but scale so Main + Sides = totalPot.
+      // This prevents the displayed amounts from diverging from the engine's real pot.
+      const computedTotal = pots.reduce((sum, p) => sum + p.amount, 0);
+      const mainAmount = computedTotal > 0
+        ? Math.round(pots[0].amount / computedTotal * totalPot)
+        : totalPot;
+
+      let text = `Main: ${formatChips(mainAmount)}`;
+      let assigned = mainAmount;
       for (let i = 1; i < pots.length; i++) {
-        text += `\nSide: ${formatChips(pots[i].amount)}`;
+        const isLast = i === pots.length - 1;
+        // Last side pot gets the remainder to ensure exact sum
+        const sideAmount = isLast
+          ? totalPot - assigned
+          : Math.round(pots[i].amount / computedTotal * totalPot);
+        text += `\nSide: ${formatChips(sideAmount)}`;
+        assigned += sideAmount;
       }
       this.statusBar.setPot(text);
       lineCount = pots.length;
+    } else if (pots.length === 1 && totalPot > 0) {
+      // Only one pot layer but someone is all-in — check if there's money
+      // above the all-in level that forms an implicit side pot
+      const allInPlayers = gameState.players.filter((p: PlayerState) => p.allIn);
+      if (allInPlayers.length > 0) {
+        const highestAllIn = Math.max(...allInPlayers.map((p: PlayerState) => p.totalBet));
+        const sideAmount = gameState.players
+          .filter((p: PlayerState) => !p.allIn && p.totalBet > highestAllIn)
+          .reduce((sum: number, p: PlayerState) => sum + (p.totalBet - highestAllIn), 0);
+        if (sideAmount > 0) {
+          const mainAmount = totalPot - sideAmount;
+          this.statusBar.setPot(`Main: ${formatChips(mainAmount)}\nSide: ${formatChips(sideAmount)}`);
+          lineCount = 2;
+        } else {
+          this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
+        }
+      } else {
+        this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
+      }
     } else {
       this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
     }

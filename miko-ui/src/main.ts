@@ -138,6 +138,7 @@ async function init() {
 
     deckPngBtn?.addEventListener('click', () => {
       settings.deckType = 'png';
+      AssetManager.loadCardPngs(); // load PNGs on demand if not already loaded
       updateDeckButtons();
     });
 
