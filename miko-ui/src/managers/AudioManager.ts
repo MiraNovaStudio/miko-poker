@@ -59,6 +59,7 @@ export class AudioManager {
       { name: 'bet', path: 'assets/sounds/bet_chips_2.wav' },
       { name: 'fold', path: 'assets/sounds/fold.wav' },
       { name: 'win', path: 'assets/sounds/game-bonus-sound-winning-hand-test.mp3' },
+      { name: 'gameover', path: 'assets/sounds/alphix-game-over-417465.mp3' },
     ];
 
     await Promise.all(
@@ -206,4 +207,5 @@ export class AudioManager {
   playBetSound(): void { this.play('bet'); }
   playFoldSound(): void { this.play('fold'); }
   playWinSound(): void { this.play('win'); }
+  playGameOverSound(): void { this.play('gameover'); }
 }

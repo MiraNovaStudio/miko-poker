@@ -1067,6 +1067,22 @@ export class GameManager {
             action = { type: 'allin', amount: currentPlayer.chips };
           }
 
+          // Pot odds override: never fold when the call is tiny relative to the pot.
+          // e.g., $13 to call into a $5000 pot is an auto-call regardless of hand.
+          if (action.type === 'fold') {
+            const gs = this.engine!.getGameState();
+            const toCall = gs.callAmount;
+            if (toCall > 0 && toCall <= currentPlayer.chips) {
+              const potOdds = toCall / (gs.pot + toCall);
+              // If calling costs less than 15% of pot, always call
+              if (potOdds < 0.15) {
+                action = toCall >= currentPlayer.chips
+                  ? { type: 'allin', amount: currentPlayer.chips }
+                  : { type: 'call', amount: toCall };
+              }
+            }
+          }
+
           // Short-handed override: AI folds too often against raises
           // due to hardcoded engine thresholds. Override folds based on table size.
           if (action.type === 'fold') {
@@ -1551,7 +1567,11 @@ export class GameManager {
           );
 
           // Show WINNER! on this pot's winners with pot type subtitle
-          this.audioManager.playWinSound();
+          if (this.eliminatedPlayers.has('player')) {
+            if (idx === 0) this.audioManager.playGameOverSound(); // play once
+          } else {
+            this.audioManager.playWinSound();
+          }
           const potSubtitle = potResult.potIndex === 0 ? 'Main Pot' : 'Side Pot';
           this.highlightWinnerNames(potResult.winnerIds, potSubtitle);
 
@@ -1617,7 +1637,11 @@ export class GameManager {
       this.highlightWinnerNames(result.winners);
 
       // Animate pot flying only to actual winners
-      this.audioManager.playWinSound();
+      if (this.eliminatedPlayers.has('player')) {
+        this.audioManager.playGameOverSound();
+      } else {
+        this.audioManager.playWinSound();
+      }
       this.animatePotToWinners(displayWinners, preWinChips, postWinChips, perPlayerWinnings);
 
       // Highlight winning cards (raise them up) and dim non-winning cards
@@ -1830,44 +1854,60 @@ export class GameManager {
     const pots = this.computeSidePots(gameState.players);
 
     let lineCount = 1;
-    // Check if anyone is all-in to determine main/side pot display
+    // Check if anyone is all-in to determine main/side pot display.
+    // A side pot only exists when a non-all-in player has bet MORE than the
+    // lowest all-in level (i.e., there are chips the all-in player can't win).
     const allInPlayers = gameState.players.filter((p: PlayerState) => p.allIn);
-    if (allInPlayers.length > 0 && totalPot > 0) {
-      // Main pot = lowest all-in level × number of players who contributed at least that much.
-      // This amount is locked once the all-in occurs — it never changes.
-      // Side pot = everything above that = totalPot - mainPot.
-      const allInLevels = Array.from(new Set(allInPlayers.map((p: PlayerState) => p.totalBet))).sort((a, b) => a - b);
-      const lowestAllIn = allInLevels[0];
-      const contributors = gameState.players.filter((p: PlayerState) => p.totalBet > 0);
-      const numContributors = contributors.filter((p: PlayerState) => p.totalBet >= lowestAllIn).length;
-      const mainAmount = lowestAllIn * numContributors;
-      const sideAmount = totalPot - mainAmount;
+    const hasSidePot = allInPlayers.length > 0 && (() => {
+      const lowestAllIn = Math.min(...allInPlayers.map((p: PlayerState) => p.totalBet));
+      // Side pot exists if any non-all-in, non-folded player bet above the all-in level,
+      // OR if there are multiple all-in levels
+      const allInLevels = new Set(allInPlayers.map((p: PlayerState) => p.totalBet));
+      if (allInLevels.size > 1) return true;
+      return gameState.players.some((p: PlayerState) =>
+        !p.allIn && !p.folded && p.totalBet > lowestAllIn
+      );
+    })();
 
-      if (sideAmount > 0) {
-        let text = `Main: ${formatChips(mainAmount)}`;
-        // Multiple all-in levels create multiple side pots
-        if (allInLevels.length > 1) {
-          let previousLevel = lowestAllIn;
-          let assigned = mainAmount;
-          for (let i = 1; i < allInLevels.length; i++) {
-            const level = allInLevels[i];
-            const increment = level - previousLevel;
-            const numAtLevel = contributors.filter((p: PlayerState) => p.totalBet >= level).length;
-            const sidePotAmount = increment * numAtLevel;
-            text += `\nSide: ${formatChips(sidePotAmount)}`;
-            assigned += sidePotAmount;
-            previousLevel = level;
-          }
-          // Remainder goes to the last side pot (bets above highest all-in)
-          const remainder = totalPot - assigned;
-          if (remainder > 0) {
-            text += `\nSide: ${formatChips(remainder)}`;
-          }
-          lineCount = text.split('\n').length;
-        } else {
-          text += `\nSide: ${formatChips(sideAmount)}`;
-          lineCount = 2;
+    if (hasSidePot && totalPot > 0) {
+      // Build pot boundaries from all-in levels
+      const allInLevels = Array.from(new Set(allInPlayers.map((p: PlayerState) => p.totalBet))).sort((a, b) => a - b);
+      const contributors = gameState.players.filter((p: PlayerState) => p.totalBet > 0);
+
+      // Compute each pot layer by summing each player's actual contribution
+      // at that level. This correctly handles partial bets (e.g., a $728 bet
+      // into a $803 all-in level contributes $716 to that layer, not $791).
+      const boundaries = [...allInLevels];
+      const potLayers: number[] = [];
+      let prevBound = 0;
+
+      for (const bound of boundaries) {
+        let layerTotal = 0;
+        for (const p of contributors) {
+          // Each player contributes min(totalBet, bound) - min(totalBet, prevBound)
+          const contrib = Math.min(p.totalBet, bound) - Math.min(p.totalBet, prevBound);
+          if (contrib > 0) layerTotal += contrib;
         }
+        if (layerTotal > 0) potLayers.push(layerTotal);
+        prevBound = bound;
+      }
+
+      // Anything above the highest all-in level is the final side pot
+      const highestAllIn = boundaries[boundaries.length - 1];
+      let topLayer = 0;
+      for (const p of contributors) {
+        const excess = p.totalBet - highestAllIn;
+        if (excess > 0) topLayer += excess;
+      }
+      if (topLayer > 0) potLayers.push(topLayer);
+
+      // Display: first layer is Main, rest are Side pots
+      if (potLayers.length >= 2) {
+        let text = `Main: ${formatChips(potLayers[0])}`;
+        for (let i = 1; i < potLayers.length; i++) {
+          text += `\nSide: ${formatChips(potLayers[i])}`;
+        }
+        lineCount = potLayers.length;
         this.statusBar.setPot(text);
       } else {
         this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
@@ -2425,20 +2465,23 @@ export class GameManager {
       } as TextStyleOptions,
     });
     label.anchor.set(0.5);
-    // Side seats (ai2=2, ai6=6): position under name label instead of at bet label
+    // Position hand labels so they don't get covered by raised community cards
     const seatIdx = slot.seatIndex;
     if (seatIdx === 2 || seatIdx === 6) {
+      // Side seats: position under name label
       label.x = slot.x;
-      label.y = slot.y + 70; // below name label at y=50
+      label.y = slot.y + 70;
     } else if (seatIdx === 3 || seatIdx === 4 || seatIdx === 5) {
-      label.x = slot.x + betLabelPos.x;
-      label.y = slot.y + betLabelPos.y - 20;
+      // Top row: place ABOVE the cards so raised board cards don't cover them
+      label.x = slot.x;
+      label.y = slot.y - 95;
     } else {
       label.x = slot.x + betLabelPos.x;
       label.y = slot.y + betLabelPos.y;
     }
     label.alpha = 0;
     label.scale.set(0.5);
+    label.zIndex = 100; // ensure hand labels render above raised cards
     scene.addChild(label);
     this.winningHandLabels.push(label);
 
