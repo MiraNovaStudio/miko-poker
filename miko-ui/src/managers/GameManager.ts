@@ -69,6 +69,7 @@ export class GameManager {
 
   // All-in runout sequencing
   private allInRunout = false;
+  private _foldWinDeferred = false;
   private streetQueue: { street: string; cards: EngineCard[] }[] = [];
   private pendingHandResult: GameResult | null = null;
 
@@ -602,6 +603,7 @@ export class GameManager {
     this.humanFolded = false;
     this.humanActedThisStreet = false;
     this.allInRunout = false;
+    this._foldWinDeferred = false;
     this.streetQueue = [];
     this.pendingHandResult = null;
 
@@ -1532,6 +1534,21 @@ export class GameManager {
       return;
     }
 
+    // For fold wins (no winningHand), defer so the last action label (e.g. "Fold")
+    // stays visible before we clear bets and show the winner. The engine fires
+    // hand_complete synchronously after player_action, so without this delay the
+    // fold label would be cleared in the same frame it was set.
+    const isFoldWin = !result.winningHand;
+    if (isFoldWin && !this._foldWinDeferred) {
+      this._foldWinDeferred = true;
+      this.delayed(() => {
+        this._foldWinDeferred = false;
+        this.onHandComplete(result);
+      }, 1200);
+      return;
+    }
+    this._foldWinDeferred = false;
+
     this.handPhase = 'showdown';
     this.actionBar.hide();
 
@@ -1588,11 +1605,8 @@ export class GameManager {
     // Track who won this hand for MikoPoker KO victory check
     this.lastHandWinners = result.winners ?? [];
 
-    // Detect eliminations (show knockout labels) but defer game-over modal
-    // until after pot award animations finish
-    this.checkForEliminatedPlayers(true);
-
-    // Reveal cards at showdown (not fold wins)
+    // Reveal cards at showdown (not fold wins) — do this BEFORE elimination
+    // detection so knockout animations aren't interrupted by card reveals.
     if (result.winningHand) {
       this.revealAllCardsAtShowdown();
     }
@@ -1609,6 +1623,10 @@ export class GameManager {
     if (result.winningHand) {
       this.showShowdownHandNames(result.winners);
     }
+
+    // Detect eliminations AFTER showdown reveals are done, so knockout
+    // animations (card fly, avatar spin) aren't interrupted by card redeal.
+    this.checkForEliminatedPlayers(true);
 
     const handNum = String(this.handCounter).padStart(3, '0');
     let extraDelay = 0;
@@ -2278,7 +2296,7 @@ export class GameManager {
 
         const slot = this.getSlotForPlayer(player.id);
         if (slot) {
-          slot.showKnockedOutLabel(7000);
+          slot.playKnockoutAnimation();
         }
 
         const eliminatedName = this.getDisplayName(player.id);
@@ -2520,6 +2538,7 @@ export class GameManager {
     gameState.players.forEach((p: PlayerState) => {
       if (!p.cards || p.cards.length === 0 || p.folded) return;
       if (winnerSet.has(p.id)) return; // winners get the animated label at their position
+      if (p.chips <= 0) return; // skip eliminated players — knockout animation playing
       try {
         const combined = [...(p.cards as EngineCard[]), ...this.currentCommunityCards];
         if (combined.length < 5) return;
@@ -2945,6 +2964,8 @@ export class GameManager {
     // Dim losing players' hole cards and winner's unused hole cards
     gameState.players.forEach((player, seatIdx) => {
       if (!player.cards || player.cards.length === 0 || player.folded) return;
+      // Skip eliminated players — they have a knockout animation playing
+      if (this.eliminatedPlayers.has(player.id)) return;
       const slot = this.slotLayout.getSlot(seatIdx);
       if (!slot) return;
       const slotCards = slot.children[0]; // cardsContainer

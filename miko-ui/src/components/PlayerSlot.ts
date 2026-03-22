@@ -494,6 +494,111 @@ export class PlayerSlot extends Container {
     this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
   }
 
+  /**
+   * Play the full knockout animation:
+   * 1) Cards fly to center of table
+   * 2) Avatar spins and flies off screen
+   * 3) K.O. label appears
+   * Returns a Promise that resolves when animations are done.
+   */
+  playKnockoutAnimation(): Promise<void> {
+    return new Promise(resolve => {
+      const totalDuration = 2200; // total time before K.O. label
+
+      // ── Phase 1: Cards fly to table center (scene coords 0,0 → local) ──
+      const localCenterX = -this.x;
+      const localCenterY = -this.y - this.cardsContainer.y;
+
+      if (this.cardsContainer.visible && this.cardsContainer.children.length > 0) {
+        const cards = [...this.cardsContainer.children];
+        const startPositions = cards.map(c => ({ x: c.x, y: c.y }));
+        const cardStart = performance.now();
+        const cardDuration = 600;
+
+        const animateCards = (now: number) => {
+          const t = Math.min((now - cardStart) / cardDuration, 1);
+          const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+          cards.forEach((card, i) => {
+            if (card.destroyed) return;
+            const start = startPositions[i];
+            card.x = start.x + (localCenterX - start.x) * ease;
+            card.y = start.y + (localCenterY - start.y) * ease;
+            card.alpha = 1 - ease * 0.8;
+            card.scale.set(1 - ease * 0.4);
+            card.rotation = ease * (i === 0 ? -0.3 : 0.3);
+          });
+
+          if (t < 1) {
+            requestAnimationFrame(animateCards);
+          } else {
+            this.cardsContainer.visible = false;
+            cards.forEach((card, i) => {
+              if (card.destroyed) return;
+              card.x = startPositions[i].x;
+              card.y = startPositions[i].y;
+              card.alpha = 1;
+              card.scale.set(1);
+              card.rotation = 0;
+            });
+          }
+        };
+        requestAnimationFrame(animateCards);
+      }
+
+      // ── Phase 2: Avatar spins and flies off screen (starts after 300ms) ──
+      if (this.avatarSprite && !this.avatarSprite.destroyed) {
+        const avatar = this.avatarSprite;
+        const avatarStartX = avatar.x;
+        const avatarStartY = avatar.y;
+
+        // Pick a random exit direction based on seat position
+        const exitAngle = Math.atan2(this.y, this.x) + (Math.random() - 0.5) * 0.5;
+        const exitDist = 800;
+        const exitX = avatarStartX + Math.cos(exitAngle) * exitDist;
+        const exitY = avatarStartY + Math.sin(exitAngle) * exitDist;
+
+        setTimeout(() => {
+          if (avatar.destroyed) return;
+          const spinStart = performance.now();
+          const spinDuration = 1200;
+          const totalSpins = 3 + Math.random() * 2; // 3-5 full rotations
+
+          const animateAvatar = (now: number) => {
+            if (avatar.destroyed) return;
+            const t = Math.min((now - spinStart) / spinDuration, 1);
+            // Ease-in for acceleration feel
+            const ease = t * t * t;
+
+            avatar.rotation = ease * totalSpins * Math.PI * 2;
+            avatar.x = avatarStartX + (exitX - avatarStartX) * ease;
+            avatar.y = avatarStartY + (exitY - avatarStartY) * ease;
+            avatar.alpha = 1 - ease;
+            avatar.scale.set(1 - ease * 0.5);
+
+            if (t < 1) {
+              requestAnimationFrame(animateAvatar);
+            } else {
+              avatar.visible = false;
+              avatar.rotation = 0;
+              avatar.x = avatarStartX;
+              avatar.y = avatarStartY;
+              avatar.alpha = 1;
+              avatar.scale.set(1);
+            }
+          };
+          requestAnimationFrame(animateAvatar);
+        }, 300);
+      }
+
+      // ── Phase 3: Show K.O. label after animations finish ──
+      setTimeout(() => {
+        this.showKnockedOutLabel(5000);
+        resolve();
+      }, totalDuration);
+    });
+  }
+
   hideWinnerLabel(): void {
     if (this.winnerTimer) {
       clearTimeout(this.winnerTimer);
