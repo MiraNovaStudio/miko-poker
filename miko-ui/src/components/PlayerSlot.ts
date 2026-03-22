@@ -251,6 +251,15 @@ export class PlayerSlot extends Container {
         const duration = 350;
 
         setTimeout(() => {
+          // If the tab is hidden, skip animation and place cards immediately.
+          // RAF is paused in background tabs, leaving cards invisible.
+          if (document.hidden) {
+            card.x = targetX;
+            card.y = 0;
+            card.scale.set(1);
+            card.alpha = 1;
+            return;
+          }
           const t0 = performance.now();
           const anim = (now: number) => {
             const t = Math.min((now - t0) / duration, 1);

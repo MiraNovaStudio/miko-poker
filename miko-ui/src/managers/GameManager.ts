@@ -1547,6 +1547,7 @@ export class GameManager {
           );
 
           // Show WINNER! on this pot's winners with pot type subtitle
+          this.audioManager.playWinSound();
           const potSubtitle = potResult.potIndex === 0 ? 'Main Pot' : 'Side Pot';
           this.highlightWinnerNames(potResult.winnerIds, potSubtitle);
 
@@ -1612,6 +1613,7 @@ export class GameManager {
       this.highlightWinnerNames(result.winners);
 
       // Animate pot flying only to actual winners
+      this.audioManager.playWinSound();
       this.animatePotToWinners(displayWinners, preWinChips, postWinChips, perPlayerWinnings);
 
       // Highlight winning cards (raise them up) and dim non-winning cards

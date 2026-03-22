@@ -37,6 +37,13 @@ export class CommunityCards extends Container {
         const duration = 400;
 
         setTimeout(() => {
+          if (document.hidden) {
+            card.x = targetX;
+            card.y = 0;
+            card.scale.set(1);
+            card.alpha = 1;
+            return;
+          }
           const t0 = performance.now();
           const anim = (now: number) => {
             const t = Math.min((now - t0) / duration, 1);
