@@ -121,6 +121,7 @@ export class HandHistory {
       this.isOpen = true;
       this.render();
       this.containerEl.style.display = 'block';
+      this.sitOutEl.style.display = 'none';
       this.toggleBtn.textContent = 'History ▾';
     }
   }
@@ -128,6 +129,7 @@ export class HandHistory {
   private close(): void {
     this.isOpen = false;
     this.containerEl.style.display = 'none';
+    this.sitOutEl.style.display = 'flex';
     this.toggleBtn.textContent = 'History';
   }
 

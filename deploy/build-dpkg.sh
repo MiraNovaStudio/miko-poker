@@ -114,17 +114,28 @@ echo "================================================"
 echo "  MikoPoker installed to /home/miko/miko-poker"
 echo "================================================"
 echo ""
-echo "  Next steps:"
-echo "    1. Start the service:"
-echo "       sudo systemctl start mikopoker"
-echo ""
-echo "    2. Enable nginx proxy (optional):"
-echo "       sudo ln -sf /etc/nginx/sites-available/mikopoker /etc/nginx/sites-enabled/"
-echo "       # Edit server_name in /etc/nginx/sites-available/mikopoker"
-echo "       sudo nginx -t && sudo systemctl reload nginx"
-echo ""
-echo "    3. Check status:"
-echo "       sudo systemctl status mikopoker"
+
+# $1 is "configure" for both install and upgrade;
+# $2 is the previously installed version (empty on fresh install)
+if [ -n "$2" ]; then
+  # Upgrade
+  echo "  Upgraded from $2. Restart the service:"
+  echo "    sudo systemctl restart mikopoker"
+else
+  # Fresh install
+  echo "  Next steps:"
+  echo "    1. Start the service:"
+  echo "       sudo systemctl start mikopoker"
+  echo ""
+  echo "    2. Enable nginx proxy (optional):"
+  echo "       sudo ln -sf /etc/nginx/sites-available/mikopoker /etc/nginx/sites-enabled/"
+  echo "       # Edit server_name in /etc/nginx/sites-available/mikopoker"
+  echo "       sudo nginx -t && sudo systemctl reload nginx"
+  echo ""
+  echo "    3. Check status:"
+  echo "       sudo systemctl status mikopoker"
+fi
+
 echo ""
 echo "  The app will be served on port 9555."
 echo "  Management scripts: /home/miko/miko-poker/deploy/"
