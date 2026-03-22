@@ -55,6 +55,7 @@ export class GameManager {
   private deferredReplacements: { seatIndex: number; engineId: string; entry: RosterEntry; handsRemaining: number }[] = [];
   private handCounter = 0;
   private handPhase: HandPhase = 'idle';
+  private lastHandWinners: string[] = [];
 
   // Hand tracking
   private playerHoleCards: Map<string, EngineCard[]> = new Map();
@@ -1485,6 +1486,9 @@ export class GameManager {
       }
     });
 
+    // Track who won this hand for MikoPoker KO victory check
+    this.lastHandWinners = result.winners ?? [];
+
     // Detect eliminations (show knockout labels) but defer game-over modal
     // until after pot award animations finish
     this.checkForEliminatedPlayers(true);
@@ -1670,10 +1674,9 @@ export class GameManager {
         const noReplacements = this.pendingReplacements.length === 0
           && this.deferredReplacements.length === 0;
         if (activeAI.length === 0 && noReplacements) {
-          // Check if the last eliminated player was MikoPoker
-          const lastWasMiko = [...this.eliminatedPlayers].some(id =>
-            this.displayNameById.get(id) === 'MikoPoker'
-          );
+          // Check if the player knocked out MikoPoker (not an AI)
+          const lastWasMiko = this.lastHandWinners.includes('player')
+            && [...this.eliminatedPlayers].some(id => this.displayNameById.get(id) === 'MikoPoker');
           const winMsg = lastWasMiko ? 'You knocked out MikoPoker!' : 'You eliminated all opponents!';
           this.statusBar.setStatus(`YOU WIN! ${winMsg}`);
           this.actionBar.hide();
@@ -1827,43 +1830,45 @@ export class GameManager {
     const pots = this.computeSidePots(gameState.players);
 
     let lineCount = 1;
-    if (pots.length > 1) {
-      // Use computed breakdown for relative sizing, but scale so Main + Sides = totalPot.
-      // This prevents the displayed amounts from diverging from the engine's real pot.
-      const computedTotal = pots.reduce((sum, p) => sum + p.amount, 0);
-      const mainAmount = computedTotal > 0
-        ? Math.round(pots[0].amount / computedTotal * totalPot)
-        : totalPot;
+    // Check if anyone is all-in to determine main/side pot display
+    const allInPlayers = gameState.players.filter((p: PlayerState) => p.allIn);
+    if (allInPlayers.length > 0 && totalPot > 0) {
+      // Main pot = lowest all-in level × number of players who contributed at least that much.
+      // This amount is locked once the all-in occurs — it never changes.
+      // Side pot = everything above that = totalPot - mainPot.
+      const allInLevels = Array.from(new Set(allInPlayers.map((p: PlayerState) => p.totalBet))).sort((a, b) => a - b);
+      const lowestAllIn = allInLevels[0];
+      const contributors = gameState.players.filter((p: PlayerState) => p.totalBet > 0);
+      const numContributors = contributors.filter((p: PlayerState) => p.totalBet >= lowestAllIn).length;
+      const mainAmount = lowestAllIn * numContributors;
+      const sideAmount = totalPot - mainAmount;
 
-      let text = `Main: ${formatChips(mainAmount)}`;
-      let assigned = mainAmount;
-      for (let i = 1; i < pots.length; i++) {
-        const isLast = i === pots.length - 1;
-        // Last side pot gets the remainder to ensure exact sum
-        const sideAmount = isLast
-          ? totalPot - assigned
-          : Math.round(pots[i].amount / computedTotal * totalPot);
-        text += `\nSide: ${formatChips(sideAmount)}`;
-        assigned += sideAmount;
-      }
-      this.statusBar.setPot(text);
-      lineCount = pots.length;
-    } else if (pots.length === 1 && totalPot > 0) {
-      // Only one pot layer but someone is all-in — check if there's money
-      // above the all-in level that forms an implicit side pot
-      const allInPlayers = gameState.players.filter((p: PlayerState) => p.allIn);
-      if (allInPlayers.length > 0) {
-        const highestAllIn = Math.max(...allInPlayers.map((p: PlayerState) => p.totalBet));
-        const sideAmount = gameState.players
-          .filter((p: PlayerState) => !p.allIn && p.totalBet > highestAllIn)
-          .reduce((sum: number, p: PlayerState) => sum + (p.totalBet - highestAllIn), 0);
-        if (sideAmount > 0) {
-          const mainAmount = totalPot - sideAmount;
-          this.statusBar.setPot(`Main: ${formatChips(mainAmount)}\nSide: ${formatChips(sideAmount)}`);
-          lineCount = 2;
+      if (sideAmount > 0) {
+        let text = `Main: ${formatChips(mainAmount)}`;
+        // Multiple all-in levels create multiple side pots
+        if (allInLevels.length > 1) {
+          let previousLevel = lowestAllIn;
+          let assigned = mainAmount;
+          for (let i = 1; i < allInLevels.length; i++) {
+            const level = allInLevels[i];
+            const increment = level - previousLevel;
+            const numAtLevel = contributors.filter((p: PlayerState) => p.totalBet >= level).length;
+            const sidePotAmount = increment * numAtLevel;
+            text += `\nSide: ${formatChips(sidePotAmount)}`;
+            assigned += sidePotAmount;
+            previousLevel = level;
+          }
+          // Remainder goes to the last side pot (bets above highest all-in)
+          const remainder = totalPot - assigned;
+          if (remainder > 0) {
+            text += `\nSide: ${formatChips(remainder)}`;
+          }
+          lineCount = text.split('\n').length;
         } else {
-          this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
+          text += `\nSide: ${formatChips(sideAmount)}`;
+          lineCount = 2;
         }
+        this.statusBar.setPot(text);
       } else {
         this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
       }
@@ -2150,8 +2155,11 @@ export class GameManager {
         }
 
         this.totalKnockouts++;
-        if (eliminatedName === 'MikoPoker') {
-          if (DEBUG_ENABLED) console.log('[ELIM] 🏆 MikoPoker knocked out! Victory!');
+        // MikoPoker KO only counts as victory if the human player won the hand
+        // (i.e., the player took MikoPoker's chips). AI knocking out MikoPoker
+        // is just a normal elimination.
+        if (eliminatedName === 'MikoPoker' && this.lastHandWinners?.includes('player')) {
+          if (DEBUG_ENABLED) console.log('[ELIM] 🏆 MikoPoker knocked out by player! Victory!');
           this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
           this.actionBar.hide();
           this.handPhase = 'idle';
@@ -2191,9 +2199,8 @@ export class GameManager {
     if (DEBUG_ENABLED) console.log('[ELIM CHECK] After processing — totalKnockouts:', this.totalKnockouts, 'needed:', PLAYER_ROSTER.length);
     if (this.totalKnockouts >= PLAYER_ROSTER.length) {
       if (DEBUG_ENABLED) console.log('[ELIM] 🏆 WIN CONDITION MET via checkForEliminatedPlayers!');
-      const lastWasMiko = [...this.eliminatedPlayers].some(id =>
-        this.displayNameById.get(id) === 'MikoPoker'
-      );
+      const lastWasMiko = this.lastHandWinners.includes('player')
+        && [...this.eliminatedPlayers].some(id => this.displayNameById.get(id) === 'MikoPoker');
       const winMsg = lastWasMiko ? 'You knocked out MikoPoker!' : 'You eliminated all opponents!';
       this.statusBar.setStatus(`YOU WIN! ${winMsg}`);
       this.actionBar.hide();
@@ -2216,11 +2223,11 @@ export class GameManager {
       return;
     }
 
-    // Check MikoPoker knockout win
+    // Check MikoPoker knockout win — only if the player knocked them out
     const mikoEliminated = [...this.eliminatedPlayers].some(id =>
       this.displayNameById.get(id) === 'MikoPoker'
     );
-    if (mikoEliminated) {
+    if (mikoEliminated && this.lastHandWinners.includes('player')) {
       this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
       this.actionBar.hide();
       this.handPhase = 'idle';
