@@ -304,11 +304,17 @@ export class GameManager {
     if (scenario >= 2) keepIds.add('ai3');
     if (scenario >= 3) keepIds.add('ai4');
 
-    // Eliminate all others
+    // Eliminate all others (but clear MikoPoker's display name mapping
+    // so the victory check won't trigger a false "knocked out MikoPoker" win)
     for (const id of this.playerIdBySeat) {
       if (keepIds.has(id)) continue;
       if (!this.eliminatedPlayers.has(id)) {
         this.eliminatedPlayers.add(id);
+      }
+      // Remove MikoPoker display name from debug-eliminated players
+      // to prevent false victory triggers
+      if (this.displayNameById.get(id) === 'MikoPoker') {
+        this.displayNameById.set(id, '[debug-removed]');
       }
       const seat = this.seatByPlayerId.get(id);
       if (seat !== undefined) {
@@ -379,6 +385,17 @@ export class GameManager {
     this.slotLayout.getAllSlots().forEach(s => s.clearCards());
     this.communityCards.display([]);
     console.log('🃏 Cards hidden');
+  }
+
+  /** Reset all debug flags to defaults (called on restart / quit) */
+  private resetDebugState(): void {
+    this._fastMode = false;
+    this.debugPocketAces = false;
+    this.debugSidePotsPending = false;
+    this.debugSidePotsCallOnly = false;
+    this.debugEndgamePending = false;
+    this.debugMikoKOPending = false;
+    this.debugClearTablePending = false;
   }
 
   /** Flag: clear entire table between hands */
@@ -582,6 +599,9 @@ export class GameManager {
     this.streetQueue = [];
     this.pendingHandResult = null;
 
+    // Reset all debug state
+    this.resetDebugState();
+
     // Clear all UI
     this.slotLayout.getAllSlots().forEach(slot => {
       slot.resetForNewHand();
@@ -632,6 +652,12 @@ export class GameManager {
       this.adjustAIForTableSize(); this.engine!.startNewHand();
       this.delayed(() => this.advanceGame(), 500);
     }, 1500);
+  }
+
+  /** Check if there are unused roster players available for Keep Playing */
+  canKeepPlaying(): boolean {
+    const available = pickNewPlayer(this.usedRosterNames);
+    return available !== null;
   }
 
   /** Keep playing after a victory — fill table with new opponents and continue */
@@ -1035,18 +1061,9 @@ export class GameManager {
         try {
           let action = this.engine!.getAIAction(currentPlayer.id);
 
-          // Side pot debug: force AI to always call/check
+          // Side pot debug: force AI to always go all-in
           if (this.debugSidePotsCallOnly) {
-            const gs = this.engine!.getGameState();
-            if (gs.canCheck) {
-              action = { type: 'check' };
-            } else if (gs.callAmount > 0) {
-              if (gs.callAmount >= currentPlayer.chips) {
-                action = { type: 'allin', amount: currentPlayer.chips };
-              } else {
-                action = { type: 'call', amount: gs.callAmount };
-              }
-            }
+            action = { type: 'allin', amount: currentPlayer.chips };
           }
 
           // Short-handed override: AI folds too often against raises
@@ -1498,43 +1515,44 @@ export class GameManager {
 
     if (result.potResults && result.potResults.length > 1) {
       // ── SEQUENTIAL POT AWARDS ──
-      // Award side pots first (reverse order), then main pot
+      // Award side pots first (reverse order), then main pot.
+      // Labels stay in place; each awarded line is removed only after its
+      // fly animation completes, so remaining labels stay visible.
       const orderedPots = [...result.potResults].reverse();
       const POT_DELAY = 2500;
       extraDelay = (orderedPots.length - 1) * POT_DELAY;
-
-      // Log combined result to hand history
-      const fullMsg = orderedPots.map(pr => {
-        const names = pr.winnerIds.map(id => this.getDisplayName(id)).join(', ');
-        return `${pr.potLabel}: ${names} wins ${formatChips(pr.amount)} — ${pr.winningHand}`;
-      }).join(' | ');
-      this.handHistory.addEntry(`Hand ${handNum}: ${fullMsg}`);
 
       // Track running chip totals for incremental display
       const runningChips = new Map<string, number>();
       preWinChips.forEach((chips, id) => runningChips.set(id, chips));
 
-      // Keep the existing pot breakdown label (already on screen from gameplay).
-      // We'll peel off lines from the bottom as each pot is awarded.
-      // The label uses "Main: $X\nSide: $Y\nSide: $Z" format.
+      // Keep a mutable copy of the pot label lines (Main first, then Sides).
+      // orderedPots is reversed (last side → main), and each awarded pot
+      // corresponds to the LAST line currently showing.
       let currentPotLines = this.statusBar.getPotText().split('\n');
 
       // Award each pot sequentially
       orderedPots.forEach((potResult, idx) => {
         this.delayed(() => {
-          // Update status bar
+          // Update status bar message
           const names = potResult.winnerIds.map(id => this.getDisplayName(id)).join(', ');
           const potName = potResult.potIndex === 0 ? 'Main' : 'Side';
           this.statusBar.setStatus(
             `${potName}: ${formatChips(potResult.amount)} → ${names} wins — ${potResult.winningHand}`
           );
 
-          // Show WINNER! on this pot's winners
-          this.highlightWinnerNames(potResult.winnerIds);
+          // Log each pot award individually to hand history
+          this.handHistory.addEntry(
+            `Hand ${handNum}: ${potName} Pot: ${names} wins ${formatChips(potResult.amount)} — ${potResult.winningHand}`
+          );
+
+          // Show WINNER! on this pot's winners with pot type subtitle
+          const potSubtitle = potResult.potIndex === 0 ? 'Main Pot' : 'Side Pot';
+          this.highlightWinnerNames(potResult.winnerIds, potSubtitle);
 
           // Calculate per-winner share for this pot
           const perWinner = Math.floor(potResult.amount / potResult.winnerIds.length);
-          let remainder = potResult.amount % potResult.winnerIds.length;
+          const remainder = potResult.amount % potResult.winnerIds.length;
 
           // Animate chips flying to each winner of this pot
           potResult.winnerIds.forEach((pid, widx) => {
@@ -1546,10 +1564,12 @@ export class GameManager {
             this.animateSinglePotAward(pid, winAmount, fromChips, toChips);
           });
 
-          // Remove the last line from the pot label (side pots are awarded
-          // bottom-up, so the last line corresponds to the current award)
-          currentPotLines = currentPotLines.slice(0, -1);
-          this.statusBar.setPot(currentPotLines.join('\n'));
+          // Remove the awarded line from the pot label AFTER the fly animation
+          // lands (1400ms), so the remaining labels stay visible during flight.
+          this.delayed(() => {
+            currentPotLines = currentPotLines.slice(0, -1);
+            this.statusBar.setPot(currentPotLines.join('\n'));
+          }, 1400);
 
           // On last pot, highlight winning cards
           if (idx === orderedPots.length - 1) {
@@ -1804,6 +1824,7 @@ export class GameManager {
     // Compute side pots (only when someone is all-in)
     const pots = this.computeSidePots(gameState.players);
 
+    let lineCount = 1;
     if (pots.length > 1) {
       // Show main pot + side pots stacked vertically
       let text = `Main: ${formatChips(pots[0].amount)}`;
@@ -1811,9 +1832,16 @@ export class GameManager {
         text += `\nSide: ${formatChips(pots[i].amount)}`;
       }
       this.statusBar.setPot(text);
+      lineCount = pots.length;
     } else {
       this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
     }
+
+    // Push chip stack up so it never overlaps multi-line pot labels.
+    // Base position: statusBar.y(-140) + potLabel.y(-94) - 20 = -254
+    // Each extra line of text needs ~24px more clearance above.
+    const baseChipY = -140 + -94 - 20;
+    this.potChips.y = baseChipY - (lineCount - 1) * 24;
 
     // Update visual chip stack
     this.potChips.update(totalPot);
@@ -2114,8 +2142,9 @@ export class GameManager {
       this.usedRosterNames.add(newEntry.name);
       const engineId = id; // reuse same engine slot ID (ai1, ai2, etc.)
 
-      // Defer replacement: wait 1-3 hands before new player joins
-      const handsRemaining = 1 + Math.floor(Math.random() * 3); // 1, 2, or 3 hands before joining
+      // Defer replacement: wait 2-4 hands before new player joins
+      // (decremented at start of each new hand, so effective wait is 1-3 hands with empty seat)
+      const handsRemaining = 2 + Math.floor(Math.random() * 3); // 2, 3, or 4 ticks → 1-3 hands empty
       this.deferredReplacements.push({ seatIndex, engineId, entry: newEntry, handsRemaining });
     }
 
@@ -2206,8 +2235,8 @@ export class GameManager {
       this.eliminatedPlayers.delete(engineId);
 
       this.statusBar.setStatus(`${entry.name} has joined the table!`);
-      const handNum = String(this.handCounter).padStart(3, '0');
-      this.handHistory.addEntry(`Hand ${handNum}: ${entry.name} has entered the game.`);
+      const nextHandNum = String(this.handCounter + 1).padStart(3, '0');
+      this.handHistory.addEntry(`Hand ${nextHandNum}: ${entry.name} has entered the game.`);
       console.log(`New player joined: ${entry.name} at seat ${seatIndex}`);
     }
 
@@ -2263,8 +2292,8 @@ export class GameManager {
       this.eliminatedPlayers.delete(engineId);
 
       this.statusBar.setStatus(`${entry.name} has joined the table!`);
-      const handNum = String(this.handCounter).padStart(3, '0');
-      this.handHistory.addEntry(`Hand ${handNum}: ${entry.name} has entered the game.`);
+      const nextHandNum = String(this.handCounter + 1).padStart(3, '0');
+      this.handHistory.addEntry(`Hand ${nextHandNum}: ${entry.name} has entered the game.`);
     }
 
     this.pendingReplacements = [];
@@ -2403,11 +2432,11 @@ export class GameManager {
     this.winningHandLabels = [];
   }
 
-  private highlightWinnerNames(winnerIds: string[]): void {
+  private highlightWinnerNames(winnerIds: string[], subtitle?: string): void {
     winnerIds.forEach(pid => {
       const slot = this.getSlotForPlayer(pid);
       if (!slot) return;
-      slot.showWinnerLabel(8000);
+      slot.showWinnerLabel(8000, subtitle);
     });
   }
 
@@ -2825,6 +2854,7 @@ export class GameManager {
   }
 
   destroy(): void {
+    this.resetDebugState();
     this.handHistory.destroy();
   }
 }

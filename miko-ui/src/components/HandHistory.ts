@@ -82,6 +82,15 @@ export class HandHistory {
     this.listEl = document.createElement('div');
     this.containerEl.appendChild(this.listEl);
     document.body.appendChild(this.containerEl);
+
+    // Click outside the history panel or toggle button to dismiss
+    document.addEventListener('click', (e) => {
+      if (!this.isOpen) return;
+      const target = e.target as Node;
+      if (!this.containerEl.contains(target) && !this.toggleBtn.contains(target)) {
+        this.close();
+      }
+    });
   }
 
   /** Add a hand result message. New entries appear at the bottom. */
@@ -106,15 +115,20 @@ export class HandHistory {
   }
 
   private toggle(): void {
-    this.isOpen = !this.isOpen;
     if (this.isOpen) {
+      this.close();
+    } else {
+      this.isOpen = true;
       this.render();
       this.containerEl.style.display = 'block';
       this.toggleBtn.textContent = 'History ▾';
-    } else {
-      this.containerEl.style.display = 'none';
-      this.toggleBtn.textContent = 'History';
     }
+  }
+
+  private close(): void {
+    this.isOpen = false;
+    this.containerEl.style.display = 'none';
+    this.toggleBtn.textContent = 'History';
   }
 
   /** Reposition/resize based on screen dimensions and scene center Y. */

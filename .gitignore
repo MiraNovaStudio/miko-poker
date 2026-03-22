@@ -10,6 +10,7 @@ coverage/
 engine/dist/
 miko-ui/dist/
 public/
+deploy/*.deb
 
 # OS cruft
 .DS_Store

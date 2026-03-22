@@ -19,6 +19,12 @@ const DESIGN_HEIGHT = 720;
 const app = new Application();
 
 async function init() {
+  const loadingOverlay = document.getElementById('loading-overlay');
+  const loadingSpinner = document.getElementById('loading-spinner');
+  const loadingStatus = document.getElementById('loading-status');
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressBar = document.getElementById('progress-bar');
+
   await app.init({
     background: '#1a1a2e',
     resizeTo: window,
@@ -29,12 +35,27 @@ async function init() {
   if (!canvasEl) throw new Error('Missing #game-canvas element');
   canvasEl.appendChild(app.canvas);
 
-  // Load all textures
-  await AssetManager.load();
+  // Switch from spinner to progress bar for asset loading
+  if (loadingSpinner) loadingSpinner.style.display = 'none';
+  if (progressWrap) progressWrap.style.display = 'block';
+  if (loadingStatus) loadingStatus.textContent = 'Loading assets...';
+
+  // Load all textures with progress
+  await AssetManager.load((progress: number) => {
+    const pct = Math.round(progress * 100);
+    if (progressBar) progressBar.style.width = `${pct}%`;
+    if (loadingStatus) loadingStatus.textContent = `Loading assets... ${pct}%`;
+  });
 
   // Shared audio manager (singleton, persists across scenes)
   const audio = AudioManager.instance;
   await audio.initialize();
+
+  // Fade out loading overlay
+  if (loadingOverlay) {
+    loadingOverlay.classList.add('fade-out');
+    setTimeout(() => loadingOverlay.remove(), 400);
+  }
 
   // Sound mute toggle button (HTML overlay, top-right — hidden on start screen)
   const soundBtn = document.getElementById('sound-toggle');

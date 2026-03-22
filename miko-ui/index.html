@@ -6,8 +6,52 @@
   <title>MikoPoker - Texas Hold'em</title>
   <link rel="icon" type="image/png" href="/assets/favicon.png">
   <link rel="stylesheet" href="/src/styles.css">
+  <style>
+    #loading-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #1a1a2e;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transition: opacity 0.4s ease;
+    }
+    #loading-overlay.fade-out { opacity: 0; pointer-events: none; }
+    #loading-title {
+      color: #fff; font-family: Arial, sans-serif;
+      font-size: 36px; font-weight: bold; margin-bottom: 32px;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 4px solid rgba(255,255,255,0.15);
+      border-top-color: #5588aa;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-status {
+      color: rgba(255,255,255,0.5); font-family: Arial, sans-serif;
+      font-size: 14px; margin-top: 18px;
+    }
+    #progress-wrap {
+      display: none; width: 220px; height: 6px;
+      background: rgba(255,255,255,0.1); border-radius: 3px;
+      margin-top: 18px; overflow: hidden;
+    }
+    #progress-bar {
+      width: 0%; height: 100%;
+      background: #5588aa; border-radius: 3px;
+      transition: width 0.15s ease;
+    }
+  </style>
 </head>
 <body>
+  <!-- Loading overlay — visible instantly before JS loads -->
+  <div id="loading-overlay">
+    <div id="loading-title">MikoPoker</div>
+    <div class="spinner" id="loading-spinner"></div>
+    <div id="progress-wrap"><div id="progress-bar"></div></div>
+    <div id="loading-status">Loading...</div>
+  </div>
+
   <div id="mobile-gate">
     <h2>MikoPoker</h2>
     <p>Not yet supported on mobile browsers or small desktop browser windows.</p>

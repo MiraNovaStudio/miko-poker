@@ -9,7 +9,7 @@ export class AssetManager {
   private static loaded = false;
 
   /** Preload all game textures. Call once at startup. */
-  static async load(): Promise<void> {
+  static async load(onProgress?: (progress: number) => void): Promise<void> {
     if (this.loaded) return;
 
     const manifest: { alias: string; src: string }[] = [];
@@ -39,7 +39,7 @@ export class AssetManager {
     }
 
     const aliases = manifest.map(m => m.alias);
-    await Assets.load(aliases);
+    await Assets.load(aliases, onProgress);
 
     this.loaded = true;
     console.log(`AssetManager: loaded ${manifest.length} textures`);

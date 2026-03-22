@@ -21,7 +21,7 @@ export class PlayerSlot extends Container {
   private chipOverlay: Graphics;
   private cardsContainer: Container;
   private avatarSprite: Sprite | null = null;
-  private winnerLabel: Text | null = null;
+  private winnerLabel: Container | null = null;
   private winnerTimer: ReturnType<typeof setTimeout> | null = null;
 
   private _isHighlighted = false;
@@ -343,11 +343,17 @@ export class PlayerSlot extends Container {
     this.drawChipOverlay(active ? COLORS.activeHighlight : COLORS.darkGray);
   }
 
-  /** Show an animated "WINNER!" label over the cards area */
-  showWinnerLabel(duration = 8000): void {
+  /** Show an animated "WINNER!" label over the cards area, with optional subtitle (e.g. "Side Pot") */
+  showWinnerLabel(duration = 8000, subtitle?: string): void {
     this.hideWinnerLabel();
 
-    this.winnerLabel = new Text({
+    const container = new Container();
+    container.y = subtitle ? -45 : -20; // shift up more when subtitle present to clear chip stack
+    container.scale.set(0);
+    container.alpha = 0;
+    this.addChild(container);
+
+    const mainLabel = new Text({
       text: 'WINNER!',
       style: {
         fontFamily: 'Arial',
@@ -357,11 +363,26 @@ export class PlayerSlot extends Container {
         stroke: { color: COLORS.black, width: 3 },
       } as TextStyleOptions,
     });
-    this.winnerLabel.anchor.set(0.5);
-    this.winnerLabel.y = -20; // centered on cards area
-    this.winnerLabel.scale.set(0);
-    this.winnerLabel.alpha = 0;
-    this.addChild(this.winnerLabel);
+    mainLabel.anchor.set(0.5);
+    container.addChild(mainLabel);
+
+    if (subtitle) {
+      const subLabel = new Text({
+        text: subtitle,
+        style: {
+          fontFamily: 'Arial',
+          fontSize: 20,
+          fontWeight: 'bold',
+          fill: COLORS.yellow,
+          stroke: { color: COLORS.black, width: 2 },
+        } as TextStyleOptions,
+      });
+      subLabel.anchor.set(0.5);
+      subLabel.y = 32;
+      container.addChild(subLabel);
+    }
+
+    this.winnerLabel = container;
 
     // Animate: scale up + fade in over ~300ms using requestAnimationFrame
     const startTime = performance.now();
@@ -386,7 +407,7 @@ export class PlayerSlot extends Container {
   showButtonLabel(duration = 3000): void {
     this.hideWinnerLabel();
 
-    this.winnerLabel = new Text({
+    const label = new Text({
       text: 'BUTTON',
       style: {
         fontFamily: 'Arial',
@@ -396,11 +417,12 @@ export class PlayerSlot extends Container {
         stroke: { color: COLORS.black, width: 3 },
       } as TextStyleOptions,
     });
-    this.winnerLabel.anchor.set(0.5);
-    this.winnerLabel.y = -20;
-    this.winnerLabel.scale.set(0);
-    this.winnerLabel.alpha = 0;
-    this.addChild(this.winnerLabel);
+    label.anchor.set(0.5);
+    label.y = -20;
+    label.scale.set(0);
+    label.alpha = 0;
+    this.winnerLabel = label;
+    this.addChild(label);
 
     const startTime2 = performance.now();
     const animDuration2 = 300;
@@ -423,7 +445,7 @@ export class PlayerSlot extends Container {
   showKnockedOutLabel(duration = 7000): void {
     this.hideWinnerLabel();
 
-    this.winnerLabel = new Text({
+    const label = new Text({
       text: 'K.O.',
       style: {
         fontFamily: 'Arial',
@@ -433,11 +455,12 @@ export class PlayerSlot extends Container {
         stroke: { color: COLORS.black, width: 3 },
       } as TextStyleOptions,
     });
-    this.winnerLabel.anchor.set(0.5);
-    this.winnerLabel.y = -20;
-    this.winnerLabel.scale.set(0);
-    this.winnerLabel.alpha = 0;
-    this.addChild(this.winnerLabel);
+    label.anchor.set(0.5);
+    label.y = -20;
+    label.scale.set(0);
+    label.alpha = 0;
+    this.winnerLabel = label;
+    this.addChild(label);
 
     // Animate: shake + scale up
     const startTime3 = performance.now();
