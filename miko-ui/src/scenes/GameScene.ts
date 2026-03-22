@@ -52,12 +52,14 @@ export class GameScene extends Container {
     // Pot chips (visual chip stack above pot label)
     const potChips = new PotChips();
     potChips.x = -410;   // aligned with pot label x
-    potChips.y = -140 + -94 - 20; // statusBar.y + potLabel.y - offset above label
+    potChips.y = -140 + -105 - 20; // statusBar.y + potLabel.y - offset above label
+    potChips.zIndex = 2;
     this.addChild(potChips);
 
-    // Status bar
+    // Status bar (zIndex 2 so pot labels render above player slots when side pots grow down)
     const statusBar = new StatusBar();
     statusBar.y = -140;
+    statusBar.zIndex = 2;
     this.addChild(statusBar);
 
     // Action bar

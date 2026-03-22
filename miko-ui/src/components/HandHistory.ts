@@ -151,6 +151,10 @@ export class HandHistory {
       this.autoScroll = true;
       this.render();
       this.containerEl.style.display = 'block';
+      // Scroll after the browser has laid out the panel
+      requestAnimationFrame(() => {
+        this.containerEl.scrollTop = this.containerEl.scrollHeight;
+      });
       this.sitOutEl.style.display = 'none';
       this.toggleBtn.textContent = 'History ▾';
     }

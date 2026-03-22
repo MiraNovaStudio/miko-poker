@@ -1504,6 +1504,21 @@ export class GameManager {
         this.allInRunout = true;
         this.streetQueue = [];
         this.pendingHandResult = null;
+
+        // Freeze the pot label with side pot breakdown (same as advanceGame path).
+        // Engine will call forceHandComplete() after this handler returns, which
+        // zeroes the pot — so snapshot now before that happens.
+        const potsBefore = this.computeSidePots(gs.players);
+        const potBeforeAward = this.engine.getCurrentPot();
+        if (potsBefore.length > 1) {
+          let text = `Main: ${formatChips(potsBefore[0].amount)}`;
+          for (let i = 1; i < potsBefore.length; i++) {
+            text += `\nSide: ${formatChips(potsBefore[i].amount)}`;
+          }
+          this.statusBar.setPot(text);
+        } else {
+          this.statusBar.setPot(`Pot: ${formatChips(potBeforeAward)}`);
+        }
       }
     }
   }
@@ -1921,7 +1936,6 @@ export class GameManager {
     // Compute side pots (only when someone is all-in)
     const pots = this.computeSidePots(gameState.players);
 
-    let lineCount = 1;
     // Check if anyone is all-in to determine main/side pot display.
     // A side pot only exists when a non-all-in player has bet MORE than the
     // lowest all-in level (i.e., there are chips the all-in player can't win).
@@ -1987,11 +2001,12 @@ export class GameManager {
         rawLayers.push({ amount: topLayer, eligible: topEligible });
       }
 
-      // Merge layers with < 2 eligible players into the previous layer
-      // (uncontested pots get returned, so don't show them as side pots)
+      // Merge layers with 0 eligible players into the previous layer
+      // (no one can win that slice). During active play, layers with eligible === 1
+      // are legitimate side pots — other players may still call/fold.
       const potLayers: number[] = [];
       for (const layer of rawLayers) {
-        if (layer.eligible < 2 && potLayers.length > 0) {
+        if (layer.eligible === 0 && potLayers.length > 0) {
           potLayers[potLayers.length - 1] += layer.amount;
         } else {
           potLayers.push(layer.amount);
@@ -2004,7 +2019,6 @@ export class GameManager {
         for (let i = 1; i < potLayers.length; i++) {
           text += `\nSide: ${formatChips(potLayers[i])}`;
         }
-        lineCount = potLayers.length;
         this.statusBar.setPot(text);
       } else {
         this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
@@ -2012,12 +2026,6 @@ export class GameManager {
     } else {
       this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
     }
-
-    // Push chip stack up so it never overlaps multi-line pot labels.
-    // Base position: statusBar.y(-140) + potLabel.y(-94) - 20 = -254
-    // Each extra line of text needs ~24px more clearance above.
-    const baseChipY = -140 + -94 - 20;
-    this.potChips.y = baseChipY - (lineCount - 1) * 24;
 
     // Update visual chip stack
     this.potChips.update(totalPot);
@@ -2649,6 +2657,8 @@ export class GameManager {
     }
     this.potChips.clear();
 
+    const gen = this.generation;
+
     winnerIds.forEach((pid, idx) => {
       const slot = this.getSlotForPlayer(pid);
       if (!slot) return;
@@ -2695,7 +2705,29 @@ export class GameManager {
         const flyDuration = 1400;
 
         const animate = (now: number) => {
+          // If game restarted or tab was hidden too long, skip animation
+          const stale = this.generation !== gen;
           const t = Math.min((now - startTime) / flyDuration, 1);
+
+          if (stale || t >= 1) {
+            // Clean up visuals immediately
+            scene.removeChild(floatingText);
+            floatingText.destroy();
+            flyingChips.forEach(chip => {
+              scene.removeChild(chip);
+              chip.destroy();
+            });
+
+            // Only play completion effects if still in same hand
+            if (!stale) {
+              slot.pulseChipOverlay();
+              const fromChips = preWinChips.get(pid) ?? 0;
+              const toChips = postWinChips.get(pid) ?? fromChips;
+              slot.animateChipsTo(fromChips, toChips);
+            }
+            return;
+          }
+
           // Ease-in-out cubic
           const ease = t < 0.5
             ? 4 * t * t * t
@@ -2722,27 +2754,7 @@ export class GameManager {
             chip.scale.set(1 - 0.4 * chipEase);
           });
 
-          if (t < 1) {
-            requestAnimationFrame(animate);
-          } else {
-            // Remove the floating text
-            scene.removeChild(floatingText);
-            floatingText.destroy();
-
-            // Remove flying chips
-            flyingChips.forEach(chip => {
-              scene.removeChild(chip);
-              chip.destroy();
-            });
-
-            // Pulse the chip overlay
-            slot.pulseChipOverlay();
-
-            // Animate chip count spinning up from pre-win to post-win
-            const fromChips = preWinChips.get(pid) ?? 0;
-            const toChips = postWinChips.get(pid) ?? fromChips;
-            slot.animateChipsTo(fromChips, toChips);
-          }
+          requestAnimationFrame(animate);
         };
         requestAnimationFrame(animate);
       }, delay);
@@ -2795,9 +2807,27 @@ export class GameManager {
     const startY = floatingText.y;
     const startTime = performance.now();
     const flyDuration = 1400;
+    const gen = this.generation;
 
     const animate = (now: number) => {
+      // If game restarted or tab was hidden too long, skip animation
+      const stale = this.generation !== gen;
       const t = Math.min((now - startTime) / flyDuration, 1);
+
+      if (stale || t >= 1) {
+        scene.removeChild(floatingText);
+        floatingText.destroy();
+        flyingChips.forEach(chip => {
+          scene.removeChild(chip);
+          chip.destroy();
+        });
+        if (!stale) {
+          slot.pulseChipOverlay();
+          slot.animateChipsTo(fromChips, toChips);
+        }
+        return;
+      }
+
       const ease = t < 0.5
         ? 4 * t * t * t
         : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -2821,18 +2851,7 @@ export class GameManager {
         chip.scale.set(1 - 0.4 * chipEase);
       });
 
-      if (t < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        scene.removeChild(floatingText);
-        floatingText.destroy();
-        flyingChips.forEach(chip => {
-          scene.removeChild(chip);
-          chip.destroy();
-        });
-        slot.pulseChipOverlay();
-        slot.animateChipsTo(fromChips, toChips);
-      }
+      requestAnimationFrame(animate);
     };
     requestAnimationFrame(animate);
   }

@@ -136,9 +136,9 @@ async function init() {
       }
     };
 
-    deckPngBtn?.addEventListener('click', () => {
+    deckPngBtn?.addEventListener('click', async () => {
       settings.deckType = 'png';
-      AssetManager.loadCardPngs(); // load PNGs on demand if not already loaded
+      await AssetManager.loadCardPngs(); // load PNGs on demand if not already loaded
       updateDeckButtons();
     });
 

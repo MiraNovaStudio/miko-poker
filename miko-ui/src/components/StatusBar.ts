@@ -11,9 +11,10 @@ export class StatusBar extends Container {
     super();
 
     // Pot label (center, above the table)
+    // Anchor (0.5, 0) so multi-line text (side pots) grows downward from a fixed top
     this.potLabel = new Text({ text: 'Pot: $0', style: FONTS.potLabel as TextStyleOptions });
-    this.potLabel.anchor.set(0.5);
-    this.potLabel.y = -94;
+    this.potLabel.anchor.set(0.5, 0);
+    this.potLabel.y = -105;
     this.potLabel.x = -410;
     this.addChild(this.potLabel);
 
@@ -45,11 +46,13 @@ export class StatusBar extends Container {
     this.handLabel.text = text;
   }
 
-  /** Return the pot label's position relative to StatusBar's parent (scene coords) */
+  /** Return the visual center of the first pot line (scene coords).
+   *  With anchor (0.5, 0), the top of text is at potLabel.y.
+   *  First line center ≈ potLabel.y + half a line height (~11px for fontSize 22). */
   getPotLabelScenePosition(): { x: number; y: number } {
     return {
       x: this.x + this.potLabel.x,
-      y: this.y + this.potLabel.y,
+      y: this.y + this.potLabel.y + 11,
     };
   }
 
