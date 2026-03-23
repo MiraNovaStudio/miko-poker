@@ -455,12 +455,13 @@ export class PlayerSlot extends Container {
     this.hideWinnerLabel();
 
     const label = new Text({
-      text: 'K.O.',
+      text: 'Knocked\nOut',
       style: {
         fontFamily: 'Arial',
         fontSize: 32,
         fontWeight: 'bold',
         fill: 0xff4444,
+        align: 'center',
         stroke: { color: COLORS.black, width: 3 },
       } as TextStyleOptions,
     });
@@ -573,8 +574,7 @@ export class PlayerSlot extends Container {
             avatar.rotation = ease * totalSpins * Math.PI * 2;
             avatar.x = avatarStartX + (exitX - avatarStartX) * ease;
             avatar.y = avatarStartY + (exitY - avatarStartY) * ease;
-            avatar.alpha = 1 - ease;
-            avatar.scale.set(1 - ease * 0.5);
+            avatar.alpha = 1 - ease * 0.8;
 
             if (t < 1) {
               requestAnimationFrame(animateAvatar);
@@ -584,7 +584,6 @@ export class PlayerSlot extends Container {
               avatar.x = avatarStartX;
               avatar.y = avatarStartY;
               avatar.alpha = 1;
-              avatar.scale.set(1);
             }
           };
           requestAnimationFrame(animateAvatar);

@@ -70,6 +70,7 @@ export class GameManager {
   // All-in runout sequencing
   private allInRunout = false;
   private _foldWinDeferred = false;
+  private _lastKoCount = 0;
   private streetQueue: { street: string; cards: EngineCard[] }[] = [];
   private pendingHandResult: GameResult | null = null;
 
@@ -895,6 +896,8 @@ export class GameManager {
       this.handHistory.addEntry(`Button: ${winnerName}`);
       const winnerSlot = this.slotLayout.getSlot(winnerIdx);
       if (winnerSlot) winnerSlot.showButtonLabel(3000);
+      const winnerSeat = SEAT_POSITIONS[winnerIdx];
+      if (winnerSeat) this.dealerButton.flyTo(winnerSeat.x, winnerSeat.y, winnerIdx);
 
       // After a brief pause, clear and start the real hand
       this.delayed(() => {
@@ -930,9 +933,11 @@ export class GameManager {
       );
       this.handHistory.addEntry(`Button: ${winnerName}`);
 
-      // Show BUTTON animation on the winner's slot
+      // Show BUTTON animation on the winner's slot and fly the dealer button
       const winnerSlot = this.slotLayout.getSlot(winnerIdx);
       if (winnerSlot) winnerSlot.showButtonLabel(3000);
+      const winnerSeat = SEAT_POSITIONS[winnerIdx];
+      if (winnerSeat) this.dealerButton.flyTo(winnerSeat.x, winnerSeat.y, winnerIdx);
 
       // After the BUTTON label has shown, clear and start the real hand
       this.delayed(() => {
@@ -943,6 +948,8 @@ export class GameManager {
     }, revealTime);
   }
 
+  private _advanceRetries = 0;
+
   // ─── Game Loop ─────────────────────────────────────────────
 
   private advanceGame(): void {
@@ -952,6 +959,7 @@ export class GameManager {
     // After a street change, wait an extra second so the last action label is visible
     if (this.streetJustChanged) {
       this.streetJustChanged = false;
+      this._advanceRetries = 0;
       this.delayed(() => this.advanceGame(), 1000);
       return;
     }
@@ -966,6 +974,15 @@ export class GameManager {
     // — board should auto-run only when nobody can make a decision
     const activePlayers = gameState.players.filter((p: PlayerState) => !p.folded);
     const canActPlayers = activePlayers.filter((p: PlayerState) => !p.allIn);
+
+    // Safety: if only 1 active player remains (all others folded), force hand completion
+    if (activePlayers.length <= 1) {
+      console.warn('[SAFETY] Only 0-1 active players — forcing hand completion');
+      if (activePlayers.length === 1) {
+        this.engine.forceHandComplete();
+      }
+      return;
+    }
 
     // Trigger all-in runout when:
     // 1) Everyone is all-in (canAct === 0), OR
@@ -1019,17 +1036,28 @@ export class GameManager {
     }
 
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    if (!currentPlayer) return;
+    if (!currentPlayer) {
+      console.warn('[SAFETY] currentPlayer is null at index', gameState.currentPlayerIndex);
+      return;
+    }
 
-    if (currentPlayer.folded) {
+    if (currentPlayer.folded || currentPlayer.allIn) {
+      this._advanceRetries++;
+      // Safety: if we've been stuck on folded/all-in players for too many cycles,
+      // the engine's currentPlayerIndex isn't advancing. Force completion.
+      if (this._advanceRetries > gameState.players.length * 2) {
+        console.warn(`[SAFETY] advanceGame stuck (${this._advanceRetries} retries on ${currentPlayer.id}). Forcing hand completion.`);
+        this._advanceRetries = 0;
+        this.engine.forceHandComplete();
+        return;
+      }
+      if (currentPlayer.allIn) {
+        this.getSlotForPlayer(currentPlayer.id)?.showAllIn();
+      }
       this.delayed(() => this.advanceGame(), 100);
       return;
     }
-    if (currentPlayer.allIn) {
-      this.getSlotForPlayer(currentPlayer.id)?.showAllIn();
-      this.delayed(() => this.advanceGame(), 500);
-      return;
-    }
+    this._advanceRetries = 0;
 
     // Highlight current player
     this.highlightPlayer(currentPlayer.id);
@@ -1177,6 +1205,8 @@ export class GameManager {
           this.delayed(() => this.advanceGame(), 500);
         } catch (error) {
           console.error('Error processing AI action:', error);
+          // Don't let the game loop die — try to continue
+          this.delayed(() => this.advanceGame(), 1000);
         }
       }, delay);
     }
@@ -1233,6 +1263,12 @@ export class GameManager {
     this.playerHoleCards.clear();
     this.humanFolded = false;
     this.humanActedThisStreet = false;
+    this.allInRunout = false;
+    this._foldWinDeferred = false;
+    this._advanceRetries = 0;
+    this._lastKoCount = 0;
+    this.streetQueue = [];
+    this.pendingHandResult = null;
     this.actionBar.hidePreaction();
 
     // Reset UI
@@ -1624,10 +1660,6 @@ export class GameManager {
       this.showShowdownHandNames(result.winners);
     }
 
-    // Detect eliminations AFTER showdown reveals are done, so knockout
-    // animations (card fly, avatar spin) aren't interrupted by card redeal.
-    this.checkForEliminatedPlayers(true);
-
     const handNum = String(this.handCounter).padStart(3, '0');
     let extraDelay = 0;
 
@@ -1668,11 +1700,7 @@ export class GameManager {
           );
 
           // Show WINNER! on this pot's winners with pot type subtitle
-          if (this.eliminatedPlayers.has('player')) {
-            if (idx === 0) this.audioManager.playGameOverSound(); // play once
-          } else {
-            this.audioManager.playWinSound();
-          }
+          this.audioManager.playWinSound();
           const potSubtitle = potResult.potIndex === 0 ? 'Main Pot' : 'Side Pot';
           this.highlightWinnerNames(potResult.winnerIds, potSubtitle);
 
@@ -1738,11 +1766,7 @@ export class GameManager {
       this.highlightWinnerNames(result.winners);
 
       // Animate pot flying only to actual winners
-      if (this.eliminatedPlayers.has('player')) {
-        this.audioManager.playGameOverSound();
-      } else {
-        this.audioManager.playWinSound();
-      }
+      this.audioManager.playWinSound();
       this.animatePotToWinners(displayWinners, preWinChips, postWinChips, perPlayerWinnings);
 
       // Highlight winning cards (raise them up) and dim non-winning cards
@@ -1759,12 +1783,28 @@ export class GameManager {
     this.currentCommunityCards = [];
     this.playerHoleCards.clear();
 
-    // After award animations finish, trigger any deferred game-over
-    // (extra 3s pause so the player can see what happened)
-    const gameOverDelay = extraDelay + 3000;
-    this.delayed(() => this.triggerDeferredGameOver(), gameOverDelay);
+    // After pot award fly animations land (~1400ms + sequential pot delays),
+    // detect eliminations and play knockout animations.
+    const knockoutDelay = extraDelay + 1800;
+    this.delayed(() => {
+      this.checkForEliminatedPlayers(true);
 
-    // Schedule next hand (extra delay for multi-pot sequential display)
+      // Schedule game-over and next hand AFTER we know how many KOs there are.
+      // Each KO animation takes ~2800ms; wait for all to finish before proceeding.
+      const koTime = this._lastKoCount * 2800;
+
+      // Trigger deferred game-over after all KO animations complete
+      this.delayed(() => this.triggerDeferredGameOver(), koTime + 1500);
+
+      // Schedule next hand after KO animations + viewing time
+      this.delayed(() => {
+        this.scheduleNextHand();
+      }, koTime + 4000);
+    }, knockoutDelay);
+  }
+
+  /** Start the next hand (extracted for reuse after knockout animations) */
+  private scheduleNextHand(): void {
     this.delayed(() => {
       if (this.eliminatedPlayers.has('player')) return;
       // Check win condition before starting next hand
@@ -1821,7 +1861,7 @@ export class GameManager {
           this.delayed(() => this.advanceGame(), 500);
         }
       }
-    }, 8000 + extraDelay);
+    }, 0);
   }
 
   // ─── Player Actions ──────────────────────────────────────
@@ -2290,47 +2330,50 @@ export class GameManager {
 
     gameState.players.forEach((player, index) => {
       if (player.chips <= 0 && !this.eliminatedPlayers.has(player.id)) {
-        if (DEBUG_ENABLED) console.log(`[ELIM] ${player.id} eliminated with ${player.chips} chips`);
+        if (DEBUG_ENABLED) console.log(`[ELIM] ${player.id} knocked out (${player.chips} chips)`);
         this.eliminatedPlayers.add(player.id);
         newlyEliminated.push({ id: player.id, seatIndex: index });
-
-        const slot = this.getSlotForPlayer(player.id);
-        if (slot) {
-          slot.playKnockoutAnimation();
-        }
 
         const eliminatedName = this.getDisplayName(player.id);
         const handNum = String(this.handCounter).padStart(3, '0');
         this.handHistory.addEntry(`Hand ${handNum}: Player ${eliminatedName} eliminated.`);
 
         if (deferGameOver) {
-          // Just track elimination — game-over modal will be shown later
           if (player.id !== 'player') this.totalKnockouts++;
-          return;
-        }
-
-        if (player.id === 'player') {
+        } else if (player.id === 'player') {
           this.statusBar.setStatus('GAME OVER — You ran out of chips!');
           this.actionBar.hide();
           this.handPhase = 'idle';
-          this.onGameOver?.('You ran out of chips!');
-          return;
-        }
-
-        this.totalKnockouts++;
-        // MikoPoker KO only counts as victory if the human player won the hand
-        // (i.e., the player took MikoPoker's chips). AI knocking out MikoPoker
-        // is just a normal elimination.
-        if (eliminatedName === 'MikoPoker' && this.lastHandWinners?.includes('player')) {
-          if (DEBUG_ENABLED) console.log('[ELIM] 🏆 MikoPoker knocked out by player! Victory!');
-          this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
-          this.actionBar.hide();
-          this.handPhase = 'idle';
-          this.onGameOver?.('You knocked out MikoPoker!');
-          return;
+        } else {
+          this.totalKnockouts++;
+          if (eliminatedName === 'MikoPoker' && this.lastHandWinners?.includes('player')) {
+            if (DEBUG_ENABLED) console.log('[ELIM] 🏆 MikoPoker knocked out by player! Victory!');
+            this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
+            this.actionBar.hide();
+            this.handPhase = 'idle';
+          }
         }
       }
     });
+
+    // Play knockout animations sequentially (one at a time) with sound
+    const KO_ANIM_DURATION = 2800; // time per KO animation before starting next
+    newlyEliminated.forEach(({ id, seatIndex }, idx) => {
+      this.delayed(() => {
+        const slot = this.getSlotForPlayer(id);
+        const name = this.getDisplayName(id);
+        this.audioManager.playKnockoutSound();
+        if (slot) {
+          if (DEBUG_ENABLED) console.log(`[KO] ${name} knocked out (seat ${seatIndex})`);
+          slot.playKnockoutAnimation();
+        } else {
+          if (DEBUG_ENABLED) console.warn(`[KO] ${name} knocked out but no slot found (seat ${seatIndex})`);
+        }
+      }, idx * KO_ANIM_DURATION);
+    });
+
+    // Store how many KOs are queued so downstream timing can account for them
+    this._lastKoCount = newlyEliminated.length;
 
     // Replace eliminated AI players with new roster players (always, even when deferring game-over)
     for (const { id, seatIndex } of newlyEliminated) {
@@ -2365,6 +2408,7 @@ export class GameManager {
       const lastWasMiko = this.lastHandWinners.includes('player')
         && [...this.eliminatedPlayers].some(id => this.displayNameById.get(id) === 'MikoPoker');
       const winMsg = lastWasMiko ? 'You knocked out MikoPoker!' : 'You eliminated all opponents!';
+      this.audioManager.playGameOverSound();
       this.statusBar.setStatus(`YOU WIN! ${winMsg}`);
       this.actionBar.hide();
       this.handPhase = 'idle';
@@ -2379,6 +2423,7 @@ export class GameManager {
    */
   private triggerDeferredGameOver(): void {
     if (this.eliminatedPlayers.has('player')) {
+      this.audioManager.playGameOverSound();
       this.statusBar.setStatus('GAME OVER — You ran out of chips!');
       this.actionBar.hide();
       this.handPhase = 'idle';
@@ -2391,6 +2436,7 @@ export class GameManager {
       this.displayNameById.get(id) === 'MikoPoker'
     );
     if (mikoEliminated && this.lastHandWinners.includes('player')) {
+      this.audioManager.playGameOverSound();
       this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
       this.actionBar.hide();
       this.handPhase = 'idle';
@@ -2549,7 +2595,7 @@ export class GameManager {
         // Top-row seats: show hand name as a scene-level label above the
         // community cards, since bet labels inside slots get occluded
         if (slot.seatIndex === 3 || slot.seatIndex === 4 || slot.seatIndex === 5) {
-          this.showWinningHandAtSlot(handName, slot);
+          this.showLosingHandAtSlot(handName, slot);
         } else {
           slot.setBetSmallItalic(handName);
         }
@@ -2630,6 +2676,47 @@ export class GameManager {
     requestAnimationFrame(animate);
 
     // Clean up after 7.5 seconds
+    setTimeout(() => {
+      const idx = this.winningHandLabels.indexOf(label);
+      if (idx >= 0) this.winningHandLabels.splice(idx, 1);
+      label.parent?.removeChild(label);
+      label.destroy();
+    }, 7500);
+  }
+
+  /** Show a losing hand name at a top-row slot — smaller, muted style */
+  private showLosingHandAtSlot(handName: string, slot: PlayerSlot): void {
+    const scene = slot.parent;
+    if (!scene) return;
+
+    const label = new Text({
+      text: handName,
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 16,
+        fontWeight: 'bold',
+        fill: 0xcccccc,
+        stroke: { color: 0x000000, width: 2 },
+      } as TextStyleOptions,
+    });
+    label.anchor.set(0.5);
+    label.x = slot.x;
+    label.y = slot.y - 95;
+    label.alpha = 0;
+    label.zIndex = 100;
+    scene.addChild(label);
+    this.winningHandLabels.push(label);
+
+    // Simple fade in
+    const startTime = performance.now();
+    const duration = 400;
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      label.alpha = t * 0.85;
+      if (t < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+
     setTimeout(() => {
       const idx = this.winningHandLabels.indexOf(label);
       if (idx >= 0) this.winningHandLabels.splice(idx, 1);
@@ -2964,8 +3051,8 @@ export class GameManager {
     // Dim losing players' hole cards and winner's unused hole cards
     gameState.players.forEach((player, seatIdx) => {
       if (!player.cards || player.cards.length === 0 || player.folded) return;
-      // Skip eliminated players — they have a knockout animation playing
-      if (this.eliminatedPlayers.has(player.id)) return;
+      // Skip eliminated players — knockout animation will play after pot awards
+      if (player.chips <= 0) return;
       const slot = this.slotLayout.getSlot(seatIdx);
       if (!slot) return;
       const slotCards = slot.children[0]; // cardsContainer
