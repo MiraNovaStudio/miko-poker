@@ -95,7 +95,8 @@ export class GameScene extends Container {
       // Player eliminated → show Rebuy + Quit; player won → show victory + Keep Playing + New Game
       const eliminated = message?.includes('ran out of chips');
       const victory = message?.includes('eliminated all opponents') || message?.includes('knocked out MikoPoker');
-      const canContinue = victory && this.gameManager?.canKeepPlaying();
+      const allEliminated = message?.includes('eliminated all opponents');
+      const canContinue = victory && !allEliminated && this.gameManager?.canKeepPlaying();
       if (rebuyBtn) rebuyBtn.style.display = eliminated ? 'inline-block' : 'none';
       if (quitBtn) quitBtn.style.display = eliminated ? 'inline-block' : 'none';
       if (keepPlayingBtn) keepPlayingBtn.style.display = canContinue ? 'inline-block' : 'none';

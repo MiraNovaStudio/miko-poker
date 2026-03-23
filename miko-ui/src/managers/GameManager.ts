@@ -652,13 +652,14 @@ export class GameManager {
     this.humanFolded = false;
     this.handPhase = 'idle';
 
-    // Re-show the player slot with new chips
+    // Re-show the player slot with new chips and avatar
     const slot = this.slotLayout.getSlot(0);
     if (slot) {
       slot.resetForNewHand();
       slot.setPlayerName(this.getDisplayName('player'));
       slot.setChips(GAME_CONFIG.startingChips);
       slot.visible = true;
+      this.applyAvatar(slot, 'player');
     }
 
     this.statusBar.setStatus('Rebuy! Back in the game.');

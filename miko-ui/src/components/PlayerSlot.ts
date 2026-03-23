@@ -492,7 +492,9 @@ export class PlayerSlot extends Container {
     };
     requestAnimationFrame(animate3);
 
-    this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
+    if (duration > 0) {
+      this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
+    }
   }
 
   /**
@@ -592,7 +594,7 @@ export class PlayerSlot extends Container {
 
       // ── Phase 3: Show K.O. label after animations finish ──
       setTimeout(() => {
-        this.showKnockedOutLabel(5000);
+        this.showKnockedOutLabel(0);
         resolve();
       }, totalDuration);
     });
