@@ -2681,6 +2681,7 @@ export class GameManager {
     const startTime = performance.now();
     const duration = 600;
     const animate = (now: number) => {
+      if (label.destroyed) return;
       const t = Math.min((now - startTime) / duration, 1);
       const ease = t === 1 ? 1 : 1 - Math.pow(2, -10 * t) * Math.cos((t * 10 - 0.75) * (2 * Math.PI / 3));
       label.alpha = Math.min(t * 2, 1);
@@ -2727,6 +2728,7 @@ export class GameManager {
     const startTime = performance.now();
     const duration = 400;
     const animate = (now: number) => {
+      if (label.destroyed) return;
       const t = Math.min((now - startTime) / duration, 1);
       label.alpha = t * 0.85;
       if (t < 1) requestAnimationFrame(animate);

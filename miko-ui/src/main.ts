@@ -143,8 +143,8 @@ async function init() {
     };
 
     deckPngBtn?.addEventListener('click', async () => {
+      await AssetManager.loadCardPngs(); // load PNGs BEFORE switching deck type
       settings.deckType = 'png';
-      await AssetManager.loadCardPngs(); // load PNGs on demand if not already loaded
       updateDeckButtons();
     });
 
