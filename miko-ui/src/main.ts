@@ -103,12 +103,18 @@ async function init() {
   const table2Btn = document.getElementById('table-2');
   const avatarsOnBtn = document.getElementById('avatars-on');
   const avatarsOffBtn = document.getElementById('avatars-off');
+  const fastOnBtn = document.getElementById('fast-on');
+  const fastOffBtn = document.getElementById('fast-off');
 
   if (settingsBtn && settingsModal) {
     settingsBtn.style.display = 'none'; // hidden on start screen
 
     settingsBtn.addEventListener('click', () => {
       settingsModal.classList.add('open');
+      // Refresh fast mode button state when opening settings
+      const isOn = currentGameScene?.gameManager?.fastMode ?? false;
+      fastOnBtn?.classList.toggle('active', isOn);
+      fastOffBtn?.classList.toggle('active', !isOn);
     });
 
     settingsClose?.addEventListener('click', () => {
@@ -243,6 +249,21 @@ async function init() {
       updateShuffleButtons();
     });
     updateShuffleButtons(); // reflect persisted shuffle state
+
+    // Fast mode toggle
+    const updateFastButtons = () => {
+      const isOn = currentGameScene?.gameManager?.fastMode ?? false;
+      fastOnBtn?.classList.toggle('active', isOn);
+      fastOffBtn?.classList.toggle('active', !isOn);
+    };
+    fastOnBtn?.addEventListener('click', () => {
+      currentGameScene?.gameManager?.setFastMode(true);
+      updateFastButtons();
+    });
+    fastOffBtn?.addEventListener('click', () => {
+      currentGameScene?.gameManager?.setFastMode(false);
+      updateFastButtons();
+    });
 
     // Player name input
     const nameInput = document.getElementById('player-name') as HTMLInputElement | null;

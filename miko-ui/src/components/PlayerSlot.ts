@@ -43,9 +43,9 @@ export class PlayerSlot extends Container {
     this._betOffsetWide = getBetLabelOffset(seatIndex, seatPos);
     // Middle position: near the player, just inside toward center
     if (seatPos.x < 0) {
-      this._betOffsetMiddle = { x: 125, y: 10 };
+      this._betOffsetMiddle = { x: 122, y: 10 };
     } else if (seatPos.x > 0) {
-      this._betOffsetMiddle = { x: -125, y: 10 };
+      this._betOffsetMiddle = { x: -122, y: 10 };
     } else {
       this._betOffsetMiddle = this._betOffsetWide;
     }
@@ -71,7 +71,7 @@ export class PlayerSlot extends Container {
     const isTopRow = TOP_ROW_SEATS.includes(seatIndex);
     this.nameLabel = new Text({ text: '', style: FONTS.playerName as TextStyleOptions });
     this.nameLabel.anchor.set(0.5);
-    this.nameLabel.y = isTopRow ? -90 : 50;
+    this.nameLabel.y = isTopRow ? -96 : 50;
     this.addChild(this.nameLabel);
 
     // Bet label (positioned based on seat region; side seats start in middle)
@@ -466,7 +466,7 @@ export class PlayerSlot extends Container {
       } as TextStyleOptions,
     });
     label.anchor.set(0.5);
-    label.y = -20;
+    label.y = -40;
     label.scale.set(0);
     label.alpha = 0;
     this.winnerLabel = label;

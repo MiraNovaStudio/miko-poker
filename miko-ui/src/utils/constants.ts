@@ -39,11 +39,11 @@ export const DEALER_BUTTON_SIZE = 30;
 export const DEALER_BUTTON_OFFSETS: { x: number; y: number }[] = [
   { x: 50, y: -95 },   // Seat 0: bottom center → up-right
   { x: 70, y: -95 },   // Seat 1: bottom left → up-right
-  { x: 80, y: -30 },   // Seat 2: left side → right
+  { x: 98, y: 18 },    // Seat 2: left side → right of stack box, vertically centered
   { x: 70, y: 70 },    // Seat 3: top left → down-right
   { x: 50, y: 70 },    // Seat 4: top center → down
   { x: -70, y: 70 },   // Seat 5: top right → down-left
-  { x: -80, y: -30 },  // Seat 6: right side → left
+  { x: -98, y: 18 },   // Seat 6: right side → left of stack box, vertically centered
   { x: -70, y: -95 },  // Seat 7: bottom right → up-left
 ];
 

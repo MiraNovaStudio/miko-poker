@@ -61,6 +61,7 @@ export class AudioManager {
       { name: 'win', path: 'assets/sounds/game-bonus-sound-winning-hand-test.mp3' },
       { name: 'knockout', path: 'assets/sounds/freesound_crunchpixstudio-button-394464.mp3' },
       { name: 'gameover', path: 'assets/sounds/alphix-knock-out.mp3' },
+      { name: 'victory', path: 'assets/sounds/superpuyofans1234-winner-game-sound-404167.mp3' },
     ];
 
     await Promise.all(
@@ -210,4 +211,5 @@ export class AudioManager {
   playWinSound(): void { this.play('win'); }
   playKnockoutSound(): void { this.play('knockout'); }
   playGameOverSound(): void { this.play('gameover'); }
+  playVictorySound(): void { this.play('victory'); }
 }

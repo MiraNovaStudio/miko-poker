@@ -71,6 +71,7 @@ export class GameManager {
   private allInRunout = false;
   private _foldWinDeferred = false;
   private _lastKoCount = 0;
+  private _newlyEliminatedNames: string[] = [];
   private streetQueue: { street: string; cards: EngineCard[] }[] = [];
   private pendingHandResult: GameResult | null = null;
 
@@ -375,6 +376,13 @@ export class GameManager {
   private debugMikoKOPending = false;
   private _fastMode = false;
 
+  get fastMode(): boolean { return this._fastMode; }
+
+  setFastMode(on: boolean): void {
+    this._fastMode = on;
+    console.log(`⚡ Fast mode: ${this._fastMode ? 'ON' : 'OFF'}`);
+  }
+
   debugFastMode(): void {
     this._fastMode = !this._fastMode;
     console.log(`⚡ Fast mode: ${this._fastMode ? 'ON' : 'OFF'}`);
@@ -455,6 +463,7 @@ export class GameManager {
     }
 
     if (DEBUG_ENABLED) console.log('🏆 All opponents eliminated! Victory incoming...');
+    this.audioManager.playVictorySound();
     this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
     this.actionBar.hide();
     this.handPhase = 'idle';
@@ -1244,6 +1253,7 @@ export class GameManager {
       case 'game_over':
         console.log('Game Over! Winner:', event.winnerId, 'onGameOver set:', !!this.onGameOver);
         if (event.winnerId === 'player') {
+          this.audioManager.playVictorySound();
           this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
           this.actionBar.hide();
           this.handPhase = 'idle';
@@ -1267,6 +1277,7 @@ export class GameManager {
     this._foldWinDeferred = false;
     this._advanceRetries = 0;
     this._lastKoCount = 0;
+    this._newlyEliminatedNames = [];
     this.streetQueue = [];
     this.pendingHandResult = null;
     this.actionBar.hidePreaction();
@@ -1578,7 +1589,9 @@ export class GameManager {
     if (isFoldWin && !this._foldWinDeferred) {
       this._foldWinDeferred = true;
       this.delayed(() => {
-        this._foldWinDeferred = false;
+        // Don't reset _foldWinDeferred here — leave it true so the
+        // recursive onHandComplete call falls through to process the result.
+        // It gets reset in onHandStarted for the next hand.
         this.onHandComplete(result);
       }, 1200);
       return;
@@ -1839,9 +1852,9 @@ export class GameManager {
         const noReplacements = this.pendingReplacements.length === 0
           && this.deferredReplacements.length === 0;
         if (activeAI.length === 0 && noReplacements) {
-          // Check if the player knocked out MikoPoker (not an AI)
+          // Check if the player knocked out MikoPoker THIS hand (not an AI in a previous hand)
           const lastWasMiko = this.lastHandWinners.includes('player')
-            && [...this.eliminatedPlayers].some(id => this.displayNameById.get(id) === 'MikoPoker');
+            && this._newlyEliminatedNames.includes('MikoPoker');
           const winMsg = lastWasMiko ? 'You knocked out MikoPoker!' : 'You eliminated all opponents!';
           this.statusBar.setStatus(`YOU WIN! ${winMsg}`);
           this.actionBar.hide();
@@ -2341,6 +2354,7 @@ export class GameManager {
         if (deferGameOver) {
           if (player.id !== 'player') this.totalKnockouts++;
         } else if (player.id === 'player') {
+          this.audioManager.playGameOverSound();
           this.statusBar.setStatus('GAME OVER — You ran out of chips!');
           this.actionBar.hide();
           this.handPhase = 'idle';
@@ -2348,6 +2362,7 @@ export class GameManager {
           this.totalKnockouts++;
           if (eliminatedName === 'MikoPoker' && this.lastHandWinners?.includes('player')) {
             if (DEBUG_ENABLED) console.log('[ELIM] 🏆 MikoPoker knocked out by player! Victory!');
+            this.audioManager.playVictorySound();
             this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
             this.actionBar.hide();
             this.handPhase = 'idle';
@@ -2372,8 +2387,9 @@ export class GameManager {
       }, idx * KO_ANIM_DURATION);
     });
 
-    // Store how many KOs are queued so downstream timing can account for them
+    // Store KO info so downstream timing and game-over checks can use it
     this._lastKoCount = newlyEliminated.length;
+    this._newlyEliminatedNames = newlyEliminated.map(({ id }) => this.getDisplayName(id));
 
     // Replace eliminated AI players with new roster players (always, even when deferring game-over)
     for (const { id, seatIndex } of newlyEliminated) {
@@ -2406,9 +2422,9 @@ export class GameManager {
     if (this.totalKnockouts >= PLAYER_ROSTER.length) {
       if (DEBUG_ENABLED) console.log('[ELIM] 🏆 WIN CONDITION MET via checkForEliminatedPlayers!');
       const lastWasMiko = this.lastHandWinners.includes('player')
-        && [...this.eliminatedPlayers].some(id => this.displayNameById.get(id) === 'MikoPoker');
+        && this._newlyEliminatedNames.includes('MikoPoker');
       const winMsg = lastWasMiko ? 'You knocked out MikoPoker!' : 'You eliminated all opponents!';
-      this.audioManager.playGameOverSound();
+      this.audioManager.playVictorySound();
       this.statusBar.setStatus(`YOU WIN! ${winMsg}`);
       this.actionBar.hide();
       this.handPhase = 'idle';
@@ -2431,12 +2447,11 @@ export class GameManager {
       return;
     }
 
-    // Check MikoPoker knockout win — only if the player knocked them out
-    const mikoEliminated = [...this.eliminatedPlayers].some(id =>
-      this.displayNameById.get(id) === 'MikoPoker'
-    );
-    if (mikoEliminated && this.lastHandWinners.includes('player')) {
-      this.audioManager.playGameOverSound();
+    // Check MikoPoker knockout win — only if MikoPoker was eliminated THIS hand
+    // AND the player won the hand (i.e., player took MikoPoker's chips)
+    const mikoKnockedOutThisHand = this._newlyEliminatedNames.includes('MikoPoker');
+    if (mikoKnockedOutThisHand && this.lastHandWinners.includes('player')) {
+      this.audioManager.playVictorySound();
       this.statusBar.setStatus('YOU WIN! You knocked out MikoPoker!');
       this.actionBar.hide();
       this.handPhase = 'idle';
@@ -2446,6 +2461,7 @@ export class GameManager {
 
     // Check all-opponents-eliminated win
     if (this.totalKnockouts >= PLAYER_ROSTER.length) {
+      this.audioManager.playVictorySound();
       this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
       this.actionBar.hide();
       this.handPhase = 'idle';
@@ -2584,7 +2600,7 @@ export class GameManager {
     gameState.players.forEach((p: PlayerState) => {
       if (!p.cards || p.cards.length === 0 || p.folded) return;
       if (winnerSet.has(p.id)) return; // winners get the animated label at their position
-      if (p.chips <= 0) return; // skip eliminated players — knockout animation playing
+      if (this.eliminatedPlayers.has(p.id)) return; // skip players with knockout animation playing
       try {
         const combined = [...(p.cards as EngineCard[]), ...this.currentCommunityCards];
         if (combined.length < 5) return;
@@ -2694,14 +2710,14 @@ export class GameManager {
       style: {
         fontFamily: 'Arial',
         fontSize: 16,
-        fontWeight: 'bold',
-        fill: 0xcccccc,
+        fontStyle: 'italic',
+        fill: 0xffff00,
         stroke: { color: 0x000000, width: 2 },
       } as TextStyleOptions,
     });
     label.anchor.set(0.5);
     label.x = slot.x;
-    label.y = slot.y - 95;
+    label.y = slot.y + 48;
     label.alpha = 0;
     label.zIndex = 100;
     scene.addChild(label);
