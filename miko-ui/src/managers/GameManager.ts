@@ -2063,12 +2063,10 @@ export class GameManager {
         winnerParts.push(`${this.getDisplayName(pid)} wins ${formatChips(amt)}`);
       }
       let statusMsg = winnerParts.join(', ');
-      // Use detailed hand summary for status bar
-      const winnerSummary = this.engine ? this.getPlayerHandSummary(result.winners[0]) : '';
-      if (winnerSummary) {
-        statusMsg += ` — ${winnerSummary}`;
-      } else if (result.winningHand) {
-        statusMsg += ` — ${result.winningHand}`;
+      // Only show hand strength at showdown (not fold wins — cards aren't revealed)
+      if (result.winningHand) {
+        const winnerSummary = this.engine ? this.getPlayerHandSummary(result.winners[0]) : '';
+        statusMsg += ` — ${winnerSummary || result.winningHand}`;
       }
       this.statusBar.setStatus(statusMsg);
 
@@ -4036,6 +4034,10 @@ export class GameManager {
 
   debugHandLog(input: number | string): void {
     const handNum = HandLog.parseHandNum(input);
+    // Warn about octal: debugHandLog(020) is 16 in JS. Use debugHandLog("020") or debugHandLog(20).
+    if (typeof input === 'number' && input !== handNum) {
+      console.warn(`Note: ${input} was passed. Use debugHandLog("${String(handNum).padStart(3, '0')}") or debugHandLog(${handNum}) to avoid octal.`);
+    }
     console.log(this.handLog.getLog(handNum));
   }
 
