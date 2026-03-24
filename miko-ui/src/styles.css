@@ -57,7 +57,7 @@ html, body {
   z-index: 200;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.75);
 }
 #settings-modal.open {
   display: flex;
@@ -67,7 +67,7 @@ html, body {
   border: 2px solid #5588aa;
   border-radius: 12px;
   padding: 24px 32px 24px 32px;
-  min-width: 280px;
+  min-width: 460px;
   max-height: 80vh;
   color: #fff;
   font-family: Arial, sans-serif;

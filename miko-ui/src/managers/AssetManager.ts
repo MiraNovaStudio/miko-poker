@@ -6,10 +6,17 @@ import { SettingsManager } from './SettingsManager.js';
 const SUITS = ['spades', 'hearts', 'diamonds', 'clubs'] as const;
 const RANKS = Object.keys(RANK_TO_FILENAME);
 
+// 4-color suit replacement map: diamonds → blue, clubs → green
+const FOUR_COLOR_MAP: Record<string, Record<string, string>> = {
+  diamonds: { '#df0000': '#2266cc' },
+  clubs:    { '#000000': '#228833' },
+};
+
 export class AssetManager {
   private static loaded = false;
   private static cardPngsLoaded = false;
   private static cardSvgsLoaded = false;
+  private static cardSvgs4cLoaded = false;
 
   /** Preload all game textures. Call once at startup. */
   static async load(onProgress?: (progress: number) => void): Promise<void> {
@@ -100,13 +107,56 @@ export class AssetManager {
     console.log('AssetManager: loaded 52 card SVG textures on demand');
   }
 
+  /** Load 4-color SVG card variants on demand */
+  static async loadCardSvgs4Color(): Promise<void> {
+    if (this.cardSvgs4cLoaded) return;
+
+    // Ensure base SVGs are loaded first (we fetch from same paths)
+    await this.loadCardSvgs();
+
+    const loadPromises: Promise<void>[] = [];
+
+    for (const rank of RANKS) {
+      for (const suit of SUITS) {
+        const replacements = FOUR_COLOR_MAP[suit];
+        if (!replacements) continue; // hearts & spades keep original colors
+
+        const rankName = RANK_TO_FILENAME[rank];
+        const alias = `card_svg4c_${rank}_${suit}`;
+        const src = `assets/svg_cards/${rankName}_of_${suit}.svg`;
+
+        loadPromises.push(
+          fetch(src)
+            .then(r => r.text())
+            .then(svgText => {
+              let modified = svgText;
+              for (const [from, to] of Object.entries(replacements)) {
+                modified = modified.split(from).join(to);
+              }
+              const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(modified)));
+              Assets.add({ alias, src: dataUrl });
+              return Assets.load(alias) as Promise<void>;
+            })
+        );
+      }
+    }
+
+    await Promise.all(loadPromises);
+    this.cardSvgs4cLoaded = true;
+    console.log('AssetManager: loaded 4-color SVG card variants');
+  }
+
   /** Get a card face texture by rank and suit */
   static getCardTexture(rank: string, suit: string): Texture {
     return Assets.get(`card_${rank}_${suit}`);
   }
 
-  /** Get a card SVG texture by rank and suit */
-  static getSvgCardTexture(rank: string, suit: string): Texture {
+  /** Get a card SVG texture by rank and suit (standard or 4-color) */
+  static getSvgCardTexture(rank: string, suit: string, fourColor = false): Texture {
+    if (fourColor && (suit === 'diamonds' || suit === 'clubs')) {
+      const tex = Assets.get(`card_svg4c_${rank}_${suit}`);
+      if (tex) return tex;
+    }
     return Assets.get(`card_svg_${rank}_${suit}`);
   }
 

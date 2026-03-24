@@ -47,6 +47,13 @@ async function init() {
     if (loadingStatus) loadingStatus.textContent = `Loading assets... ${pct}%`;
   });
 
+  // If user has 4-color deck enabled with SVG, load the recolored variants
+  const settings0 = SettingsManager.instance;
+  if (settings0.fourColorDeck && settings0.deckType === 'svg') {
+    if (loadingStatus) loadingStatus.textContent = 'Loading 4-color cards...';
+    await AssetManager.loadCardSvgs4Color();
+  }
+
   // Shared audio manager (singleton, persists across scenes)
   const audio = AudioManager.instance;
   await audio.initialize();
@@ -112,6 +119,12 @@ async function init() {
 
     settingsBtn.addEventListener('click', () => {
       settingsModal.classList.add('open');
+      const gm = currentGameScene?.gameManager;
+      if (gm) {
+        gm.pause();
+        // Hide the pause overlay — settings modal serves as the visual overlay
+        if (gm['_pauseOverlay']) gm['_pauseOverlay'].style.display = 'none';
+      }
       // Refresh fast mode button state when opening settings
       const isOn = currentGameScene?.gameManager?.fastMode ?? false;
       fastOnBtn?.classList.toggle('active', isOn);
@@ -120,11 +133,15 @@ async function init() {
 
     settingsClose?.addEventListener('click', () => {
       settingsModal.classList.remove('open');
+      currentGameScene?.gameManager?.unpause();
     });
 
     // Close modal when clicking backdrop
     settingsModal.addEventListener('click', (e) => {
-      if (e.target === settingsModal) settingsModal.classList.remove('open');
+      if (e.target === settingsModal) {
+        settingsModal.classList.remove('open');
+        currentGameScene?.gameManager?.unpause();
+      }
     });
 
     // Deck type selection
@@ -132,13 +149,13 @@ async function init() {
       deckPngBtn?.classList.toggle('active', settings.deckType === 'png');
       deckSvgBtn?.classList.toggle('active', settings.deckType === 'svg');
       deckUnicodeBtn?.classList.toggle('active', settings.deckType === 'unicode');
-      // 4-Color Deck only available with Unicode deck
-      const isUnicode = settings.deckType === 'unicode';
+      // 4-Color Deck available with Unicode and SVG decks
+      const supports4Color = settings.deckType === 'unicode' || settings.deckType === 'svg';
       if (fourColorRow) {
-        fourColorRow.style.opacity = isUnicode ? '1' : '0.4';
-        fourColorRow.style.pointerEvents = isUnicode ? 'auto' : 'none';
+        fourColorRow.style.opacity = supports4Color ? '1' : '0.4';
+        fourColorRow.style.pointerEvents = supports4Color ? 'auto' : 'none';
       }
-      if (!isUnicode && settings.fourColorDeck) {
+      if (!supports4Color && settings.fourColorDeck) {
         settings.fourColorDeck = false;
         updateFourColorButtons();
       }
@@ -209,13 +226,17 @@ async function init() {
       updateAvatarToggle();
     });
 
-    // 4-Color Deck toggle (Unicode only)
+    // 4-Color Deck toggle (Unicode and SVG)
     const updateFourColorButtons = () => {
       fourColorOnBtn?.classList.toggle('active', settings.fourColorDeck);
       fourColorOffBtn?.classList.toggle('active', !settings.fourColorDeck);
     };
 
-    fourColorOnBtn?.addEventListener('click', () => {
+    fourColorOnBtn?.addEventListener('click', async () => {
+      // Pre-load 4-color SVG variants if needed
+      if (settings.deckType === 'svg') {
+        await AssetManager.loadCardSvgs4Color();
+      }
       settings.fourColorDeck = true;
       updateFourColorButtons();
     });

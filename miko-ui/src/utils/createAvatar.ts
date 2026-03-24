@@ -27,7 +27,7 @@ export const AVATAR_PRESETS: AvatarPreset[] = [
   { id: 'male3',    label: 'Guy 3',    seed: 'preset_male_tan',      gender: 'male' },
   { id: 'female1',  label: 'Gal 1',    seed: 'preset_female_light',  gender: 'female' },
   { id: 'female2',  label: 'Gal 2',    seed: 'preset_female_dark',   gender: 'female' },
-  { id: 'female3',  label: 'Gal 3',    seed: 'preset_female_tan',    gender: 'female' },
+  { id: 'male4',    label: 'Guy 4',    seed: 'preset_male_light_1',  gender: 'male' },
 ];
 
 // ─── Seeded PRNG ──────────────────────────────────────────────────

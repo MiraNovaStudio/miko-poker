@@ -210,14 +210,13 @@ export class Card extends Container {
         const r = Math.max(CARD_RADIUS * (w / 80), 3);
         const pad = Math.round(w * 0.06);
 
-        // Draw white card background with rounded corners and border
+        // Draw pure white card background with rounded corners (no border)
         this.svgBg.clear();
         this.svgBg.roundRect(-w / 2, -h / 2, w, h, r);
-        this.svgBg.fill({ color: CARD_BG });
-        this.svgBg.roundRect(-w / 2, -h / 2, w, h, r);
-        this.svgBg.stroke({ color: CARD_BORDER, width: 1 });
+        this.svgBg.fill({ color: 0xffffff });
 
-        const texture = AssetManager.getSvgCardTexture(this.cardData.rank, this.cardData.suit);
+        const fourColor = SettingsManager.instance.fourColorDeck;
+        const texture = AssetManager.getSvgCardTexture(this.cardData.rank, this.cardData.suit, fourColor);
         if (texture) {
           this.cardSprite.texture = texture;
         }
