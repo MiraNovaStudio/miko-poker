@@ -1894,8 +1894,9 @@ export class GameManager {
         color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
       }));
 
-      // Track which players have been revealed so far
+      // Track which players have been revealed / logged so far
       const revealedPlayers = new Set<string>();
+      const loggedPlayers = new Set<string>();
 
       // Build eligibility map: for each potResult, which players are eligible
       // (non-folded players whose totalBet >= the pot's contribution threshold)
@@ -1943,18 +1944,24 @@ export class GameManager {
             `${potName}: ${formatChips(potResult.amount)} → ${names} wins — ${potResult.winningHand}`
           );
 
-          // Log losing hands for this pot, then the winner
+          // Log hands for this pot (skip already-logged players)
           const winnerSet = new Set(potResult.winnerIds);
           eligible.forEach(id => {
             if (winnerSet.has(id)) return;
+            if (loggedPlayers.has(id)) return;
+            loggedPlayers.add(id);
             const summary = this.getPlayerHandSummary(id);
             if (summary) {
               this.handHistory.addEntry(`Hand ${handNum}: ${this.getDisplayName(id)} shows — ${summary}`);
             }
           });
+          // Log winner with detailed hand summary
+          const winnerSummary = this.getPlayerHandSummary(potResult.winnerIds[0]);
+          const winHandDisplay = winnerSummary || potResult.winningHand;
           this.handHistory.addEntry(
-            `Hand ${handNum}: ${potName} Pot: ${names} wins ${formatChips(potResult.amount)} — ${potResult.winningHand}`
+            `Hand ${handNum}: ${potName} Pot: ${names} wins ${formatChips(potResult.amount)} — ${winHandDisplay}`
           );
+          potResult.winnerIds.forEach(id => loggedPlayers.add(id));
 
           // Show WINNER! with pot type below and hand name above (matching normal showdown style)
           this.audioManager.playWinSound();
@@ -2056,9 +2063,12 @@ export class GameManager {
         winnerParts.push(`${this.getDisplayName(pid)} wins ${formatChips(amt)}`);
       }
       let statusMsg = winnerParts.join(', ');
-      if (result.winningHand && this.engine) {
-        const handDesc = this.getWinningHandDescription(result.winners[0]);
-        statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
+      // Use detailed hand summary for status bar
+      const winnerSummary = this.engine ? this.getPlayerHandSummary(result.winners[0]) : '';
+      if (winnerSummary) {
+        statusMsg += ` — ${winnerSummary}`;
+      } else if (result.winningHand) {
+        statusMsg += ` — ${result.winningHand}`;
       }
       this.statusBar.setStatus(statusMsg);
 
@@ -3027,22 +3037,8 @@ export class GameManager {
       }
     });
 
-    // Show animated winning hand name at winner's position
-    winnerIds.forEach(winnerId => {
-      if (!idSet.has(winnerId)) return;
-      const winner = gameState.players.find(p => p.id === winnerId);
-      if (!winner?.cards?.length) return;
-      try {
-        const combined = [...(winner.cards as EngineCard[]), ...this.currentCommunityCards];
-        if (combined.length < 5) return;
-        const strength = evaluateHand(combined as EngineCard[]);
-        const handName = this.getDetailedHandName(strength, winner.cards as EngineCard[]);
-        const slot = this.getSlotForPlayer(winnerId);
-        if (slot) this.showWinningHandAtSlot(handName, slot);
-      } catch (err) {
-        console.warn('Failed to evaluate winning hand:', err);
-      }
-    });
+    // Winner hand name is shown via the WINNER label's handName parameter
+    // in the multi-pot award path — no separate label needed here.
   }
 
   private showShowdownHandNames(winnerIds: string[]): void {
