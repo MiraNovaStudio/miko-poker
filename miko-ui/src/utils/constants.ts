@@ -39,11 +39,11 @@ export const DEALER_BUTTON_SIZE = 30;
 export const DEALER_BUTTON_OFFSETS: { x: number; y: number }[] = [
   { x: 50, y: -95 },   // Seat 0: bottom center → up-right
   { x: 70, y: -95 },   // Seat 1: bottom left → up-right
-  { x: 98, y: 18 },    // Seat 2: left side → right of stack box, vertically centered
+  { x: 79, y: -50 },   // Seat 2: left side → right of top of cards
   { x: 70, y: 70 },    // Seat 3: top left → down-right
   { x: 50, y: 70 },    // Seat 4: top center → down
   { x: -70, y: 70 },   // Seat 5: top right → down-left
-  { x: -98, y: 18 },   // Seat 6: right side → left of stack box, vertically centered
+  { x: -79, y: -50 },  // Seat 6: right side → left of top of cards
   { x: -70, y: -95 },  // Seat 7: bottom right → up-left
 ];
 
@@ -92,6 +92,21 @@ export function getBetLabelOffset(seatIndex: number, seatPos: { x: number; y: nu
   }
   return { x: 0, y: -120 };
 }
+
+/** Pot eligibility dot colors: index 0 = main, 1–7 = side pots */
+export const POT_DOT_COLORS: number[] = [
+  0xffffff,  // white  — Main
+  0x3399ff,  // blue   — Side 1
+  0xff9900,  // orange — Side 2
+  0xcc44cc,  // purple — Side 3
+  0xff4444,  // red    — Side 4
+  0x00cccc,  // cyan   — Side 5
+  0xffff44,  // yellow — Side 6
+  0xff66b2,  // pink   — Side 7
+];
+
+/** Seat index where pot dots go on the LEFT instead of right */
+export const POT_DOT_LEFT_SEATS = new Set([6]);
 
 /** Rank map for card asset filenames */
 export const RANK_TO_FILENAME: Record<string, string> = {

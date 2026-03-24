@@ -5,6 +5,7 @@ import {
   HOLE_CARD_WIDTH, HOLE_CARD_HEIGHT, CARD_SPACING_HOLE,
   CHIP_OVERLAY_WIDTH, CHIP_OVERLAY_HEIGHT, CHIP_OVERLAY_Y,
   COLORS, FONTS, TOP_ROW_SEATS, SIDE_SEATS, getBetLabelOffset,
+  POT_DOT_LEFT_SEATS,
 } from '../utils/constants.js';
 import { SettingsManager, formatChips } from '../managers/SettingsManager.js';
 
@@ -30,6 +31,9 @@ export class PlayerSlot extends Container {
   private _allIn = false;
   private _isSideSeat: boolean;
   private _seatPos: { x: number; y: number };
+  private _potDotsContainer: Container;
+  private _potDotsOnLeft: boolean;
+  private _potDotColors: number[] = [];
   /** Bet label offset when side seat should show label toward center (preflop–turn). */
   private _betOffsetMiddle: { x: number; y: number };
   /** Bet label offset when side seat should show label below board (river). */
@@ -90,6 +94,13 @@ export class PlayerSlot extends Container {
     this.statusLabel.y = isTopRow ? 130 : 90;
     this.statusLabel.visible = false;
     this.addChild(this.statusLabel);
+
+    // Pot eligibility dots container
+    this._potDotsOnLeft = POT_DOT_LEFT_SEATS.has(seatIndex);
+    this._potDotsContainer = new Container();
+    this._potDotsContainer.x = this._potDotsOnLeft ? -(CHIP_OVERLAY_WIDTH / 2 + 10) : (CHIP_OVERLAY_WIDTH / 2 + 10);
+    this._potDotsContainer.y = -5;
+    this.addChild(this._potDotsContainer);
   }
 
   // --- Public API ---
@@ -612,12 +623,60 @@ export class PlayerSlot extends Container {
     }
   }
 
+  /** Show colored dots indicating which pots this player is eligible for */
+  setPotDots(colors: number[]): void {
+    this._potDotsContainer.removeChildren();
+    this._potDotColors = colors.slice();
+    const dotSize = 5;
+    const spacing = 4;
+    colors.forEach((color, i) => {
+      const dot = new Graphics();
+      dot.circle(0, 0, dotSize / 2);
+      dot.fill({ color });
+      dot.y = i * (dotSize + spacing);
+      this._potDotsContainer.addChild(dot);
+    });
+  }
+
+  /** Bold (enlarge) a dot by its pot color to indicate its pot is being awarded */
+  highlightPotDot(potColor: number, winnerColor?: number): void {
+    const idx = this._potDotColors.indexOf(potColor);
+    if (idx < 0) return;
+    const dot = this._potDotsContainer.children[idx] as Graphics;
+    if (!dot) return;
+    const boldSize = 8;
+    const color = winnerColor ?? potColor;
+    dot.clear();
+    dot.circle(0, 0, boldSize / 2);
+    dot.fill({ color });
+  }
+
+  /** Remove a specific pot dot by its color */
+  removePotDot(potColor: number): void {
+    const idx = this._potDotColors.indexOf(potColor);
+    if (idx < 0) return;
+    this._potDotsContainer.removeChildAt(idx);
+    this._potDotColors.splice(idx, 1);
+    // Reposition remaining dots
+    const dotSize = 5;
+    const spacing = 4;
+    this._potDotsContainer.children.forEach((child, i) => {
+      child.y = i * (dotSize + spacing);
+    });
+  }
+
+  clearPotDots(): void {
+    this._potDotsContainer.removeChildren();
+    this._potDotColors = [];
+  }
+
   /** Reset slot for a new hand (clear cards, bets, status) */
   resetForNewHand(): void {
     this.clearCards();
     this.clearBet();
     this.clearStatus();
     this.clearAllIn();
+    this.clearPotDots();
     this.highlight(false);
     this.hideWinnerLabel();
     this._folded = false;

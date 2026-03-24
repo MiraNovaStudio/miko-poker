@@ -63,13 +63,17 @@
   <button id="settings-toggle" class="top-btn" title="Settings">&#x2699;</button>
   <button id="sound-toggle" class="top-btn" title="Toggle sound">&#x1F50A;</button>
 
-  <!-- About modal -->
-  <div id="about-modal">
-    <div id="about-panel">
-      <h2>Miko Poker (Demo)</h2>
-      <p class="about-version">Version <span id="about-version-number"></span></p>
-      <p class="about-copyright">&copy; 2026 MiraNova Studios</p>
-      <button id="about-close">OK</button>
+  <!-- Game menu modal (replaces about modal) -->
+  <div id="game-menu-modal">
+    <div id="game-menu-panel">
+      <h2>MikoPoker</h2>
+      <p class="game-menu-version">Version <span id="game-menu-version-number"></span></p>
+      <div class="game-menu-buttons">
+        <button id="menu-resume-btn" class="game-menu-btn">Resume</button>
+        <button id="menu-new-game-btn" class="game-menu-btn">New Game</button>
+        <button id="menu-quit-btn" class="game-menu-btn">Quit Game</button>
+      </div>
+      <p class="game-menu-copyright">&copy; 2026 MiraNova Studios</p>
     </div>
   </div>
   <!-- Settings modal -->

@@ -19,9 +19,10 @@ import { HandHistory } from '../components/HandHistory.js';
 import { Card } from '../components/Card.js';
 import { PLAYER_ROSTER, pickNewPlayer, type RosterEntry } from '../data/player-roster.js';
 import { Text, Graphics, Container, Texture, type Renderer, type TextStyleOptions } from 'pixi.js';
-import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS } from '../utils/constants.js';
+import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS, POT_DOT_COLORS } from '../utils/constants.js';
 import { createAvatar, AVATAR_PRESETS } from '../utils/createAvatar.js';
 import { PotChips } from '../components/PotChips.js';
+import { HandLog } from '../utils/HandLog.js';
 
 type HandPhase = 'idle' | 'starting' | 'dealing' | 'betting' | 'showdown';
 
@@ -77,6 +78,9 @@ export class GameManager {
 
   // Side pot tracking: snapshot chips at hand start for accurate winnings
   private handStartChips: Map<string, number> = new Map();
+
+  // Per-hand debug log
+  private handLog = new HandLog();
 
   // New Game callback (set externally to show/hide game-over modal)
   onGameOver: ((message?: string) => void) | null = null;
@@ -277,7 +281,7 @@ export class GameManager {
   /**
    * DEBUG: Set up a side pot scenario with 1, 2, or 3 side pots.
    * AI will always call any bet (never fold, never raise).
-   * Call from browser console: window.debugSidePots(1), debugSidePots(2), or debugSidePots(3)
+   * Call from browser console: window.debugSidePots(1), debugSidePots(2), debugSidePots(3), or debugSidePots(4)
    *
    * Scenario 1 (1 side pot, 3 players):
    *   You=500, ai1=800, ai2=200
@@ -287,14 +291,56 @@ export class GameManager {
    *
    * Scenario 3 (3 side pots, 5 players):
    *   You=500, ai1=800, ai2=200, ai3=100, ai4=50
+   *
+   * Scenario 4 (4 side pots, 6 players):
+   *   You=500, ai1=800, ai2=200, ai3=100, ai4=50, ai5=25
    */
   debugSidePots(scenario: number): void {
     if (!this.engine) { console.warn('Engine not ready'); return; }
-    if (scenario !== 1 && scenario !== 2 && scenario !== 3) {
-      console.error('❌ debugSidePots() requires parameter 1, 2, or 3. Example: debugSidePots(2)');
+    if (scenario < 1 || scenario > 4) {
+      console.error('❌ debugSidePots() requires parameter 1–4. Example: debugSidePots(2)');
       return;
     }
     this.debugSidePotsPending = scenario;
+
+    // If game is idle (post-game-over from a previous debug hand), kick off a new hand immediately
+    if (this.handPhase === 'idle') {
+      this.generation++;  // cancel any stale callbacks from the previous hand
+
+      // Reset all players to alive with default chips so applyDebugSidePots can re-configure
+      this.eliminatedPlayers.clear();
+      const enginePlayers = (this.engine as any).players as { id: string; chips: number; isActive: boolean; folded: boolean; allIn: boolean; bet: number; totalBet: number }[];
+      for (const ep of enginePlayers) {
+        ep.chips = GAME_CONFIG.startingChips;
+        ep.isActive = true;
+        ep.folded = false;
+        ep.allIn = false;
+        ep.bet = 0;
+        ep.totalBet = 0;
+      }
+      this.slotLayout.getAllSlots().forEach((slot, idx) => {
+        slot.resetForNewHand();
+        slot.visible = true;
+        slot.setChips(GAME_CONFIG.startingChips);
+        const pid = this.playerIdBySeat[idx];
+        if (pid) {
+          slot.setPlayerName(this.getDisplayName(pid));
+          this.applyAvatar(slot, pid);
+        }
+      });
+      this.potChips.clear();
+      this.statusBar.setPot('');
+      this.statusBar.setStatus('');
+      this.communityCards.clear();
+      this.actionBar.hide();
+      this.clearAllPotDots();
+
+      this.applyDebugSidePots();
+      this.engine.startNewHand();
+      this.delayed(() => this.advanceGame(), 500);
+      return;
+    }
+
     console.log(`🎯 Side pot debug (${scenario} side pot${scenario > 1 ? 's' : ''}) will activate after the current hand finishes.`);
     this.statusBar.setStatus(`DEBUG: Side pot scenario ${scenario} queued — finish this hand`);
   }
@@ -310,6 +356,7 @@ export class GameManager {
     const keepIds: Set<string> = new Set(['player', 'ai1', 'ai2']);
     if (scenario >= 2) keepIds.add('ai3');
     if (scenario >= 3) keepIds.add('ai4');
+    if (scenario >= 4) keepIds.add('ai5');
 
     // Eliminate all others (but clear MikoPoker's display name mapping
     // so the victory check won't trigger a false "knocked out MikoPoker" win)
@@ -343,6 +390,7 @@ export class GameManager {
     };
     if (scenario >= 2) chipConfig.ai3 = 100;
     if (scenario >= 3) chipConfig.ai4 = 50;
+    if (scenario >= 4) chipConfig.ai5 = 25;
 
     const enginePlayers = (this.engine as any).players as { id: string; chips: number }[];
     for (const ep of enginePlayers) {
@@ -617,7 +665,10 @@ export class GameManager {
     this.streetQueue = [];
     this.pendingHandResult = null;
 
-    // Reset all debug state
+    // Discard any paused callbacks from the old game before unpausing
+    this._pausedQueue = [];
+
+    // Reset all debug state (includes unpause)
     this.resetDebugState();
 
     // Clear all UI
@@ -632,6 +683,7 @@ export class GameManager {
     this.statusBar.setStatus('');
     this.statusBar.setPot('');
     this.statusBar.setHand('');
+    this.potChips.clear();
 
     this.initializeEngine();
 
@@ -739,7 +791,8 @@ export class GameManager {
     }
   }
 
-  private pause(): void {
+  pause(): void {
+    if (this._paused) return;
     this._paused = true;
     // Create overlay
     if (!this._pauseOverlay) {
@@ -767,7 +820,8 @@ export class GameManager {
     console.log('⏸️ Game paused');
   }
 
-  private unpause(): void {
+  unpause(): void {
+    if (!this._paused) return;
     this._paused = false;
     // Remove overlay
     if (this._pauseOverlay) {
@@ -1028,16 +1082,20 @@ export class GameManager {
         const gameStateBefore = this.engine.getGameState();
         const potsBefore = this.computeSidePots(gameStateBefore.players);
         const potBeforeAward = this.engine.getCurrentPot();
+        this.potChips.update(potBeforeAward);
         this.engine.forceHandComplete();
         // Refresh chip labels — uncalled bets have been returned by collectBets
         this.updateAllChipLabels();
         // Show the frozen pot breakdown (engine pot is 0 after awardPots)
         if (potsBefore.length > 1) {
-          let text = `Main: ${formatChips(potsBefore[0].amount)}`;
-          for (let i = 1; i < potsBefore.length; i++) {
-            text += `\nSide: ${formatChips(potsBefore[i].amount)}`;
-          }
-          this.statusBar.setPot(text);
+          const dotLines = potsBefore.map((pot, i) => ({
+            text: `${i === 0 ? 'Main' : 'Side'}: ${formatChips(pot.amount)}`,
+            color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
+          }));
+          this.statusBar.setPotWithDots(dotLines);
+          // Build potLayers format for dot display
+          const potLayersForDots = potsBefore.map(pot => ({ amount: pot.amount, eligibleIds: pot.eligible }));
+          this.updatePlayerPotDots(potLayersForDots);
         } else {
           this.statusBar.setPot(`Pot: ${formatChips(potBeforeAward)}`);
         }
@@ -1230,17 +1288,28 @@ export class GameManager {
         this.onHandStarted();
         break;
       case 'blind_posted':
+        this.handLog.recordBlind(event.playerId, event.amount, event.isAnte);
         this.onBlindPosted(event.playerId, event.amount);
         break;
       case 'cards_dealt':
         this.onCardsDealt(event.playerId, event.cards);
         break;
       case 'street_changed':
+        this.handLog.recordStreet(event.street, event.communityCards);
         this.onStreetChanged(event.street, event.communityCards);
         break;
-      case 'player_action':
+      case 'player_action': {
+        // Get actual post-action state from engine for accurate logging
+        const pState = this.engine?.getGameState().players.find(p => p.id === event.playerId);
+        this.handLog.recordAction(
+          event.playerId,
+          event.action.type,
+          pState?.bet ?? 0,
+          pState?.allIn ?? false,
+        );
         this.onPlayerAction(event.playerId, event.action);
         break;
+      }
       case 'pot_updated':
         this.updateAllChipLabels();
         this.updatePotLabel();
@@ -1253,6 +1322,12 @@ export class GameManager {
         break;
       case 'game_over':
         console.log('Game Over! Winner:', event.winnerId, 'onGameOver set:', !!this.onGameOver);
+        if (this.debugSidePotsCallOnly) {
+          this.handPhase = 'idle';
+          this.statusBar.setStatus('DEBUG: Side pot hand complete. Run debugSidePots(n) again or start a new game.');
+          console.log('🎯 Side pot debug hand finished. Run debugSidePots(n) to test again.');
+          break;
+        }
         if (event.winnerId === 'player') {
           this.audioManager.playVictorySound();
           this.statusBar.setStatus('YOU WIN! All opponents eliminated!');
@@ -1298,6 +1373,15 @@ export class GameManager {
     // Snapshot chips at hand start for accurate per-player winnings later
     this.handStartChips.clear();
     gameState.players.forEach(p => this.handStartChips.set(p.id, p.chips));
+
+    // Start hand log with engine-ID-keyed stacks
+    const logStacks = new Map<string, number>();
+    gameState.players.forEach(p => {
+      if (!this.eliminatedPlayers.has(p.id)) {
+        logStacks.set(p.id, p.chips);
+      }
+    });
+    this.handLog.startHand(this.handCounter, logStacks);
 
     // Update all player slots
     gameState.players.forEach((player, index) => {
@@ -1560,12 +1644,15 @@ export class GameManager {
         // zeroes the pot — so snapshot now before that happens.
         const potsBefore = this.computeSidePots(gs.players);
         const potBeforeAward = this.engine.getCurrentPot();
+        this.potChips.update(potBeforeAward);
         if (potsBefore.length > 1) {
-          let text = `Main: ${formatChips(potsBefore[0].amount)}`;
-          for (let i = 1; i < potsBefore.length; i++) {
-            text += `\nSide: ${formatChips(potsBefore[i].amount)}`;
-          }
-          this.statusBar.setPot(text);
+          const dotLines = potsBefore.map((pot, i) => ({
+            text: `${i === 0 ? 'Main' : 'Side'}: ${formatChips(pot.amount)}`,
+            color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
+          }));
+          this.statusBar.setPotWithDots(dotLines);
+          const potLayersForDots = potsBefore.map(pot => ({ amount: pot.amount, eligibleIds: pot.eligible }));
+          this.updatePlayerPotDots(potLayersForDots);
         } else {
           this.statusBar.setPot(`Pot: ${formatChips(potBeforeAward)}`);
         }
@@ -1607,7 +1694,7 @@ export class GameManager {
       this.unhighlightPlayer(this.currentActivePlayer);
     }
 
-    // Clear bets but do NOT update chip labels yet — wait for pot animation
+    // Clear bets — pot dots stay visible during sequential awards
     this.slotLayout.getAllSlots().forEach(s => s.clearBet());
 
     // Compute actual per-player winnings using chip deltas from hand start.
@@ -1693,10 +1780,13 @@ export class GameManager {
       const runningChips = new Map<string, number>();
       preWinChips.forEach((chips, id) => runningChips.set(id, chips));
 
-      // Keep a mutable copy of the pot label lines (Main first, then Sides).
+      // Keep a mutable copy of the pot dot lines (Main first, then Sides).
       // orderedPots is reversed (last side → main), and each awarded pot
       // corresponds to the LAST line currently showing.
-      let currentPotLines = this.statusBar.getPotText().split('\n');
+      let currentDotLines: { text: string; color: number }[] = result.potResults.map((pr, i) => ({
+        text: `${pr.potIndex === 0 ? 'Main' : 'Side'}: ${formatChips(pr.amount)}`,
+        color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
+      }));
 
       // Award each pot sequentially
       orderedPots.forEach((potResult, idx) => {
@@ -1718,6 +1808,14 @@ export class GameManager {
           const potSubtitle = potResult.potIndex === 0 ? 'Main Pot' : 'Side Pot';
           this.highlightWinnerNames(potResult.winnerIds, potSubtitle);
 
+          // Bold the dot being awarded on player slots and pot label
+          const awardedPotColor = POT_DOT_COLORS[Math.min(potResult.potIndex, POT_DOT_COLORS.length - 1)];
+          this.highlightAwardedPotDots(awardedPotColor);
+          this.statusBar.highlightPotDot(awardedPotColor);
+
+          // Deduct this pot's amount from the visual chip stack
+          this.potChips.deduct(potResult.amount);
+
           // Calculate per-winner share for this pot
           const perWinner = Math.floor(potResult.amount / potResult.winnerIds.length);
           const remainder = potResult.amount % potResult.winnerIds.length;
@@ -1732,16 +1830,22 @@ export class GameManager {
             this.animateSinglePotAward(pid, winAmount, fromChips, toChips);
           });
 
-          // Remove the awarded line from the pot label AFTER the fly animation
-          // lands (1400ms), so the remaining labels stay visible during flight.
+          // Remove the awarded line and matching dots AFTER the fly animation
+          // lands (2000ms — extra time so the highlighted dot stays visible).
           this.delayed(() => {
-            currentPotLines = currentPotLines.slice(0, -1);
-            this.statusBar.setPot(currentPotLines.join('\n'));
-          }, 1400);
+            currentDotLines = currentDotLines.slice(0, -1);
+            if (currentDotLines.length > 0) {
+              this.statusBar.setPotWithDots(currentDotLines);
+            } else {
+              this.statusBar.setPot('');
+            }
+            this.removePotDotFromAll(awardedPotColor);
+          }, 2000);
 
-          // On last pot, highlight winning cards
+          // On last pot, clear any remaining visual chips and highlight winning cards
           if (idx === orderedPots.length - 1) {
             this.delayed(() => {
+              this.potChips.clear();
               if (result.winningHand) {
                 result.winners.forEach(wid => {
                   this.highlightWinningBoardCards(wid);
@@ -1782,6 +1886,7 @@ export class GameManager {
       // Animate pot flying only to actual winners
       this.audioManager.playWinSound();
       this.animatePotToWinners(displayWinners, preWinChips, postWinChips, perPlayerWinnings);
+      this.clearAllPotDots();
 
       // Highlight winning cards (raise them up) and dim non-winning cards
       if (result.winningHand) {
@@ -1792,6 +1897,9 @@ export class GameManager {
         this.dimNonWinningCards(result.winners);
       }
     }
+
+    // ── Record hand log data ──
+    this.recordHandLogCompletion(result, postWinChips);
 
     // Clear tracking state
     this.currentCommunityCards = [];
@@ -1853,6 +1961,12 @@ export class GameManager {
         const noReplacements = this.pendingReplacements.length === 0
           && this.deferredReplacements.length === 0;
         if (activeAI.length === 0 && noReplacements) {
+          if (this.debugSidePotsCallOnly) {
+            this.handPhase = 'idle';
+            this.statusBar.setStatus('DEBUG: Side pot hand complete. Run debugSidePots(n) again or start a new game.');
+            console.log('🎯 Side pot debug hand finished. Run debugSidePots(n) to test again.');
+            return;
+          }
           // Check if the player knocked out MikoPoker THIS hand (not an AI in a previous hand)
           const lastWasMiko = this.lastHandWinners.includes('player')
             && this._newlyEliminatedNames.includes('MikoPoker');
@@ -1893,11 +2007,25 @@ export class GameManager {
   private onBetOrRaise(): void {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
+    const player = gameState.players.find(p => p.id === 'player');
+    if (!player) return;
     const isPreflop = gameState.street === 'preflop';
     // Preflop BB option: canBet is true but currentBet > 0, so use 'raise' not 'bet'
     const actionType = (gameState.canBet && !isPreflop) ? 'bet' : 'raise';
     const defaultAmount = gameState.canBet ? gameState.minBetAmount : gameState.minRaiseAmount;
-    const amount = this.actionBar.getBetAmount(defaultAmount);
+    const maxAmount = player.chips + player.bet;  // total available for raise-to
+    let amount = this.actionBar.getBetAmount(defaultAmount);
+
+    // Clamp: flash input and don't submit if out of range
+    if (amount > maxAmount) {
+      this.actionBar.flashClampedBet(maxAmount);
+      return;
+    }
+    if (amount < defaultAmount) {
+      this.actionBar.flashClampedBet(defaultAmount);
+      return;
+    }
+
     this.engine.processAction('player', { type: actionType as 'bet' | 'raise', amount });
     this.humanActedThisStreet = true;
     this.actionBar.hide();
@@ -2042,10 +2170,9 @@ export class GameManager {
       const contributors = gameState.players.filter((p: PlayerState) => p.totalBet > 0);
 
       // Compute each pot layer by summing each player's actual contribution
-      // at that level. Only include layers where at least 2 non-folded players
-      // are eligible (otherwise the excess gets returned, no real side pot).
+      // at that level. Track eligible player IDs for dot display.
       const boundaries = [...allInLevels];
-      const rawLayers: { amount: number; eligible: number }[] = [];
+      const rawLayers: { amount: number; eligibleCount: number; eligibleIds: string[] }[] = [];
       let prevBound = 0;
       const nonFolded = gameState.players.filter((p: PlayerState) => !p.folded && p.totalBet > 0);
 
@@ -2055,9 +2182,8 @@ export class GameManager {
           const contrib = Math.min(p.totalBet, bound) - Math.min(p.totalBet, prevBound);
           if (contrib > 0) layerTotal += contrib;
         }
-        // Count non-folded players eligible at this level
-        const eligibleCount = nonFolded.filter((p: PlayerState) => p.totalBet >= bound).length;
-        if (layerTotal > 0) rawLayers.push({ amount: layerTotal, eligible: eligibleCount });
+        const eligible = nonFolded.filter((p: PlayerState) => p.totalBet >= bound);
+        if (layerTotal > 0) rawLayers.push({ amount: layerTotal, eligibleCount: eligible.length, eligibleIds: eligible.map(p => p.id) });
         prevBound = bound;
       }
 
@@ -2069,34 +2195,38 @@ export class GameManager {
         if (excess > 0) topLayer += excess;
       }
       if (topLayer > 0) {
-        const topEligible = nonFolded.filter((p: PlayerState) => p.totalBet > highestAllIn).length;
-        rawLayers.push({ amount: topLayer, eligible: topEligible });
+        const topEligible = nonFolded.filter((p: PlayerState) => p.totalBet > highestAllIn);
+        rawLayers.push({ amount: topLayer, eligibleCount: topEligible.length, eligibleIds: topEligible.map(p => p.id) });
       }
 
       // Merge layers with 0 eligible players into the previous layer
       // (no one can win that slice). During active play, layers with eligible === 1
       // are legitimate side pots — other players may still call/fold.
-      const potLayers: number[] = [];
+      const potLayers: { amount: number; eligibleIds: string[] }[] = [];
       for (const layer of rawLayers) {
-        if (layer.eligible === 0 && potLayers.length > 0) {
-          potLayers[potLayers.length - 1] += layer.amount;
+        if (layer.eligibleCount === 0 && potLayers.length > 0) {
+          potLayers[potLayers.length - 1].amount += layer.amount;
         } else {
-          potLayers.push(layer.amount);
+          potLayers.push({ amount: layer.amount, eligibleIds: layer.eligibleIds });
         }
       }
 
       // Display: first layer is Main, rest are Side pots
       if (potLayers.length >= 2) {
-        let text = `Main: ${formatChips(potLayers[0])}`;
+        const dotLines: { text: string; color: number }[] = [];
+        dotLines.push({ text: `Main: ${formatChips(potLayers[0].amount)}`, color: POT_DOT_COLORS[0] });
         for (let i = 1; i < potLayers.length; i++) {
-          text += `\nSide: ${formatChips(potLayers[i])}`;
+          dotLines.push({ text: `Side: ${formatChips(potLayers[i].amount)}`, color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)] });
         }
-        this.statusBar.setPot(text);
+        this.statusBar.setPotWithDots(dotLines);
+        this.updatePlayerPotDots(potLayers);
       } else {
         this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
+        this.clearAllPotDots();
       }
     } else {
       this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
+      this.clearAllPotDots();
     }
 
     // Update visual chip stack
@@ -2439,6 +2569,14 @@ export class GameManager {
    * deferred checkForEliminatedPlayers call.
    */
   private triggerDeferredGameOver(): void {
+    // Suppress game-over during side pot debug
+    if (this.debugSidePotsCallOnly) {
+      this.handPhase = 'idle';
+      this.statusBar.setStatus('DEBUG: Side pot hand complete. Run debugSidePots(n) again or start a new game.');
+      console.log('🎯 Side pot debug hand finished. Run debugSidePots(n) to test again.');
+      return;
+    }
+
     if (this.eliminatedPlayers.has('player')) {
       this.audioManager.playGameOverSound();
       this.statusBar.setStatus('GAME OVER — You ran out of chips!');
@@ -3184,6 +3322,117 @@ export class GameManager {
     }
 
     return [...new Set(indices)];
+  }
+
+  // ─── Pot Dots ────────────────────────────────────────────
+
+  /** Update colored eligibility dots on each player slot based on pot layers */
+  private updatePlayerPotDots(potLayers: { amount: number; eligibleIds: string[] }[]): void {
+    // Build a map: playerId → list of pot colors they're eligible for
+    const playerColors = new Map<string, number[]>();
+    potLayers.forEach((layer, i) => {
+      const color = POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)];
+      for (const pid of layer.eligibleIds) {
+        if (!playerColors.has(pid)) playerColors.set(pid, []);
+        playerColors.get(pid)!.push(color);
+      }
+    });
+
+    // Apply dots to each player slot
+    this.slotLayout.getAllSlots().forEach((slot, idx) => {
+      const pid = this.playerIdBySeat[idx];
+      if (!pid) { slot.clearPotDots(); return; }
+      const colors = playerColors.get(pid);
+      if (colors && colors.length > 0) {
+        slot.setPotDots(colors);
+      } else {
+        slot.clearPotDots();
+      }
+    });
+  }
+
+  private clearAllPotDots(): void {
+    this.slotLayout.getAllSlots().forEach(slot => slot.clearPotDots());
+  }
+
+  /** Remove a specific pot dot (by color) from all player slots */
+  private removePotDotFromAll(potColor: number): void {
+    this.slotLayout.getAllSlots().forEach(slot => slot.removePotDot(potColor));
+  }
+
+  /** Bold the dot matching potColor on all eligible slots */
+  private highlightAwardedPotDots(potColor: number): void {
+    this.slotLayout.getAllSlots().forEach(slot => {
+      slot.highlightPotDot(potColor);
+    });
+  }
+
+  /** Show a single main pot with green dot and eligible player dots */
+  private showMainPotDot(totalPot: number, players: PlayerState[]): void {
+    if (totalPot <= 0) {
+      this.statusBar.setPot('');
+      this.clearAllPotDots();
+      return;
+    }
+    this.statusBar.setPotWithDots([{ text: `Pot: ${formatChips(totalPot)}`, color: POT_DOT_COLORS[0] }]);
+    const eligible = players.filter(p => !p.folded && p.totalBet > 0).map(p => p.id);
+    this.updatePlayerPotDots([{ amount: totalPot, eligibleIds: eligible }]);
+  }
+
+  // ─── Hand Log ─────────────────────────────────────────────
+
+  private recordHandLogCompletion(result: GameResult, postWinChips: Map<string, number>): void {
+    if (!this.engine) return;
+    const gameState = this.engine.getGameState();
+    const isFoldWin = !result.winningHand;
+
+    // Record showdown hands (only when not a fold win)
+    if (!isFoldWin) {
+      for (const p of gameState.players) {
+        if (p.folded || !p.cards || p.cards.length === 0) continue;
+        const combined = [...(p.cards as EngineCard[]), ...this.currentCommunityCards];
+        if (combined.length >= 5) {
+          const strength = evaluateHand(combined as EngineCard[]);
+          const handName = getHandName(strength);
+          this.handLog.recordShowdown(p.id, p.cards as EngineCard[], handName);
+        }
+      }
+    }
+
+    // Record pot structure
+    if (result.potResults && result.potResults.length > 1) {
+      const mainPot = result.potResults.find(pr => pr.potIndex === 0);
+      const sidePots = result.potResults
+        .filter(pr => pr.potIndex > 0)
+        .map(pr => ({ label: pr.potLabel, amount: pr.amount }));
+      this.handLog.recordPots(mainPot?.amount ?? 0, sidePots);
+    } else {
+      this.handLog.recordPots(result.potAmount, []);
+    }
+
+    // Record awards (pass engine IDs — HandLog converts to log names)
+    if (result.potResults && result.potResults.length > 1) {
+      for (const pr of result.potResults) {
+        this.handLog.recordPotAward(pr.potLabel, pr.amount, pr.winnerIds, pr.winningHand);
+      }
+    } else {
+      const handName = result.winningHand ?? 'uncontested';
+      this.handLog.recordPotAward('Main Pot', result.potAmount, result.winners, handName);
+    }
+
+    // Record end stacks (engine IDs)
+    const endStacks = new Map<string, number>();
+    for (const p of gameState.players) {
+      if (!this.eliminatedPlayers.has(p.id)) {
+        endStacks.set(p.id, postWinChips.get(p.id) ?? p.chips);
+      }
+    }
+    this.handLog.endHand(endStacks, isFoldWin);
+  }
+
+  debugHandLog(input: number | string): void {
+    const handNum = HandLog.parseHandNum(input);
+    console.log(this.handLog.getLog(handNum));
   }
 
   destroy(): void {

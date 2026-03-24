@@ -482,27 +482,51 @@ async function init() {
     updateCardbackPreview();
   }
 
-  // About modal (click page title to open)
-  const aboutModal = document.getElementById('about-modal');
-  const aboutClose = document.getElementById('about-close');
-  const aboutVersion = document.getElementById('about-version-number');
+  // Game menu modal (click page title or press Escape to open)
+  const gameMenuModal = document.getElementById('game-menu-modal');
+  const menuResumeBtn = document.getElementById('menu-resume-btn');
+  const menuNewGameBtn = document.getElementById('menu-new-game-btn');
+  const menuQuitBtn = document.getElementById('menu-quit-btn');
+  const gameMenuVersion = document.getElementById('game-menu-version-number');
   const pageTitle = document.getElementById('page-title');
   const copyrightEl = document.getElementById('copyright');
   const mobileGate = document.getElementById('mobile-gate');
   const gameCanvas = document.getElementById('game-canvas');
 
-  if (aboutVersion) {
-    aboutVersion.textContent = __APP_VERSION__;
+  if (gameMenuVersion) {
+    gameMenuVersion.textContent = __APP_VERSION__;
   }
 
-  if (pageTitle && aboutModal) {
+  function openGameMenu() {
+    if (!currentGameScene?.gameManager) return;
+    currentGameScene.gameManager.pause();
+    gameMenuModal?.classList.add('open');
+  }
+
+  function closeGameMenu() {
+    gameMenuModal?.classList.remove('open');
+    currentGameScene?.gameManager?.unpause();
+  }
+
+  if (pageTitle) {
     pageTitle.addEventListener('click', () => {
-      aboutModal.classList.add('open');
-    });
-    aboutClose?.addEventListener('click', () => {
-      aboutModal.classList.remove('open');
+      if (activeScreen === 'game') openGameMenu();
     });
   }
+
+  menuResumeBtn?.addEventListener('click', closeGameMenu);
+
+  menuNewGameBtn?.addEventListener('click', () => {
+    gameMenuModal?.classList.remove('open');
+    currentGameScene?.gameManager?.restart();
+  });
+
+  menuQuitBtn?.addEventListener('click', () => {
+    gameMenuModal?.classList.remove('open');
+    currentGameScene?.gameManager?.unpause();
+    currentGameScene = null;
+    showStartScene();
+  });
 
   const MOBILE_BREAKPOINT = 500;
 
@@ -629,15 +653,27 @@ async function init() {
       setDebugEnabled(newState);
       console.log(`🔧 Debug logs: ${newState ? 'ON' : 'OFF'}`);
     };
+    (window as any).debugHandLog = (hand: number | string) => game.gameManager?.debugHandLog(hand);
   }
 
-  // P key to pause/unpause the game
+  // Keyboard shortcuts: P = pause, Escape = game menu
   let currentGameScene: GameScene | null = null;
   window.addEventListener('keydown', (e) => {
+    if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
     if (e.key === 'p' || e.key === 'P') {
-      // Don't pause if typing in an input field
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      currentGameScene?.gameManager?.togglePause();
+      // If menu is open, close it instead of toggling pause
+      if (gameMenuModal?.classList.contains('open')) {
+        closeGameMenu();
+      } else {
+        currentGameScene?.gameManager?.togglePause();
+      }
+    }
+    if (e.key === 'Escape') {
+      if (gameMenuModal?.classList.contains('open')) {
+        closeGameMenu();
+      } else if (activeScreen === 'game') {
+        openGameMenu();
+      }
     }
   });
 

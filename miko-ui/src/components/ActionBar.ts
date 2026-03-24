@@ -198,6 +198,19 @@ export class ActionBar extends Container {
     }
   }
 
+  /** Set the input value and flash red briefly to indicate it was auto-clamped. */
+  flashClampedBet(amount: number): void {
+    if (!this.betInputEl) return;
+    this.betInputEl.value = String(amount);
+    this.betInputEl.style.borderColor = '#ff4444';
+    this.betInputEl.style.color = '#ff4444';
+    setTimeout(() => {
+      if (!this.betInputEl) return;
+      this.betInputEl.style.borderColor = '#5588aa';
+      this.betInputEl.style.color = '#fff';
+    }, 600);
+  }
+
   /** Configure the slider range and pot-fraction values. */
   setBetLimits(min: number, max: number, pot: number, callAmount: number): void {
     this.sliderMin = min;
