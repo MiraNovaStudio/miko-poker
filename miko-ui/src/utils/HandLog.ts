@@ -152,7 +152,11 @@ export class HandLog {
   }
 
   getLog(handNum: number): string {
-    const hand = this.hands.get(handNum);
+    // Check completed hands first, then fall back to current in-progress hand
+    let hand = this.hands.get(handNum);
+    if (!hand && this.current && this.current.handNum === handNum) {
+      hand = this.current;
+    }
     if (!hand) return `Hand #${String(handNum).padStart(3, '0')} not found.`;
 
     const hNum = String(hand.handNum).padStart(3, '0');

@@ -96,7 +96,8 @@ export class GameScene extends Container {
       const eliminated = message?.includes('ran out of chips');
       const victory = message?.includes('eliminated all opponents') || message?.includes('knocked out MikoPoker');
       const allEliminated = message?.includes('eliminated all opponents');
-      const canContinue = victory && !allEliminated && this.gameManager?.canKeepPlaying();
+      const mikoKO = message?.includes('knocked out MikoPoker');
+      const canContinue = victory && !allEliminated && !mikoKO && this.gameManager?.canKeepPlaying();
       if (rebuyBtn) rebuyBtn.style.display = eliminated ? 'inline-block' : 'none';
       if (quitBtn) quitBtn.style.display = eliminated ? 'inline-block' : 'none';
       if (keepPlayingBtn) keepPlayingBtn.style.display = canContinue ? 'inline-block' : 'none';
@@ -160,7 +161,14 @@ export class GameScene extends Container {
     this.gameManager?.onResize(screenWidth, sceneCenterY, scale);
   }
 
+  private fireworksSoundTimer: ReturnType<typeof setTimeout> | null = null;
+
   private startFireworks(): void {
+    // Start fireworks sound loop after a delay (let victory sound play first)
+    this.fireworksSoundTimer = setTimeout(() => {
+      AudioManager.instance.playFireworksLoop();
+    }, 2000);
+
     const canvas = document.getElementById('fireworks-canvas') as HTMLCanvasElement | null;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -241,6 +249,11 @@ export class GameScene extends Container {
       cancelAnimationFrame(this.fireworksId);
       this.fireworksId = null;
     }
+    if (this.fireworksSoundTimer) {
+      clearTimeout(this.fireworksSoundTimer);
+      this.fireworksSoundTimer = null;
+    }
+    AudioManager.instance.stopFireworksLoop();
     const canvas = document.getElementById('fireworks-canvas') as HTMLCanvasElement | null;
     if (canvas) {
       const ctx = canvas.getContext('2d');

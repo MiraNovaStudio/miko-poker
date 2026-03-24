@@ -62,6 +62,8 @@ export class AudioManager {
       { name: 'knockout', path: 'assets/sounds/freesound_crunchpixstudio-button-394464.mp3' },
       { name: 'gameover', path: 'assets/sounds/alphix-knock-out.mp3' },
       { name: 'victory', path: 'assets/sounds/superpuyofans1234-winner-game-sound-404167.mp3' },
+      { name: 'button', path: 'assets/sounds/floraphonic-90s-game-ui-6-185099.mp3' },
+      { name: 'fireworks', path: 'assets/sounds/freesound_community-fireworks-generated-31449.mp3' },
     ];
 
     await Promise.all(
@@ -212,4 +214,35 @@ export class AudioManager {
   playKnockoutSound(): void { this.play('knockout'); }
   playGameOverSound(): void { this.play('gameover'); }
   playVictorySound(): void { this.play('victory'); }
+  playButtonSound(): void { this.play('button'); }
+
+  private fireworksSource: AudioBufferSourceNode | null = null;
+
+  /** Start playing the fireworks sound in a loop */
+  playFireworksLoop(): void {
+    this.stopFireworksLoop();
+    if (!this.audioCtx || !this.loaded || this.muted) return;
+    this.ensureResumed();
+
+    const buffer = this.buffers.get('fireworks');
+    if (!buffer) return;
+
+    const source = this.audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const gain = this.audioCtx.createGain();
+    gain.gain.value = 0.4;  // lower volume so it doesn't overpower
+    source.connect(gain);
+    gain.connect(this.audioCtx.destination);
+    source.start(0);
+    this.fireworksSource = source;
+  }
+
+  /** Stop the fireworks loop */
+  stopFireworksLoop(): void {
+    if (this.fireworksSource) {
+      try { this.fireworksSource.stop(); } catch { /* already stopped */ }
+      this.fireworksSource = null;
+    }
+  }
 }

@@ -79,6 +79,12 @@ export class GameManager {
   // Side pot tracking: snapshot chips at hand start for accurate winnings
   private handStartChips: Map<string, number> = new Map();
 
+  // Pot display freeze: pot label only updates at end of betting round
+  private potFrozen = false;
+  private frozenPotAmount = 0;
+  /** Track player IDs who have chips in this betting round (for fly animation) */
+  private playersWithBetsThisRound: Set<string> = new Set();
+
   // Per-hand debug log
   private handLog = new HandLog();
 
@@ -443,10 +449,38 @@ export class GameManager {
     this.statusBar.setStatus('DEBUG: MikoPoker KO queued — finish this hand');
   }
 
+  private _cardsHidden = false;
+
   debugHideCards(): void {
-    this.slotLayout.getAllSlots().forEach(s => s.clearCards());
-    this.communityCards.display([]);
-    console.log('🃏 Cards hidden');
+    this._cardsHidden = !this._cardsHidden;
+    if (this._cardsHidden) {
+      this.slotLayout.getAllSlots().forEach(s => s.hideCards());
+      this.communityCards.display([]);
+      console.log('🃏 Cards hidden');
+    } else {
+      // Re-show hole cards from tracked data
+      if (this.engine) {
+        const gameState = this.engine.getGameState();
+        gameState.players.forEach((p, idx) => {
+          if (p.folded || !p.cards || p.cards.length === 0) return;
+          const slot = this.slotLayout.getSlot(idx);
+          if (!slot) return;
+          const isFaceUp = p.id === 'player';
+          slot.dealCards(
+            p.cards.map(c => ({ rank: c.rank, suit: c.suit })),
+            isFaceUp,
+            true, // skipAnim
+          );
+        });
+      }
+      // Re-show community cards
+      if (this.currentCommunityCards.length > 0) {
+        this.communityCards.display(
+          this.currentCommunityCards.map(c => ({ rank: c.rank, suit: c.suit })),
+        );
+      }
+      console.log('🃏 Cards shown');
+    }
   }
 
   /** Reset all debug flags to defaults (called on restart / quit) */
@@ -664,6 +698,9 @@ export class GameManager {
     this._foldWinDeferred = false;
     this.streetQueue = [];
     this.pendingHandResult = null;
+    this.potFrozen = false;
+    this.frozenPotAmount = 0;
+    this.playersWithBetsThisRound.clear();
 
     // Discard any paused callbacks from the old game before unpausing
     this._pausedQueue = [];
@@ -960,6 +997,7 @@ export class GameManager {
       this.handHistory.addEntry(`Button: ${winnerName}`);
       const winnerSlot = this.slotLayout.getSlot(winnerIdx);
       if (winnerSlot) winnerSlot.showButtonLabel(3000);
+      this.audioManager.playButtonSound();
       const winnerSeat = SEAT_POSITIONS[winnerIdx];
       if (winnerSeat) this.dealerButton.flyTo(winnerSeat.x, winnerSeat.y, winnerIdx);
 
@@ -1000,6 +1038,7 @@ export class GameManager {
       // Show BUTTON animation on the winner's slot and fly the dealer button
       const winnerSlot = this.slotLayout.getSlot(winnerIdx);
       if (winnerSlot) winnerSlot.showButtonLabel(3000);
+      this.audioManager.playButtonSound();
       const winnerSeat = SEAT_POSITIONS[winnerIdx];
       if (winnerSeat) this.dealerButton.flyTo(winnerSeat.x, winnerSeat.y, winnerIdx);
 
@@ -1075,6 +1114,8 @@ export class GameManager {
         }
         this.revealAllCardsAtShowdown();
         this.allInRunout = true;
+        this.potFrozen = false;  // all-in runout manages pot display directly
+        this.playersWithBetsThisRound.clear();
         this.streetQueue = [];
         this.pendingHandResult = null;
         this.actionBar.hide();
@@ -1189,9 +1230,11 @@ export class GameManager {
       } else {
         minAmount = gameState.minRaiseAmount;
       }
-      this.actionBar.setMinBet(minAmount);
-      // Configure slider range: min bet to all-in (player's total available)
+      // Cap min at player's total available (can't raise more than your stack)
       const playerChips = currentPlayer.chips + currentPlayer.bet;
+      minAmount = Math.min(minAmount, playerChips);
+      this.actionBar.setMinBet(minAmount);
+      // Configure slider range: min bet to all-in
       this.actionBar.setBetLimits(minAmount, playerChips, gameState.pot, gameState.callAmount);
       this.actionBar.show();
       this.statusBar.setStatus('Your turn!');
@@ -1312,7 +1355,7 @@ export class GameManager {
       }
       case 'pot_updated':
         this.updateAllChipLabels();
-        this.updatePotLabel();
+        // Pot label updates at end of betting round, not on every bet
         break;
       case 'side_pot_awarded':
         this.onSidePotAwarded(event.winnerId, event.amount);
@@ -1406,7 +1449,12 @@ export class GameManager {
       this.dealerButton.positionAt(dealerSeat.x, dealerSeat.y, gameState.dealerIndex);
     }
 
-    this.updatePotLabel();
+    // Freeze pot display — it will update after each betting round completes
+    this.potFrozen = true;
+    this.frozenPotAmount = 0;
+    this.playersWithBetsThisRound.clear();
+    this.statusBar.setPot('');
+    this.potChips.clear();
     this.statusBar.setStatus('New Hand - Dealing Cards...');
     this.handPhase = 'dealing';
   }
@@ -1433,6 +1481,7 @@ export class GameManager {
 
   private onBlindPosted(playerId: string, amount: number): void {
     const label = formatChips(amount);
+    this.playersWithBetsThisRound.add(playerId);
 
     const slot = this.getSlotForPlayer(playerId);
     if (slot) {
@@ -1445,8 +1494,6 @@ export class GameManager {
       const p = this.engine.getGameState().players.find(pl => pl.id === playerId);
       if (p?.allIn) slot?.showAllIn();
     }
-
-    this.updatePotLabel();
   }
 
   private onCardsDealt(playerId: string, cards: EngineCard[], retries = 0): void {
@@ -1491,24 +1538,30 @@ export class GameManager {
     this.streetJustChanged = true;
     // Refresh chip labels — uncalled bets may have been returned by collectBets
     this.updateAllChipLabels();
-    this.updatePotLabel();
 
-    // Delay clearing previous round's bets so the last action label stays visible for 1s
-    this.delayed(() => {
-      this.slotLayout.getAllSlots().forEach(s => s.clearBet());
-    }, 1000);
+    // Snapshot bet positions NOW before labels are cleared or state changes.
+    const betSnapshot = this.snapshotBetPositions();
+    this.playersWithBetsThisRound.clear();
 
-    // Delay showing community cards to give a brief pause between streets
+    // Animate bets flying into pot, then update pot label for the new round
+    const handAtStreetChange = this.handCounter;
     this.delayed(() => {
-      this.statusBar.setStatus(street.toUpperCase());
-      this.currentCommunityCards = cards.slice();
-      this.communityCards.display(
-        cards.map(c => ({ rank: c.rank, suit: c.suit })),
-      );
-      this.updateHumanHandLabel();
-      // Move side-seat bet labels when cards actually appear (middle preflop/flop, wide on turn/river)
-      this.slotLayout.getAllSlots().forEach(s => s.updateBetLabelForStreet(street));
-    }, 1500);
+      if (this.handCounter !== handAtStreetChange) return;  // hand changed, skip
+      this.animateBetsToPot(betSnapshot, () => {
+        if (this.handCounter !== handAtStreetChange) return;
+        // Show community cards after pot update
+        this.delayed(() => {
+          if (this.handCounter !== handAtStreetChange) return;
+          this.statusBar.setStatus(street.toUpperCase());
+          this.currentCommunityCards = cards.slice();
+          this.communityCards.display(
+            cards.map(c => ({ rank: c.rank, suit: c.suit })),
+          );
+          this.updateHumanHandLabel();
+          this.slotLayout.getAllSlots().forEach(s => s.updateBetLabelForStreet(street));
+        }, 500);
+      });
+    }, 800);  // brief pause so last action label is visible before bets fly
   }
 
   /** Replay queued street_changed events with delays between each street */
@@ -1570,6 +1623,11 @@ export class GameManager {
       slot.showAllIn();
     }
 
+    // Track players who put chips in this round
+    if (action.type !== 'fold' && action.type !== 'check') {
+      this.playersWithBetsThisRound.add(playerId);
+    }
+
     // Update bet label and play sound
     if (action.type === 'fold') {
       slot.setBet(0, 'Fold');
@@ -1609,9 +1667,8 @@ export class GameManager {
       }
     }
 
-    // Update all chip labels
+    // Update all chip labels (pot label updates at end of betting round)
     this.updateAllChipLabels();
-    this.updatePotLabel();
 
     // Flash action name in chip overlay AFTER chip labels are updated
     if (action.type === 'call' || action.type === 'raise' || action.type === 'bet') {
@@ -1636,6 +1693,8 @@ export class GameManager {
         }
         this.revealAllCardsAtShowdown();
         this.allInRunout = true;
+        this.potFrozen = false;  // all-in runout manages pot display directly
+        this.playersWithBetsThisRound.clear();
         this.streetQueue = [];
         this.pendingHandResult = null;
 
@@ -1669,19 +1728,18 @@ export class GameManager {
       return;
     }
 
-    // For fold wins (no winningHand), defer so the last action label (e.g. "Fold")
-    // stays visible before we clear bets and show the winner. The engine fires
-    // hand_complete synchronously after player_action, so without this delay the
-    // fold label would be cleared in the same frame it was set.
+    // Defer so the last action label stays visible before we clear bets and
+    // show the winner. The engine fires hand_complete synchronously after
+    // player_action, so without this delay the label would be cleared instantly.
     const isFoldWin = !result.winningHand;
-    if (isFoldWin && !this._foldWinDeferred) {
+    if (!this._foldWinDeferred) {
       this._foldWinDeferred = true;
       this.delayed(() => {
         // Don't reset _foldWinDeferred here — leave it true so the
         // recursive onHandComplete call falls through to process the result.
         // It gets reset in onHandStarted for the next hand.
         this.onHandComplete(result);
-      }, 1200);
+      }, isFoldWin ? 1200 : 800);
       return;
     }
     this._foldWinDeferred = false;
@@ -1694,8 +1752,21 @@ export class GameManager {
       this.unhighlightPlayer(this.currentActivePlayer);
     }
 
-    // Clear bets — pot dots stay visible during sequential awards
-    this.slotLayout.getAllSlots().forEach(s => s.clearBet());
+    // Fly remaining bets into the pot. At showdown, the engine has already
+    // awarded pots (getCurrentPot() = 0), so we compute the total from the result.
+    const betSnapshot = this.snapshotBetPositions();
+    this.playersWithBetsThisRound.clear();
+
+    // Total pot = sum of all pot results, or result.potAmount for single pot
+    const totalPot = result.potResults && result.potResults.length > 0
+      ? result.potResults.reduce((sum, pr) => sum + pr.amount, 0)
+      : result.potAmount;
+
+    this.animateBetsIntoPotForShowdown(betSnapshot, totalPot, result);
+  }
+
+  /** Process showdown awards after bets have been collected into the pot */
+  private processHandAwards(result: GameResult): void {
 
     // Compute actual per-player winnings using chip deltas from hand start.
     // Engine's awardPots() has already distributed chips correctly per pot layer.
@@ -1773,8 +1844,9 @@ export class GameManager {
       // Labels stay in place; each awarded line is removed only after its
       // fly animation completes, so remaining labels stay visible.
       const orderedPots = [...result.potResults].reverse();
+      const INITIAL_DELAY = 1000;
       const POT_DELAY = 2500;
-      extraDelay = (orderedPots.length - 1) * POT_DELAY;
+      extraDelay = INITIAL_DELAY + (orderedPots.length - 1) * POT_DELAY;
 
       // Track running chip totals for incremental display
       const runningChips = new Map<string, number>();
@@ -1788,7 +1860,7 @@ export class GameManager {
         color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
       }));
 
-      // Award each pot sequentially
+      // Award each pot sequentially (initial 1s pause so labels are visible first)
       orderedPots.forEach((potResult, idx) => {
         this.delayed(() => {
           // Update status bar message
@@ -1855,7 +1927,7 @@ export class GameManager {
               }
             }, 1500);
           }
-        }, idx * POT_DELAY);
+        }, INITIAL_DELAY + idx * POT_DELAY);
       });
     } else {
       // ── SINGLE POT — existing display logic ──
@@ -2130,6 +2202,18 @@ export class GameManager {
     if (!this.engine) return;
     // During all-in runout, the engine pot is already awarded — don't overwrite the frozen label
     if (this.allInRunout) return;
+    // During active betting, show frozen pot amount from previous round
+    if (this.potFrozen) {
+      if (this.frozenPotAmount > 0) {
+        this.statusBar.setPot(`Pot: ${formatChips(this.frozenPotAmount)}`);
+        this.potChips.update(this.frozenPotAmount);
+      } else {
+        this.statusBar.setPot('');
+        this.potChips.clear();
+      }
+      this.clearAllPotDots();
+      return;
+    }
     const totalPot = this.engine.getCurrentPot();
     const gameState = this.engine.getGameState();
 
@@ -3322,6 +3406,238 @@ export class GameManager {
     }
 
     return [...new Set(indices)];
+  }
+
+  // ─── Pot Freeze / Bet-to-Pot Animation ───────────────────
+
+  /**
+   * Snapshot which slots have bets or visible action labels.
+   * Must be called BEFORE the engine collects bets (i.e. at street_changed time).
+   */
+  /**
+   * Snapshot fly positions for all players who put chips in this betting round.
+   * Uses the tracked set (populated by onBlindPosted and onPlayerAction).
+   */
+  private snapshotBetPositions(): { startX: number; startY: number }[] {
+    const positions: { startX: number; startY: number }[] = [];
+    for (const pid of this.playersWithBetsThisRound) {
+      const slot = this.getSlotForPlayer(pid);
+      if (!slot || !slot.visible) continue;
+      const betPos = slot.getBetLabelPosition();
+      positions.push({
+        startX: slot.x + betPos.x,
+        startY: slot.y + betPos.y,
+      });
+    }
+    return positions;
+  }
+
+  /**
+   * Animate bet labels flying from player slots into the pot chip area,
+   * then unfreeze and update the pot display.
+   * @param snapshot - pre-captured bet positions (pass null to auto-detect from visible labels)
+   */
+  private animateBetsToPot(snapshot: { startX: number; startY: number }[] | null, onComplete?: () => void): void {
+    const scene = this.statusBar.parent;
+    if (!scene || !this.engine) {
+      this.unfreezeAndUpdatePot();
+      onComplete?.();
+      return;
+    }
+
+    const potTarget = { x: this.potChips.x, y: this.potChips.y };
+    const slots = this.slotLayout.getAllSlots();
+    const gen = this.generation;
+
+    // Use provided snapshot or fall back to current visible bet labels
+    const flySlots = snapshot ?? this.snapshotBetPositions();
+
+    // Clear ALL bet labels (including non-numeric like "Check", "Fold")
+    slots.forEach(s => s.clearBet());
+
+    if (flySlots.length === 0) {
+      // No bets to animate (e.g. everyone checked) — just update
+      this.unfreezeAndUpdatePot();
+      onComplete?.();
+      return;
+    }
+
+    // Create flying chip graphics for each bet
+    const flyDuration = 500;
+    let completed = 0;
+    const total = flySlots.length;
+
+    flySlots.forEach(({ startX, startY }) => {
+      const chip = new Graphics();
+      chip.circle(0, 0, 8);
+      chip.fill({ color: 0xffff00 });
+      chip.x = startX;
+      chip.y = startY;
+      scene.addChild(chip);
+
+      const startTime = performance.now();
+      const animate = (now: number) => {
+        if (this.generation !== gen) {
+          scene.removeChild(chip);
+          chip.destroy();
+          return;
+        }
+        const t = Math.min((now - startTime) / flyDuration, 1);
+        const ease = t * t;
+        chip.x = startX + (potTarget.x - startX) * ease;
+        chip.y = startY + (potTarget.y - startY) * ease;
+        chip.alpha = 1 - t * 0.3;
+        chip.scale.set(1 - t * 0.4);
+
+        if (t < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          scene.removeChild(chip);
+          chip.destroy();
+          completed++;
+          if (completed === total) {
+            this.unfreezeAndUpdatePot();
+            onComplete?.();
+          }
+        }
+      };
+      requestAnimationFrame(animate);
+    });
+  }
+
+  /**
+   * Showdown-specific: fly bets into pot, animate pot count-up to known total,
+   * then proceed with awards. Does NOT read engine pot (already 0 at showdown).
+   */
+  private animateBetsIntoPotForShowdown(
+    betSnapshot: { startX: number; startY: number }[],
+    totalPot: number,
+    result: GameResult,
+  ): void {
+    const scene = this.statusBar.parent;
+    if (!scene) {
+      this.processHandAwards(result);
+      return;
+    }
+
+    const slots = this.slotLayout.getAllSlots();
+    const gen = this.generation;
+    const potTarget = { x: this.potChips.x, y: this.potChips.y };
+
+    // Clear all bet labels
+    slots.forEach(s => s.clearBet());
+
+    if (betSnapshot.length === 0) {
+      // No bets to fly — just show pot and proceed
+      this.potFrozen = false;
+      this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
+      this.potChips.update(totalPot);
+      this.delayed(() => this.processHandAwards(result), 900);
+      return;
+    }
+
+    // Fly chips from bet positions to pot
+    const flyDuration = 500;
+    let completed = 0;
+    const total = betSnapshot.length;
+    const fromAmount = this.frozenPotAmount;
+
+    betSnapshot.forEach(({ startX, startY }) => {
+      const chip = new Graphics();
+      chip.circle(0, 0, 8);
+      chip.fill({ color: 0xffff00 });
+      chip.x = startX;
+      chip.y = startY;
+      scene.addChild(chip);
+
+      const startTime = performance.now();
+      const animate = (now: number) => {
+        if (this.generation !== gen) {
+          scene.removeChild(chip);
+          chip.destroy();
+          return;
+        }
+        const t = Math.min((now - startTime) / flyDuration, 1);
+        const ease = t * t;
+        chip.x = startX + (potTarget.x - startX) * ease;
+        chip.y = startY + (potTarget.y - startY) * ease;
+        chip.alpha = 1 - t * 0.3;
+        chip.scale.set(1 - t * 0.4);
+
+        if (t < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          scene.removeChild(chip);
+          chip.destroy();
+          completed++;
+          if (completed === total) {
+            // Animate pot count-up from frozen amount to total
+            this.potFrozen = false;
+            this.potChips.update(totalPot);
+
+            // Check for side pots
+            const hasSidePots = result.potResults && result.potResults.length > 1;
+            if (hasSidePots) {
+              // Build side pot display from result data (engine pot is already 0)
+              const dotLines = result.potResults!.map((pr, i) => ({
+                text: `${pr.potIndex === 0 ? 'Main' : 'Side'}: ${formatChips(pr.amount)}`,
+                color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
+              }));
+              this.statusBar.setPotWithDots(dotLines);
+              // Compute eligibility from engine state (totalBet/folded still valid after award)
+              if (this.engine) {
+                const gs = this.engine.getGameState();
+                const pots = this.computeSidePots(gs.players);
+                if (pots.length > 0) {
+                  const potLayers = pots.map(pot => ({ amount: pot.amount, eligibleIds: pot.eligible }));
+                  this.updatePlayerPotDots(potLayers);
+                }
+              }
+              this.delayed(() => this.processHandAwards(result), 900);
+            } else {
+              this.animatePotCount(fromAmount, totalPot);
+              this.delayed(() => this.processHandAwards(result), 900);
+            }
+          }
+        }
+      };
+      requestAnimationFrame(animate);
+    });
+  }
+
+  /** Unfreeze the pot, animate the label from old to new total, then re-freeze */
+  private unfreezeAndUpdatePot(): void {
+    const fromAmount = this.frozenPotAmount;
+    const toAmount = this.engine?.getCurrentPot() ?? 0;
+
+    this.potFrozen = false;
+    this.updatePotLabel();  // update side pot dots, chip stack, etc.
+    this.frozenPotAmount = toAmount;
+    this.potFrozen = true;
+
+    // Only animate the count-up for single pot display.
+    // Side pots use setPotWithDots which would be overwritten by the animation.
+    const hasSidePots = this.statusBar.getPotText().includes('\n');
+    if (!hasSidePots && toAmount > fromAmount && toAmount > 0) {
+      this.animatePotCount(fromAmount, toAmount);
+    }
+  }
+
+  /** Animate the pot label text counting from one value to another */
+  private animatePotCount(from: number, to: number, duration = 800): void {
+    const startTime = performance.now();
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      const ease = 1 - (1 - t) * (1 - t);  // ease-out quad
+      const current = Math.round(from + (to - from) * ease);
+      this.statusBar.setPot(`Pot: ${formatChips(current)}`);
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        this.statusBar.setPot(`Pot: ${formatChips(to)}`);
+      }
+    };
+    requestAnimationFrame(animate);
   }
 
   // ─── Pot Dots ────────────────────────────────────────────

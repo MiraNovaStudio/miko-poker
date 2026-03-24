@@ -179,6 +179,23 @@ export class PlayerSlot extends Container {
     return { x: this.betLabel.x, y: this.betLabel.y };
   }
 
+  /** Returns true if the bet label shows a numeric bet (not "Check", "Fold", etc.) */
+  get hasBetAmount(): boolean {
+    if (!this.betLabel.visible || !this.betLabel.text) return false;
+    const t = this.betLabel.text;
+    return t.charAt(0) === '$' || (t.charAt(0) >= '0' && t.charAt(0) <= '9');
+  }
+
+  /** Returns true if the bet label is visible (any text — amount or action like "Check") */
+  get isBetLabelVisible(): boolean {
+    return this.betLabel.visible && this.betLabel.text !== '';
+  }
+
+  /** Returns the current bet label text */
+  getBetText(): string {
+    return this.betLabel.text;
+  }
+
   setBetColor(color: number): void {
     this.betLabel.style.fill = color;
   }
