@@ -57,7 +57,8 @@ export class AudioManager {
     const sounds: { name: string; path: string }[] = [
       { name: 'check', path: 'assets/sounds/check_one_knock.wav' },
       { name: 'bet', path: 'assets/sounds/bet_chips_2.wav' },
-      { name: 'fold', path: 'assets/sounds/fold.wav' },
+      { name: 'fold', path: 'assets/sounds/freesound_community-mxl993_yarstick_swoosh_6-88322.mp3' },
+      { name: 'deal', path: 'assets/sounds/alexzavesa-swoosh-4-463609.mp3' },
       { name: 'win', path: 'assets/sounds/game-bonus-sound-winning-hand-test.mp3' },
       { name: 'knockout', path: 'assets/sounds/freesound_crunchpixstudio-button-394464.mp3' },
       { name: 'gameover', path: 'assets/sounds/alphix-knock-out.mp3' },
@@ -65,6 +66,7 @@ export class AudioManager {
       { name: 'button', path: 'assets/sounds/floraphonic-90s-game-ui-6-185099.mp3' },
       { name: 'fireworks', path: 'assets/sounds/freesound_community-fireworks-generated-31449.mp3' },
       { name: 'chipsCollect', path: 'assets/sounds/freesound_community-poker_chips1-87592.mp3' },
+      { name: 'playerJoin', path: 'assets/sounds/universfield-the-notification-email-143029.mp3' },
     ];
 
     await Promise.all(
@@ -195,6 +197,11 @@ export class AudioManager {
     }
   }
 
+  /** Per-sound volume overrides (0.0–1.0, default 1.0) */
+  private volumeOverrides: Map<string, number> = new Map([
+    ['deal', 0.15],
+  ]);
+
   private play(name: string): void {
     if (!this.audioCtx || !this.loaded || this.muted) return;
     this.ensureResumed();
@@ -204,7 +211,17 @@ export class AudioManager {
 
     const source = this.audioCtx.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.audioCtx.destination);
+
+    const vol = this.volumeOverrides.get(name);
+    if (vol !== undefined) {
+      const gain = this.audioCtx.createGain();
+      gain.gain.value = vol;
+      source.connect(gain);
+      gain.connect(this.audioCtx.destination);
+    } else {
+      source.connect(this.audioCtx.destination);
+    }
+
     source.start(0);
   }
 
@@ -217,6 +234,8 @@ export class AudioManager {
   playVictorySound(): void { this.play('victory'); }
   playButtonSound(): void { this.play('button'); }
   playChipsCollectSound(): void { this.play('chipsCollect'); }
+  playDealSound(): void { this.play('deal'); }
+  playPlayerJoinSound(): void { this.play('playerJoin'); }
 
   private fireworksSource: AudioBufferSourceNode | null = null;
 

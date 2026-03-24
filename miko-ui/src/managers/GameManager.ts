@@ -1517,6 +1517,7 @@ export class GameManager {
     this.playerHoleCards.set(playerId, cards.slice());
 
     const isFaceUp = playerId === 'player';
+    this.audioManager.playDealSound();
     slot.dealCards(
       cards.map(c => ({ rank: c.rank, suit: c.suit })),
       isFaceUp,
@@ -1556,7 +1557,7 @@ export class GameManager {
         // Show community cards after pot update
         this.delayed(() => {
           if (this.handCounter !== handAtStreetChange) return;
-          this.statusBar.setStatus(street.toUpperCase());
+            this.statusBar.setStatus(street.toUpperCase());
           this.currentCommunityCards = cards.slice();
           this.communityCards.display(
             cards.map(c => ({ rank: c.rank, suit: c.suit })),
@@ -2877,6 +2878,8 @@ export class GameManager {
   private applyPendingReplacements(): void {
     if (!this.engine || this.pendingReplacements.length === 0) return;
 
+    this.audioManager.playPlayerJoinSound();
+
     for (const { seatIndex, engineId, entry } of this.pendingReplacements) {
       // Replace in engine
       this.engine.replacePlayer(seatIndex, engineId, entry.config);
@@ -2919,6 +2922,8 @@ export class GameManager {
       onComplete();
       return;
     }
+
+    this.audioManager.playPlayerJoinSound();
 
     // Upper-left origin for animation (same as community card deal origin)
     const originX = -480;
