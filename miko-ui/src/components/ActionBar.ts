@@ -246,6 +246,8 @@ export class ActionBar extends Container {
     if (this.sliderPanel && this.hasBetOption) {
       this.sliderPanel.style.display = 'flex';
     }
+    // Trigger resize to ensure HTML overlays are correctly positioned
+    window.dispatchEvent(new Event('resize'));
     // Show normal buttons
     this.leftBtn.visible = true;
     this.middleBtn.visible = true;

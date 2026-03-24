@@ -1230,12 +1230,11 @@ export class GameManager {
       } else {
         minAmount = gameState.minRaiseAmount;
       }
-      // Cap min at player's total available (can't raise more than your stack)
-      const playerChips = currentPlayer.chips + currentPlayer.bet;
-      minAmount = Math.min(minAmount, playerChips);
+      // Cap at player's remaining chips (what they can still put in)
+      minAmount = Math.min(minAmount, currentPlayer.chips);
       this.actionBar.setMinBet(minAmount);
-      // Configure slider range: min bet to all-in
-      this.actionBar.setBetLimits(minAmount, playerChips, gameState.pot, gameState.callAmount);
+      // Configure slider range: min bet to all-in (remaining chips)
+      this.actionBar.setBetLimits(minAmount, currentPlayer.chips, gameState.pot, gameState.callAmount);
       this.actionBar.show();
       this.statusBar.setStatus('Your turn!');
     } else {
@@ -1813,9 +1812,10 @@ export class GameManager {
     // Track who won this hand for MikoPoker KO victory check
     this.lastHandWinners = result.winners ?? [];
 
-    // Reveal cards at showdown (not fold wins) — do this BEFORE elimination
-    // detection so knockout animations aren't interrupted by card reveals.
-    if (result.winningHand) {
+    const isMultiPot = result.potResults && result.potResults.length > 1;
+
+    // For single-pot hands, reveal all cards upfront. For multi-pot, reveal per pot.
+    if (result.winningHand && !isMultiPot) {
       this.revealAllCardsAtShowdown();
     }
 
@@ -1827,8 +1827,8 @@ export class GameManager {
       this.getSlotForPlayer(wid)?.clearAllIn();
     }
 
-    // Show hand names on bet labels at showdown
-    if (result.winningHand) {
+    // Show hand names on bet labels at showdown (single pot only; multi-pot does per award)
+    if (result.winningHand && !isMultiPot) {
       this.showShowdownHandNames(result.winners);
     }
 
@@ -1860,9 +1860,48 @@ export class GameManager {
         color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
       }));
 
+      // Track which players have been revealed so far
+      const revealedPlayers = new Set<string>();
+
+      // Build eligibility map: for each potResult, which players are eligible
+      // (non-folded players whose totalBet >= the pot's contribution threshold)
+      const gameState = this.engine ? this.engine.getGameState() : null;
+      const eligibleByPot = new Map<number, string[]>();
+      if (gameState) {
+        const allInLevels = Array.from(
+          new Set(gameState.players.filter(p => p.allIn).map(p => p.totalBet))
+        ).sort((a, b) => a - b);
+        // potIndex 0 = main (everyone), potIndex 1+ = side pots at higher levels
+        result.potResults.forEach(pr => {
+          if (pr.potIndex === 0) {
+            // Main pot: all non-folded players
+            eligibleByPot.set(0, gameState.players.filter(p => !p.folded && p.totalBet > 0).map(p => p.id));
+          } else {
+            // Side pot: players who bet at least the corresponding level
+            const level = allInLevels[pr.potIndex - 1] ?? 0;
+            const nextLevel = allInLevels[pr.potIndex] ?? Infinity;
+            eligibleByPot.set(pr.potIndex, gameState.players.filter(p =>
+              !p.folded && p.totalBet > level
+            ).map(p => p.id));
+          }
+        });
+      }
+
       // Award each pot sequentially (initial 1s pause so labels are visible first)
       orderedPots.forEach((potResult, idx) => {
         this.delayed(() => {
+          // Reveal cards for this pot's eligible players (not yet revealed)
+          const eligible = eligibleByPot.get(potResult.potIndex) ?? potResult.winnerIds;
+          const newReveals = eligible.filter(id => !revealedPlayers.has(id));
+          if (newReveals.length > 0) {
+            this.revealCardsForPlayers(newReveals);
+            this.showHandNamesForPlayers(newReveals, potResult.winnerIds);
+            newReveals.forEach(id => revealedPlayers.add(id));
+          }
+
+          // Clear ALL-IN label on winners of this pot
+          potResult.winnerIds.forEach(wid => this.getSlotForPlayer(wid)?.clearAllIn());
+
           // Update status bar message
           const names = potResult.winnerIds.map(id => this.getDisplayName(id)).join(', ');
           const potName = potResult.potIndex === 0 ? 'Main' : 'Side';
@@ -1879,6 +1918,13 @@ export class GameManager {
           this.audioManager.playWinSound();
           const potSubtitle = potResult.potIndex === 0 ? 'Main Pot' : 'Side Pot';
           this.highlightWinnerNames(potResult.winnerIds, potSubtitle);
+
+          // Highlight winning board + hole cards for this pot's winners
+          potResult.winnerIds.forEach(wid => {
+            this.highlightWinningBoardCards(wid);
+            this.highlightWinningHoleCards(wid);
+          });
+          this.dimNonWinningCards(potResult.winnerIds);
 
           // Bold the dot being awarded on player slots and pot label
           const awardedPotColor = POT_DOT_COLORS[Math.min(potResult.potIndex, POT_DOT_COLORS.length - 1)];
@@ -1902,8 +1948,7 @@ export class GameManager {
             this.animateSinglePotAward(pid, winAmount, fromChips, toChips);
           });
 
-          // Remove the awarded line and matching dots AFTER the fly animation
-          // lands (2000ms — extra time so the highlighted dot stays visible).
+          // After fly animation lands: remove pot line/dots, knock out losers
           this.delayed(() => {
             currentDotLines = currentDotLines.slice(0, -1);
             if (currentDotLines.length > 0) {
@@ -1912,19 +1957,29 @@ export class GameManager {
               this.statusBar.setPot('');
             }
             this.removePotDotFromAll(awardedPotColor);
+
+            // Knock out side pot losers — they lost to a better hand and
+            // can't win any remaining pot since the winner also beats them there
+            if (potResult.potIndex > 0) {
+              const losers = eligible.filter(id => !potResult.winnerIds.includes(id));
+              for (const lid of losers) {
+                const endChips = postWinChips.get(lid) ?? 0;
+                if (endChips <= 0 && !this.eliminatedPlayers.has(lid)) {
+                  this.eliminatedPlayers.add(lid);
+                  const slot = this.getSlotForPlayer(lid);
+                  if (slot) {
+                    slot.playKnockoutAnimation();
+                    this.audioManager.playKnockoutSound();
+                  }
+                }
+              }
+            }
           }, 2000);
 
-          // On last pot, clear any remaining visual chips and highlight winning cards
+          // On last pot, clear any remaining visual chips
           if (idx === orderedPots.length - 1) {
             this.delayed(() => {
               this.potChips.clear();
-              if (result.winningHand) {
-                result.winners.forEach(wid => {
-                  this.highlightWinningBoardCards(wid);
-                  this.highlightWinningHoleCards(wid);
-                });
-                this.dimNonWinningCards(result.winners);
-              }
             }, 1500);
           }
         }, INITIAL_DELAY + idx * POT_DELAY);
@@ -2084,17 +2139,18 @@ export class GameManager {
     const isPreflop = gameState.street === 'preflop';
     // Preflop BB option: canBet is true but currentBet > 0, so use 'raise' not 'bet'
     const actionType = (gameState.canBet && !isPreflop) ? 'bet' : 'raise';
-    const defaultAmount = gameState.canBet ? gameState.minBetAmount : gameState.minRaiseAmount;
-    const maxAmount = player.chips + player.bet;  // total available for raise-to
-    let amount = this.actionBar.getBetAmount(defaultAmount);
+    const rawMin = gameState.canBet ? gameState.minBetAmount : gameState.minRaiseAmount;
+    const maxAmount = player.chips;  // remaining chips (what they can still put in)
+    const minAmount = Math.min(rawMin, maxAmount);  // capped min
+    let amount = this.actionBar.getBetAmount(minAmount);
 
     // Clamp: flash input and don't submit if out of range
     if (amount > maxAmount) {
       this.actionBar.flashClampedBet(maxAmount);
       return;
     }
-    if (amount < defaultAmount) {
-      this.actionBar.flashClampedBet(defaultAmount);
+    if (amount < minAmount) {
+      this.actionBar.flashClampedBet(minAmount);
       return;
     }
 
@@ -2800,18 +2856,75 @@ export class GameManager {
   private revealAllCardsAtShowdown(): void {
     if (!this.engine) return;
     const gameState = this.engine.getGameState();
+    const allIds = gameState.players.filter(p => !p.folded && p.cards?.length).map(p => p.id);
+    this.revealCardsForPlayers(allIds);
+  }
+
+  /** Reveal cards for a specific set of player IDs */
+  private revealCardsForPlayers(playerIds: string[]): void {
+    if (!this.engine) return;
+    const idSet = new Set(playerIds);
+    const gameState = this.engine.getGameState();
     gameState.players.forEach((player, index) => {
+      if (!idSet.has(player.id)) return;
       if (!player.cards || player.cards.length === 0 || player.folded) return;
       const slot = this.slotLayout.getSlot(index);
       if (!slot) return;
       slot.showCards();
       slot.revealCards();
-      // Also re-set with actual card data for AI cards that were face-down
       slot.dealCards(
         player.cards.map((c: EngineCard) => ({ rank: c.rank, suit: c.suit })),
         true,
         true, // skipAnim — showdown reveal, not a fresh deal
       );
+    });
+  }
+
+  /** Show hand names for specific players (non-winners get italic label, winners get animated) */
+  private showHandNamesForPlayers(playerIds: string[], winnerIds: string[]): void {
+    if (!this.engine) return;
+    const idSet = new Set(playerIds);
+    const winnerSet = new Set(winnerIds);
+    const gameState = this.engine.getGameState();
+
+    // Show losing hand names (italic on bet label)
+    gameState.players.forEach((p: PlayerState) => {
+      if (!idSet.has(p.id)) return;
+      if (!p.cards || p.cards.length === 0 || p.folded) return;
+      if (winnerSet.has(p.id)) return; // winners get animated label below
+      if (this.eliminatedPlayers.has(p.id)) return;
+      try {
+        const combined = [...(p.cards as EngineCard[]), ...this.currentCommunityCards];
+        if (combined.length < 5) return;
+        const strength = evaluateHand(combined as EngineCard[]);
+        const handName = this.getDetailedHandName(strength, p.cards as EngineCard[]);
+        const slot = this.getSlotForPlayer(p.id);
+        if (!slot) return;
+        if (slot.seatIndex === 3 || slot.seatIndex === 4 || slot.seatIndex === 5) {
+          this.showLosingHandAtSlot(handName, slot);
+        } else {
+          slot.setBetSmallItalic(handName);
+        }
+      } catch (err) {
+        console.warn('Failed to set showdown hand for', p.id, err);
+      }
+    });
+
+    // Show animated winning hand name at winner's position
+    winnerIds.forEach(winnerId => {
+      if (!idSet.has(winnerId)) return;
+      const winner = gameState.players.find(p => p.id === winnerId);
+      if (!winner?.cards?.length) return;
+      try {
+        const combined = [...(winner.cards as EngineCard[]), ...this.currentCommunityCards];
+        if (combined.length < 5) return;
+        const strength = evaluateHand(combined as EngineCard[]);
+        const handName = this.getDetailedHandName(strength, winner.cards as EngineCard[]);
+        const slot = this.getSlotForPlayer(winnerId);
+        if (slot) this.showWinningHandAtSlot(handName, slot);
+      } catch (err) {
+        console.warn('Failed to evaluate winning hand:', err);
+      }
     });
   }
 
