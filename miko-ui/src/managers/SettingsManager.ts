@@ -1,5 +1,5 @@
 // (c) 2026 MiraNova Studios
-export type DeckType = 'png' | 'unicode';
+export type DeckType = 'png' | 'unicode' | 'svg';
 export type ChipDisplay = 'dollar' | 'bb';
 export type TableStyle = 'table1' | 'table2';
 
@@ -50,7 +50,7 @@ export class SettingsManager {
 
   private constructor() {
     const savedDeck = localStorage.getItem(DECK_KEY);
-    this._deckType = (savedDeck === 'png' || savedDeck === 'unicode') ? savedDeck : 'unicode';
+    this._deckType = (savedDeck === 'png' || savedDeck === 'unicode' || savedDeck === 'svg') ? savedDeck : 'unicode';
     this._playerName = localStorage.getItem(NAME_KEY) || DEFAULT_NAME;
     const savedChip = localStorage.getItem(CHIP_DISPLAY_KEY);
     this._chipDisplay = (savedChip === 'dollar' || savedChip === 'bb') ? savedChip : 'dollar';

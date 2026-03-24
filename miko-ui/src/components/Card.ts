@@ -59,6 +59,8 @@ export const CARD_BACK_DESIGNS: CardBackDesign[] = [
 export class Card extends Container {
   // PNG mode
   private cardSprite: Sprite;
+  // SVG mode background
+  private svgBg: Graphics;
   // Unicode mode
   private unicodeContainer: Container;
   private unicodeBg: Graphics;
@@ -78,7 +80,12 @@ export class Card extends Container {
     this._cardWidth = width;
     this._cardHeight = height;
 
-    // --- PNG sprite (hidden when unicode mode) ---
+    // --- SVG background (white rounded rect behind SVG sprite) ---
+    this.svgBg = new Graphics();
+    this.svgBg.visible = false;
+    this.addChild(this.svgBg);
+
+    // --- PNG/SVG sprite (hidden when unicode mode) ---
     this.cardSprite = new Sprite();
     this.cardSprite.anchor.set(0.5);
     this.cardSprite.width = width;
@@ -176,10 +183,11 @@ export class Card extends Container {
   private updateDisplay(): void {
     if (!this.cardData) return;
 
-    const isUnicode = SettingsManager.instance.deckType === 'unicode';
+    const deckType = SettingsManager.instance.deckType;
 
-    if (isUnicode) {
+    if (deckType === 'unicode') {
       this.cardSprite.visible = false;
+      this.svgBg.visible = false;
       if (this._isFaceUp) {
         this.unicodeContainer.visible = true;
         this.backContainer.visible = false;
@@ -189,9 +197,43 @@ export class Card extends Container {
         this.backContainer.visible = true;
         this.drawUnicodeBack();
       }
+    } else if (deckType === 'svg') {
+      // SVG mode — white border background + inset SVG sprite
+      this.unicodeContainer.visible = false;
+      if (this._isFaceUp) {
+        this.backContainer.visible = false;
+        this.svgBg.visible = true;
+        this.cardSprite.visible = true;
+
+        const w = this._cardWidth;
+        const h = this._cardHeight;
+        const r = Math.max(CARD_RADIUS * (w / 80), 3);
+        const pad = Math.round(w * 0.06);
+
+        // Draw white card background with rounded corners and border
+        this.svgBg.clear();
+        this.svgBg.roundRect(-w / 2, -h / 2, w, h, r);
+        this.svgBg.fill({ color: CARD_BG });
+        this.svgBg.roundRect(-w / 2, -h / 2, w, h, r);
+        this.svgBg.stroke({ color: CARD_BORDER, width: 1 });
+
+        const texture = AssetManager.getSvgCardTexture(this.cardData.rank, this.cardData.suit);
+        if (texture) {
+          this.cardSprite.texture = texture;
+        }
+        // Inset the sprite to create padding
+        this.cardSprite.width = w - pad * 2;
+        this.cardSprite.height = h - pad * 2;
+      } else {
+        this.cardSprite.visible = false;
+        this.svgBg.visible = false;
+        this.backContainer.visible = true;
+        this.drawUnicodeBack();
+      }
     } else {
       // PNG mode — use PNG faces but drawn card backs
       this.unicodeContainer.visible = false;
+      this.svgBg.visible = false;
       if (this._isFaceUp) {
         this.backContainer.visible = false;
         this.cardSprite.visible = true;

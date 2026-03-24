@@ -91,6 +91,7 @@ async function init() {
   const settingsModal = document.getElementById('settings-modal');
   const settingsClose = document.getElementById('settings-close');
   const deckPngBtn = document.getElementById('deck-png');
+  const deckSvgBtn = document.getElementById('deck-svg');
   const deckUnicodeBtn = document.getElementById('deck-unicode');
   const chipDollarBtn = document.getElementById('chip-dollar');
   const chipBbBtn = document.getElementById('chip-bb');
@@ -129,6 +130,7 @@ async function init() {
     // Deck type selection
     const updateDeckButtons = () => {
       deckPngBtn?.classList.toggle('active', settings.deckType === 'png');
+      deckSvgBtn?.classList.toggle('active', settings.deckType === 'svg');
       deckUnicodeBtn?.classList.toggle('active', settings.deckType === 'unicode');
       // 4-Color Deck only available with Unicode deck
       const isUnicode = settings.deckType === 'unicode';
@@ -145,6 +147,12 @@ async function init() {
     deckPngBtn?.addEventListener('click', async () => {
       await AssetManager.loadCardPngs(); // load PNGs BEFORE switching deck type
       settings.deckType = 'png';
+      updateDeckButtons();
+    });
+
+    deckSvgBtn?.addEventListener('click', async () => {
+      await AssetManager.loadCardSvgs(); // load SVGs BEFORE switching deck type
+      settings.deckType = 'svg';
       updateDeckButtons();
     });
 

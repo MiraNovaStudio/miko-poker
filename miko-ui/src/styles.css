@@ -116,6 +116,9 @@ html, body {
   display: flex;
   gap: 8px;
 }
+.setting-options-vertical {
+  flex-direction: column;
+}
 .setting-options button {
   padding: 6px 14px;
   border: 2px solid #5588aa;
