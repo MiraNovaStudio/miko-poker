@@ -12,6 +12,9 @@ import { SettingsManager, formatChips } from '../managers/SettingsManager.js';
 const CHIP_OVERLAY_RADIUS = 8;
 
 export class PlayerSlot extends Container {
+  /** Set by GameManager so slots can check pause state */
+  static isPaused: () => boolean = () => false;
+
   readonly seatIndex: number;
 
   // Child display objects
@@ -152,6 +155,7 @@ export class PlayerSlot extends Container {
 
   setChips(amount: number): void {
     if (this._allIn) return; // preserve "ALL IN" label
+    if (this.flashTimer) return; // preserve flash action text (e.g. "Call", "Fold")
     this.chipsLabel.text = formatChips(amount);
   }
 
@@ -237,13 +241,36 @@ export class PlayerSlot extends Container {
 
   private flashTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /**
+   * setTimeout that freezes while the game is paused.
+   * Polls every 200ms; when unpaused, counts down remaining time.
+   */
+  private pauseableTimeout(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
+    let remaining = ms;
+    let lastTick = performance.now();
+    const check = () => {
+      const now = performance.now();
+      if (!PlayerSlot.isPaused()) {
+        remaining -= (now - lastTick);
+      }
+      lastTick = now;
+      if (remaining <= 0) {
+        fn();
+      } else {
+        timer = setTimeout(check, 200);
+      }
+    };
+    let timer = setTimeout(check, Math.min(200, ms));
+    return timer;
+  }
+
   /** Briefly show an action name (e.g. "Call", "Raise") in the chip overlay,
    *  then restore the chip amount after the given duration. */
   flashAction(text: string, chips: number, duration = 1000): void {
     if (this._allIn) return;
     if (this.flashTimer) clearTimeout(this.flashTimer);
     this.chipsLabel.text = text;
-    this.flashTimer = setTimeout(() => {
+    this.flashTimer = this.pauseableTimeout(() => {
       this.flashTimer = null;
       if (this._allIn) return;
       this.chipsLabel.text = formatChips(chips);
@@ -380,15 +407,34 @@ export class PlayerSlot extends Container {
     this.drawChipOverlay(active ? COLORS.activeHighlight : COLORS.darkGray);
   }
 
-  /** Show an animated "WINNER!" label over the cards area, with optional subtitle (e.g. "Side Pot") */
-  showWinnerLabel(duration = 8000, subtitle?: string): void {
+  /** Show an animated "WINNER!" label over the cards area.
+   *  handName appears above, subtitle appears below. */
+  showWinnerLabel(duration = 8000, subtitle?: string, handName?: string): void {
     this.hideWinnerLabel();
 
+    const hasExtra = !!(subtitle || handName);
     const container = new Container();
-    container.y = subtitle ? -45 : -20; // shift up more when subtitle present to clear chip stack
+    container.y = hasExtra ? -55 : -20; // shift up more when extra text present
     container.scale.set(0);
     container.alpha = 0;
     this.addChild(container);
+
+    // Hand name above WINNER (e.g. "Pair of Kings")
+    if (handName) {
+      const handLabel = new Text({
+        text: handName,
+        style: {
+          fontFamily: 'Arial',
+          fontSize: 22,
+          fontWeight: 'bold',
+          fill: COLORS.yellow,
+          stroke: { color: COLORS.black, width: 2 },
+        } as TextStyleOptions,
+      });
+      handLabel.anchor.set(0.5);
+      handLabel.y = -28;
+      container.addChild(handLabel);
+    }
 
     const mainLabel = new Text({
       text: 'WINNER!',
@@ -437,7 +483,7 @@ export class PlayerSlot extends Container {
     };
     requestAnimationFrame(animate);
 
-    this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
+    this.winnerTimer = this.pauseableTimeout(() => this.hideWinnerLabel(), duration);
   }
 
   /** Show an animated "BUTTON" label over the cards area */
@@ -475,7 +521,7 @@ export class PlayerSlot extends Container {
     };
     requestAnimationFrame(animate2);
 
-    this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
+    this.winnerTimer = this.pauseableTimeout(() => this.hideWinnerLabel(), duration);
   }
 
   /** Show an animated "KNOCKED OUT" label over the cards area */
@@ -521,7 +567,7 @@ export class PlayerSlot extends Container {
     requestAnimationFrame(animate3);
 
     if (duration > 0) {
-      this.winnerTimer = setTimeout(() => this.hideWinnerLabel(), duration);
+      this.winnerTimer = this.pauseableTimeout(() => this.hideWinnerLabel(), duration);
     }
   }
 

@@ -64,6 +64,7 @@ export class AudioManager {
       { name: 'victory', path: 'assets/sounds/superpuyofans1234-winner-game-sound-404167.mp3' },
       { name: 'button', path: 'assets/sounds/floraphonic-90s-game-ui-6-185099.mp3' },
       { name: 'fireworks', path: 'assets/sounds/freesound_community-fireworks-generated-31449.mp3' },
+      { name: 'chipsCollect', path: 'assets/sounds/freesound_community-poker_chips1-87592.mp3' },
     ];
 
     await Promise.all(
@@ -215,6 +216,7 @@ export class AudioManager {
   playGameOverSound(): void { this.play('gameover'); }
   playVictorySound(): void { this.play('victory'); }
   playButtonSound(): void { this.play('button'); }
+  playChipsCollectSound(): void { this.play('chipsCollect'); }
 
   private fireworksSource: AudioBufferSourceNode | null = null;
 

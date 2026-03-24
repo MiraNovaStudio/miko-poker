@@ -84,6 +84,8 @@ export class GameManager {
   private frozenPotAmount = 0;
   /** Track player IDs who have chips in this betting round (for fly animation) */
   private playersWithBetsThisRound: Set<string> = new Set();
+  /** Bet positions to fly directly to winner at showdown (single pot only) */
+  private _showdownBetSnapshot: { startX: number; startY: number }[] = [];
 
   // Per-hand debug log
   private handLog = new HandLog();
@@ -113,6 +115,9 @@ export class GameManager {
     this.actionBar = actionBar;
     this.audioManager = audioManager;
     this.renderer = renderer;
+
+    // Wire pause state to PlayerSlot so timers freeze during pause
+    PlayerSlot.isPaused = () => this._paused;
     this.potChips = potChips;
     this.handHistory = new HandHistory();
 
@@ -1629,8 +1634,17 @@ export class GameManager {
 
     // Update bet label and play sound
     if (action.type === 'fold') {
-      slot.setBet(0, 'Fold');
-      slot.setBetColor(0x888888);
+      const betOnTable = player.bet;  // chips already committed this street
+      if (betOnTable > 0) {
+        // Keep bet amount visible but gray to show they're folded
+        slot.setBet(betOnTable);
+        slot.setBetColor(0x888888);
+      } else {
+        slot.setBet(0, 'Fold');
+        slot.setBetColor(0x888888);
+      }
+      // Flash "Fold" in the chip overlay for 2s, then restore chip count
+      slot.flashAction('Fold', player.chips, 2000);
       if (SettingsManager.instance.cardAnimations) {
         slot.foldCardsTo(this.communityCards.x, this.communityCards.y);
       } else {
@@ -1642,7 +1656,13 @@ export class GameManager {
         this.statusBar.setHand('');
       }
     } else if (action.type === 'check') {
-      slot.setBet(0, 'Check');
+      // If player has chips on the table (e.g. BB checking preflop), keep the bet visible
+      if (player.bet > 0) {
+        slot.setBet(player.bet);
+      } else {
+        slot.setBet(0, 'Check');
+      }
+      slot.flashAction('Check', player.chips, 1500);
       this.audioManager.playCheckSound();
     } else {
       // bet, call, raise, allin
@@ -1751,8 +1771,6 @@ export class GameManager {
       this.unhighlightPlayer(this.currentActivePlayer);
     }
 
-    // Fly remaining bets into the pot. At showdown, the engine has already
-    // awarded pots (getCurrentPot() = 0), so we compute the total from the result.
     const betSnapshot = this.snapshotBetPositions();
     this.playersWithBetsThisRound.clear();
 
@@ -1761,7 +1779,23 @@ export class GameManager {
       ? result.potResults.reduce((sum, pr) => sum + pr.amount, 0)
       : result.potAmount;
 
-    this.animateBetsIntoPotForShowdown(betSnapshot, totalPot, result);
+    const hasSidePots = result.potResults && result.potResults.length > 1;
+
+    if (hasSidePots) {
+      // Side pots: fly bets into pot first, then sequential awards
+      this.animateBetsIntoPotForShowdown(betSnapshot, totalPot, result);
+    } else if (result.winners.length > 1) {
+      // Chop pot: fly bets into pot first, then distribute evenly
+      this.animateBetsIntoPotForShowdown(betSnapshot, totalPot, result);
+    } else {
+      // Single winner: skip bet-to-pot, fly everything directly to winner
+      this.slotLayout.getAllSlots().forEach(s => s.clearBet());
+      this.potFrozen = false;
+      this.potChips.update(totalPot);
+      this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
+      this._showdownBetSnapshot = betSnapshot;
+      this.delayed(() => this.processHandAwards(result), 900);
+    }
   }
 
   /** Process showdown awards after bets have been collected into the pot */
@@ -1909,15 +1943,37 @@ export class GameManager {
             `${potName}: ${formatChips(potResult.amount)} → ${names} wins — ${potResult.winningHand}`
           );
 
-          // Log each pot award individually to hand history
+          // Log losing hands for this pot, then the winner
+          const winnerSet = new Set(potResult.winnerIds);
+          eligible.forEach(id => {
+            if (winnerSet.has(id)) return;
+            const summary = this.getPlayerHandSummary(id);
+            if (summary) {
+              this.handHistory.addEntry(`Hand ${handNum}: ${this.getDisplayName(id)} shows — ${summary}`);
+            }
+          });
           this.handHistory.addEntry(
             `Hand ${handNum}: ${potName} Pot: ${names} wins ${formatChips(potResult.amount)} — ${potResult.winningHand}`
           );
 
-          // Show WINNER! on this pot's winners with pot type subtitle
+          // Show WINNER! with pot type below and hand name above (matching normal showdown style)
           this.audioManager.playWinSound();
           const potSubtitle = potResult.potIndex === 0 ? 'Main Pot' : 'Side Pot';
-          this.highlightWinnerNames(potResult.winnerIds, potSubtitle);
+          // Get detailed hand name for the winner
+          let winHandName = '';
+          if (gameState) {
+            const firstWinner = gameState.players.find(p => p.id === potResult.winnerIds[0]);
+            if (firstWinner?.cards?.length) {
+              try {
+                const combined = [...(firstWinner.cards as EngineCard[]), ...this.currentCommunityCards];
+                if (combined.length >= 5) {
+                  const strength = evaluateHand(combined as EngineCard[]);
+                  winHandName = this.getDetailedHandName(strength, firstWinner.cards as EngineCard[]);
+                }
+              } catch { /* ignore */ }
+            }
+          }
+          this.highlightWinnerNames(potResult.winnerIds, potSubtitle, winHandName);
 
           // Highlight winning board + hole cards for this pot's winners
           potResult.winnerIds.forEach(wid => {
@@ -2005,14 +2061,31 @@ export class GameManager {
         statusMsg += ` — ${result.winningHand}${handDesc ? ` (${handDesc})` : ''}`;
       }
       this.statusBar.setStatus(statusMsg);
+
+      // Log losing hands first, then the winner
+      if (result.winningHand && this.engine) {
+        const winnerSet = new Set(result.winners);
+        const gs = this.engine.getGameState();
+        gs.players.forEach(p => {
+          if (p.folded || !p.cards?.length || winnerSet.has(p.id)) return;
+          const summary = this.getPlayerHandSummary(p.id);
+          if (summary) {
+            this.handHistory.addEntry(`Hand ${handNum}: ${this.getDisplayName(p.id)} shows — ${summary}`);
+          }
+        });
+      }
       this.handHistory.addEntry(`Hand ${handNum}: ${statusMsg}`);
 
       // Highlight winner names
       this.highlightWinnerNames(result.winners);
 
-      // Animate pot flying only to actual winners
+      // Animate pot flying only to actual winners + table bets fly directly to winner
       this.audioManager.playWinSound();
       this.animatePotToWinners(displayWinners, preWinChips, postWinChips, perPlayerWinnings);
+      if (this._showdownBetSnapshot.length > 0) {
+        this.flyChipsToWinners(this._showdownBetSnapshot, displayWinners);
+        this._showdownBetSnapshot = [];
+      }
       this.clearAllPotDots();
 
       // Highlight winning cards (raise them up) and dim non-winning cards
@@ -2028,9 +2101,9 @@ export class GameManager {
     // ── Record hand log data ──
     this.recordHandLogCompletion(result, postWinChips);
 
-    // Clear tracking state
-    this.currentCommunityCards = [];
-    this.playerHoleCards.clear();
+    // Note: currentCommunityCards and playerHoleCards are NOT cleared here.
+    // They're needed by delayed side pot award callbacks for hand evaluation.
+    // They get cleared in onHandStarted() at the start of the next hand.
 
     // After pot award fly animations land (~1400ms + sequential pot delays),
     // detect eliminations and play knockout animations.
@@ -2374,6 +2447,50 @@ export class GameManager {
   }
 
   /** Get the best 5-card hand as a short string like "KKJJT" */
+  /** Get hand description for any player: "Two Pair (KKTT9)" */
+  private getPlayerHandSummary(playerId: string): string {
+    if (!this.engine) return '';
+    const gameState = this.engine.getGameState();
+    const player = gameState.players.find(p => p.id === playerId);
+    if (!player?.cards?.length) return '';
+    const combined = [...(player.cards as EngineCard[]), ...this.currentCommunityCards];
+    if (combined.length < 5) return '';
+    try {
+      const strength = evaluateHand(combined as EngineCard[]);
+      const handName = this.getDetailedHandName(strength, player.cards as EngineCard[]);
+      const desc = this.getHandDescriptionFromStrength(strength);
+      return desc ? `${handName} (${desc})` : handName;
+    } catch {
+      return '';
+    }
+  }
+
+  /** Build compact 5-card string from a HandStrength (e.g. "KKTT9") */
+  private getHandDescriptionFromStrength(strength: HandStrength): string {
+    const kickers = strength.kickers;
+    const valToRank: Record<number, string> = {
+      14: 'A', 13: 'K', 12: 'Q', 11: 'J', 10: 'T',
+      9: '9', 8: '8', 7: '7', 6: '6', 5: '5', 4: '4', 3: '3', 2: '2',
+    };
+    switch (strength.category) {
+      case 8: case 4: {
+        const high = kickers[0];
+        if (high === 5) return '5432A';
+        const cards = [];
+        for (let i = 0; i < 5; i++) cards.push(valToRank[high - i] ?? '?');
+        return cards.join('');
+      }
+      case 7: return (valToRank[kickers[0]] ?? '').repeat(4) + (valToRank[kickers[1]] ?? '');
+      case 6: return (valToRank[kickers[0]] ?? '').repeat(3) + (valToRank[kickers[1]] ?? '').repeat(2);
+      case 5: return kickers.slice(0, 5).map(k => valToRank[k] ?? '?').join('');
+      case 3: return (valToRank[kickers[0]] ?? '').repeat(3) + kickers.slice(1, 3).map(k => valToRank[k] ?? '?').join('');
+      case 2: return (valToRank[kickers[0]] ?? '').repeat(2) + (valToRank[kickers[1]] ?? '').repeat(2) + (valToRank[kickers[2]] ?? '');
+      case 1: return (valToRank[kickers[0]] ?? '').repeat(2) + kickers.slice(1, 4).map(k => valToRank[k] ?? '?').join('');
+      case 0: return kickers.slice(0, 5).map(k => valToRank[k] ?? '?').join('');
+      default: return '';
+    }
+  }
+
   private getWinningHandDescription(winnerId: string): string {
     if (!this.engine) return '';
     const gameState = this.engine.getGameState();
@@ -3029,7 +3146,7 @@ export class GameManager {
     requestAnimationFrame(animate);
 
     // Clean up after 7.5 seconds
-    setTimeout(() => {
+    this.delayed(() => {
       const idx = this.winningHandLabels.indexOf(label);
       if (idx >= 0) this.winningHandLabels.splice(idx, 1);
       label.parent?.removeChild(label);
@@ -3071,7 +3188,7 @@ export class GameManager {
     };
     requestAnimationFrame(animate);
 
-    setTimeout(() => {
+    this.delayed(() => {
       const idx = this.winningHandLabels.indexOf(label);
       if (idx >= 0) this.winningHandLabels.splice(idx, 1);
       label.parent?.removeChild(label);
@@ -3087,11 +3204,11 @@ export class GameManager {
     this.winningHandLabels = [];
   }
 
-  private highlightWinnerNames(winnerIds: string[], subtitle?: string): void {
+  private highlightWinnerNames(winnerIds: string[], subtitle?: string, handName?: string): void {
     winnerIds.forEach(pid => {
       const slot = this.getSlotForPlayer(pid);
       if (!slot) return;
-      slot.showWinnerLabel(8000, subtitle);
+      slot.showWinnerLabel(8000, subtitle, handName);
     });
   }
 
@@ -3521,6 +3638,49 @@ export class GameManager {
     return [...new Set(indices)];
   }
 
+  /** Fly yellow chips from given positions directly to winner slot(s) */
+  private flyChipsToWinners(positions: { startX: number; startY: number }[], winnerIds: string[]): void {
+    const scene = this.statusBar.parent;
+    if (!scene || winnerIds.length === 0) return;
+    const gen = this.generation;
+
+    // Target: first winner's chip overlay
+    const targetSlot = this.getSlotForPlayer(winnerIds[0]);
+    if (!targetSlot) return;
+    const targetX = targetSlot.x;
+    const targetY = targetSlot.y + CHIP_OVERLAY_Y;
+
+    this.audioManager.playChipsCollectSound();
+    const flyDuration = 800;
+
+    positions.forEach(({ startX, startY }) => {
+      const chip = new Graphics();
+      chip.circle(0, 0, 8);
+      chip.fill({ color: 0xffff00 });
+      chip.x = startX;
+      chip.y = startY;
+      scene.addChild(chip);
+
+      const startTime = performance.now();
+      const animate = (now: number) => {
+        if (this.generation !== gen) { scene.removeChild(chip); chip.destroy(); return; }
+        const t = Math.min((now - startTime) / flyDuration, 1);
+        const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        chip.x = startX + (targetX - startX) * ease;
+        chip.y = startY + (targetY - startY) * ease;
+        chip.alpha = 1 - t * 0.3;
+        chip.scale.set(1 - t * 0.4);
+        if (t < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          scene.removeChild(chip);
+          chip.destroy();
+        }
+      };
+      requestAnimationFrame(animate);
+    });
+  }
+
   // ─── Pot Freeze / Bet-to-Pot Animation ───────────────────
 
   /**
@@ -3576,6 +3736,7 @@ export class GameManager {
     }
 
     // Create flying chip graphics for each bet
+    this.audioManager.playChipsCollectSound();
     const flyDuration = 500;
     let completed = 0;
     const total = flySlots.length;
@@ -3641,15 +3802,33 @@ export class GameManager {
     slots.forEach(s => s.clearBet());
 
     if (betSnapshot.length === 0) {
-      // No bets to fly — just show pot and proceed
+      // No bets to fly — show pot (with side pot dots if applicable) and proceed
       this.potFrozen = false;
-      this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
       this.potChips.update(totalPot);
+      const hasSidePots = result.potResults && result.potResults.length > 1;
+      if (hasSidePots) {
+        const dotLines = result.potResults!.map((pr, i) => ({
+          text: `${pr.potIndex === 0 ? 'Main' : 'Side'}: ${formatChips(pr.amount)}`,
+          color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
+        }));
+        this.statusBar.setPotWithDots(dotLines);
+        if (this.engine) {
+          const gs = this.engine.getGameState();
+          const pots = this.computeSidePots(gs.players);
+          if (pots.length > 0) {
+            const potLayers = pots.map(pot => ({ amount: pot.amount, eligibleIds: pot.eligible }));
+            this.updatePlayerPotDots(potLayers);
+          }
+        }
+      } else {
+        this.statusBar.setPot(`Pot: ${formatChips(totalPot)}`);
+      }
       this.delayed(() => this.processHandAwards(result), 900);
       return;
     }
 
     // Fly chips from bet positions to pot
+    this.audioManager.playChipsCollectSound();
     const flyDuration = 500;
     let completed = 0;
     const total = betSnapshot.length;
