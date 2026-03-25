@@ -70,10 +70,29 @@
       <p class="game-menu-version">Version <span id="game-menu-version-number"></span></p>
       <div class="game-menu-buttons">
         <button id="menu-resume-btn" class="game-menu-btn">Resume</button>
+        <button id="menu-waitlist-btn" class="game-menu-btn">Waitlist</button>
         <button id="menu-new-game-btn" class="game-menu-btn">New Game</button>
         <button id="menu-quit-btn" class="game-menu-btn">Quit Game</button>
       </div>
       <p class="game-menu-copyright">&copy; 2026 MiraNova Studios</p>
+    </div>
+  </div>
+  <!-- Waitlist modal -->
+  <div id="waitlist-modal">
+    <div id="waitlist-panel">
+      <h2>Waitlist</h2>
+      <div id="waitlist-scroll"></div>
+      <button id="waitlist-close-btn" class="game-menu-btn">Close</button>
+    </div>
+  </div>
+  <!-- Bounty modal -->
+  <div id="bounty-modal">
+    <canvas id="bounty-fireworks-canvas"></canvas>
+    <div id="bounty-panel">
+      <h2 id="bounty-title">BOUNTY!</h2>
+      <p id="bounty-message">You knocked out MiraNova!</p>
+      <p id="bounty-amount">+$10,000 Bounty Added</p>
+      <button id="bounty-continue-btn" class="game-menu-btn">Continue</button>
     </div>
   </div>
   <!-- Settings modal -->

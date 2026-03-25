@@ -23,6 +23,7 @@ export class GameScene extends Container {
   private tableSprite: Sprite;
   onQuit: (() => void) | null = null;
   private fireworksId: number | null = null;
+  private bountyFireworksId: number | null = null;
 
   constructor(renderer: Renderer) {
     super();
@@ -135,6 +136,28 @@ export class GameScene extends Container {
         this.onQuit?.();
       });
     }
+
+    // Wire bounty modal
+    const bountyModal = document.getElementById('bounty-modal');
+    const bountyContinueBtn = document.getElementById('bounty-continue-btn');
+    const bountyMessage = document.getElementById('bounty-message');
+    const bountyAmount = document.getElementById('bounty-amount');
+    const bountyFireworksCanvas = document.getElementById('bounty-fireworks-canvas') as HTMLCanvasElement | null;
+
+    this.gameManager.onBounty = (playerName: string, amount: number) => {
+      if (bountyMessage) bountyMessage.textContent = `You knocked out ${playerName}!`;
+      if (bountyAmount) bountyAmount.textContent = `+$${amount.toLocaleString()} Bounty Added`;
+      bountyModal?.classList.add('open');
+      this.startBountyFireworks(bountyFireworksCanvas);
+      AudioManager.instance.playFireworksLoop();
+    };
+
+    bountyContinueBtn?.addEventListener('click', () => {
+      bountyModal?.classList.remove('open');
+      this.stopBountyFireworks();
+      AudioManager.instance.stopFireworksLoop();
+      this.gameManager?.onBountyDismissed();
+    });
 
     // Update table texture when settings change
     SettingsManager.instance.onChange(() => this.updateTableTexture());
@@ -260,8 +283,69 @@ export class GameScene extends Container {
     }
   }
 
+  private startBountyFireworks(canvas: HTMLCanvasElement | null): void {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const particles: Particle[] = [];
+    const colors = ['#ffd700', '#ff4500', '#ff1493', '#00ff88', '#00bfff', '#ff69b4', '#fff', '#ffa500'];
+
+    const spawnBurst = () => {
+      const cx = Math.random() * canvas.width;
+      const cy = Math.random() * canvas.height * 0.6;
+      const count = 40 + Math.floor(Math.random() * 30);
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.3;
+        const speed = 2 + Math.random() * 4;
+        particles.push({ x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1, maxLife: 60 + Math.random() * 40, color, size: 2 + Math.random() * 3 });
+      }
+    };
+
+    let frameCount = 0;
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      frameCount++;
+      if (frameCount % 30 === 0) spawnBurst();
+      if (frameCount % 45 === 15) spawnBurst();
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.04;
+        p.vx *= 0.99; p.life++;
+        const alpha = Math.max(0, 1 - p.life / p.maxLife);
+        if (alpha <= 0) { particles.splice(i, 1); continue; }
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      this.bountyFireworksId = requestAnimationFrame(animate);
+    };
+    spawnBurst();
+    this.bountyFireworksId = requestAnimationFrame(animate);
+  }
+
+  private stopBountyFireworks(): void {
+    if (this.bountyFireworksId !== null) {
+      cancelAnimationFrame(this.bountyFireworksId);
+      this.bountyFireworksId = null;
+    }
+    const canvas = document.getElementById('bounty-fireworks-canvas') as HTMLCanvasElement | null;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
   destroy(): void {
     this.stopFireworks();
+    this.stopBountyFireworks();
     // Close modal if open
     document.getElementById('gameover-modal')?.classList.remove('open', 'victory');
     this.actionBar.destroy();

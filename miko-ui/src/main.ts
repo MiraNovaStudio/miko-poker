@@ -114,6 +114,21 @@ async function init() {
   const fastOnBtn = document.getElementById('fast-on');
   const fastOffBtn = document.getElementById('fast-off');
 
+  /** Render a PixiJS avatar container to a target canvas element. */
+  function renderAvatarToCanvas(seed: string, gender: 'male' | 'female', target: HTMLCanvasElement): void {
+    const container = createAvatar(seed, gender);
+    const tex = app.renderer.generateTexture(container);
+    const extract = app.renderer.extract;
+    const extractCanvas = extract.canvas(tex) as HTMLCanvasElement;
+    const ctx = target.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, target.width, target.height);
+      ctx.drawImage(extractCanvas, 0, 0, target.width, target.height);
+    }
+    container.destroy(true);
+    tex.destroy(true);
+  }
+
   if (settingsBtn && settingsModal) {
     settingsBtn.style.display = 'none'; // hidden on start screen
 
@@ -322,21 +337,6 @@ async function init() {
     const avatarGrid = document.getElementById('avatar-grid');
     const avatarClose = document.getElementById('avatar-close');
 
-    /** Render a PixiJS avatar container to a target canvas element. */
-    function renderAvatarToCanvas(seed: string, gender: 'male' | 'female', target: HTMLCanvasElement): void {
-      const container = createAvatar(seed, gender);
-      // Generate texture via the app renderer, then extract pixels
-      const tex = app.renderer.generateTexture(container);
-      const extract = app.renderer.extract;
-      const extractCanvas = extract.canvas(tex) as HTMLCanvasElement;
-      const ctx = target.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, target.width, target.height);
-        ctx.drawImage(extractCanvas, 0, 0, target.width, target.height);
-      }
-      container.destroy(true);
-      tex.destroy(true);
-    }
 
     /** Update the small avatar preview in the settings row. */
     function updateAvatarPreview(): void {
@@ -557,6 +557,66 @@ async function init() {
 
   menuResumeBtn?.addEventListener('click', closeGameMenu);
 
+  // Waitlist modal
+  const waitlistModal = document.getElementById('waitlist-modal');
+  const waitlistScroll = document.getElementById('waitlist-scroll');
+  const waitlistCloseBtn = document.getElementById('waitlist-close-btn');
+  const menuWaitlistBtn = document.getElementById('menu-waitlist-btn');
+
+  function openWaitlistModal() {
+    if (!waitlistScroll || !currentGameScene?.gameManager) return;
+    const waitlist = currentGameScene.gameManager.getWaitlist();
+    waitlistScroll.innerHTML = '';
+
+    if (waitlist.length === 0) {
+      waitlistScroll.innerHTML = '<p class="waitlist-empty">No players waiting</p>';
+    } else {
+      waitlist.forEach((entry, i) => {
+        const row = document.createElement('div');
+        row.className = 'waitlist-row';
+
+        const pos = document.createElement('span');
+        pos.className = 'waitlist-position';
+        pos.textContent = `${i + 1}.`;
+        row.appendChild(pos);
+
+        const avatarWrap = document.createElement('div');
+        avatarWrap.className = 'waitlist-avatar';
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const avatarSeed = entry.avatarName ?? entry.name;
+        renderAvatarToCanvas(avatarSeed, entry.gender, canvas);
+        avatarWrap.appendChild(canvas);
+        row.appendChild(avatarWrap);
+
+        const name = document.createElement('span');
+        name.className = 'waitlist-name';
+        name.textContent = entry.name;
+        row.appendChild(name);
+
+        waitlistScroll.appendChild(row);
+      });
+    }
+
+    gameMenuModal?.classList.remove('open');
+    waitlistModal?.classList.add('open');
+  }
+
+  menuWaitlistBtn?.addEventListener('click', openWaitlistModal);
+
+  waitlistCloseBtn?.addEventListener('click', () => {
+    waitlistModal?.classList.remove('open');
+    gameMenuModal?.classList.add('open');
+  });
+
+  waitlistModal?.addEventListener('click', (e) => {
+    if (e.target === waitlistModal) {
+      waitlistModal.classList.remove('open');
+      gameMenuModal?.classList.add('open');
+    }
+  });
+
   menuNewGameBtn?.addEventListener('click', () => {
     gameMenuModal?.classList.remove('open');
     currentGameScene?.gameManager?.restart();
@@ -682,6 +742,7 @@ async function init() {
     (window as any).debugSetChips = (n: number) => game.gameManager?.debugSetChips(n);
     (window as any).debugAces = () => game.gameManager?.debugAces();
     (window as any).debugMikoKO = () => game.gameManager?.debugMikoKO();
+    (window as any).debugMiraKO = () => game.gameManager?.debugMiraKO();
     (window as any).debugSidePots = (n: number) => game.gameManager?.debugSidePots(n);
     (window as any).debugFastMode = () => game.gameManager?.debugFastMode();
     (window as any).debugHideCards = () => game.gameManager?.debugHideCards();
@@ -695,6 +756,7 @@ async function init() {
       console.log(`🔧 Debug logs: ${newState ? 'ON' : 'OFF'}`);
     };
     (window as any).debugHandLog = (hand: number | string) => game.gameManager?.debugHandLog(hand);
+    (window as any).debugSeats = () => game.gameManager?.debugSeats();
   }
 
   // Keyboard shortcuts: P = pause, Escape = game menu

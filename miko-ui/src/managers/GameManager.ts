@@ -17,7 +17,7 @@ import { AudioManager } from './AudioManager.js';
 import { SettingsManager, formatChips } from './SettingsManager.js';
 import { HandHistory } from '../components/HandHistory.js';
 import { Card } from '../components/Card.js';
-import { PLAYER_ROSTER, pickNewPlayer, type RosterEntry } from '../data/player-roster.js';
+import { PLAYER_ROSTER, type RosterEntry } from '../data/player-roster.js';
 import { Text, Graphics, Container, Texture, type Renderer, type TextStyleOptions } from 'pixi.js';
 import { GAME_CONFIG, SEAT_POSITIONS, CHIP_OVERLAY_Y, FONTS, POT_DOT_COLORS } from '../utils/constants.js';
 import { createAvatar, AVATAR_PRESETS } from '../utils/createAvatar.js';
@@ -49,6 +49,8 @@ export class GameManager {
   private displayNameById: Map<string, string> = new Map();
   private eliminatedPlayers: Set<string> = new Set();
   private usedRosterNames: Set<string> = new Set();
+  /** Ordered waitlist of players not yet at the table (pre-shuffled at game start) */
+  private waitlist: RosterEntry[] = [];
   private totalKnockouts = 0;
   private currentActivePlayer: string | null = null;
   private pendingReplacements: { seatIndex: number; engineId: string; entry: RosterEntry }[] = [];
@@ -57,6 +59,9 @@ export class GameManager {
   private handCounter = 0;
   private handPhase: HandPhase = 'idle';
   private lastHandWinners: string[] = [];
+  private _pendingBounty: { name: string; amount: number } | null = null;
+  private _bountyChipsFrom = 0;
+  private _bountyChipsTo = 0;
   private _paused = false;
   private _pausedQueue: { fn: () => void; ms: number }[] = [];
   private _pauseOverlay: HTMLDivElement | null = null;
@@ -93,6 +98,8 @@ export class GameManager {
 
   // New Game callback (set externally to show/hide game-over modal)
   onGameOver: ((message?: string) => void) | null = null;
+  // Bounty callback — fired when player knocks out a bounty target (e.g. MiraNova)
+  onBounty: ((playerName: string, amount: number) => void) | null = null;
 
   // Generation counter — incremented on restart to cancel stale timer callbacks
   private generation = 0;
@@ -455,6 +462,67 @@ export class GameManager {
     this.statusBar.setStatus('DEBUG: MikoPoker KO queued — finish this hand');
   }
 
+  private debugMiraKOPending = false;
+
+  debugMiraKO(): void {
+    if (!this.engine) { console.warn('Engine not ready'); return; }
+    this.debugMiraKOPending = true;
+    console.log('🎯 MiraNova bounty test will activate after the current hand finishes. Play it out!');
+    this.statusBar.setStatus('DEBUG: MiraNova KO queued — finish this hand');
+  }
+
+  /** Print seat status: filled seats show 0, empty seats show their countdown timer */
+  debugSeats(): void {
+    const lines: string[] = [];
+    this.playerIdBySeat.forEach((id, idx) => {
+      const name = this.getDisplayName(id);
+      const eliminated = this.eliminatedPlayers.has(id);
+      const deferred = this.deferredReplacements.find(dr => dr.seatIndex === idx);
+      const pending = this.pendingReplacements.find(pr => pr.seatIndex === idx);
+
+      if (pending) {
+        lines.push(`  seat ${idx} (${id}): 0 — ${pending.entry.name} joining next hand`);
+      } else if (deferred) {
+        lines.push(`  seat ${idx} (${id}): ${deferred.handsRemaining} — ${deferred.entry.name} waiting`);
+      } else if (eliminated) {
+        lines.push(`  seat ${idx} (${id}): EMPTY — no replacement queued!`);
+      } else {
+        lines.push(`  seat ${idx} (${id}): ${name} — active`);
+      }
+    });
+    console.log('🪑 Seat status:\n' + lines.join('\n'));
+  }
+
+  /** Called from UI when the bounty modal is dismissed — update chips and resume */
+  onBountyDismissed(): void {
+    const slot = this.getSlotForPlayer('player');
+    if (slot) {
+      slot.animateChipsTo(this._bountyChipsFrom, this._bountyChipsTo);
+      this.audioManager.playChipsWinSound();
+    }
+    // Resume the next hand
+    this.scheduleNextHand();
+  }
+
+  /** Take the next player from the waitlist (FIFO). Returns null if empty. */
+  private dequeueWaitlistPlayer(): RosterEntry | null {
+    if (this.waitlist.length === 0) return null;
+    const entry = this.waitlist.shift()!;
+    this.usedRosterNames.add(entry.name);
+    return entry;
+  }
+
+  /** Get the current waitlist for UI display.
+   *  Includes players in deferred/pending replacements (not yet seated)
+   *  at the front, followed by the remaining waitlist queue. */
+  getWaitlist(): RosterEntry[] {
+    const seating = [
+      ...this.pendingReplacements.map(pr => pr.entry),
+      ...this.deferredReplacements.map(dr => dr.entry),
+    ];
+    return [...seating, ...this.waitlist];
+  }
+
   private _cardsHidden = false;
 
   debugHideCards(): void {
@@ -497,6 +565,7 @@ export class GameManager {
     this.debugSidePotsCallOnly = false;
     this.debugEndgamePending = false;
     this.debugMikoKOPending = false;
+    this.debugMiraKOPending = false;
     this.debugClearTablePending = false;
     // Unpause if paused
     if (this._paused) this.unpause();
@@ -675,6 +744,82 @@ export class GameManager {
     this.statusBar.setStatus('DEBUG: Final opponent — MikoPoker');
   }
 
+  /** Called between hands to rig a 3-player table with MiraNova (20 chips) for bounty testing */
+  private applyDebugMiraKO(): void {
+    if (!this.debugMiraKOPending || !this.engine) return;
+    this.debugMiraKOPending = false;
+
+    const miraEntry = PLAYER_ROSTER.find(e => e.name === 'MiraNova');
+    if (!miraEntry) { console.warn('MiraNova not found in roster'); return; }
+
+    // Pick two AI seats: one for MiraNova, one for a passive folder
+    const availableIds = this.playerIdBySeat.filter(
+      id => id !== 'player' && !this.eliminatedPlayers.has(id)
+    );
+    if (availableIds.length < 2) { console.warn('Need at least 2 AI seats'); return; }
+    const miraId = availableIds[0];
+    const folderId = availableIds[1];
+
+    // Eliminate all other AI
+    for (const id of this.playerIdBySeat) {
+      if (id === 'player' || id === miraId || id === folderId) continue;
+      if (!this.eliminatedPlayers.has(id)) {
+        this.eliminatedPlayers.add(id);
+        this.totalKnockouts++;
+      }
+      const seat = this.seatByPlayerId.get(id);
+      if (seat !== undefined) {
+        const slot = this.slotLayout.getSlot(seat);
+        if (slot) slot.visible = false;
+      }
+    }
+
+    this.pendingReplacements = [];
+    this.deferredReplacements = [];
+
+    // Swap MiraNova into seat
+    const miraSeat = this.seatByPlayerId.get(miraId)!;
+    this.engine.replacePlayer(miraSeat, miraId, miraEntry.config);
+    this.displayNameById.set(miraId, miraEntry.name);
+    this.usedRosterNames.add(miraEntry.name);
+
+    // Pick a passive player for the folder seat
+    const folderEntry = PLAYER_ROSTER.find(e => e.name === 'QuiltedGrandma') ?? PLAYER_ROSTER[0];
+    const folderSeat = this.seatByPlayerId.get(folderId)!;
+    this.engine.replacePlayer(folderSeat, folderId, folderEntry.config);
+    this.displayNameById.set(folderId, folderEntry.name);
+
+    // Set chips
+    const enginePlayers = (this.engine as any).players as { id: string; chips: number }[];
+    for (const ep of enginePlayers) {
+      if (ep.id === 'player') {
+        ep.chips = 10000;
+        this.getSlotForPlayer('player')?.setChips(10000);
+      } else if (ep.id === miraId) {
+        ep.chips = 20;
+        const slot = this.getSlotForPlayer(miraId);
+        if (slot) {
+          slot.setChips(20);
+          slot.setPlayerName(miraEntry.name);
+          slot.setAvatar(this.getAvatarTexture(miraEntry.avatarName ?? miraEntry.name, miraEntry.gender));
+        }
+      } else if (ep.id === folderId) {
+        ep.chips = 2000;
+        const slot = this.getSlotForPlayer(folderId);
+        if (slot) {
+          slot.setChips(2000);
+          slot.setPlayerName(folderEntry.name);
+          slot.setAvatar(this.getAvatarTexture(folderEntry.avatarName ?? folderEntry.name, folderEntry.gender));
+        }
+      } else {
+        ep.chips = 0;
+      }
+    }
+
+    console.log(`🎯 MIRA KO RIGGED: MiraNova=20, ${folderEntry.name}=2000, You=10000. Knock out MiraNova for the bounty!`);
+    this.statusBar.setStatus('DEBUG: Bounty target — MiraNova (20 chips)');
+  }
+
   /** Reposition the hand history HTML overlay on resize */
   onResize(screenWidth: number, sceneCenterY: number, scale: number): void {
     this.handHistory.updatePosition(screenWidth, sceneCenterY, scale);
@@ -771,8 +916,7 @@ export class GameManager {
 
   /** Check if there are unused roster players available for Keep Playing */
   canKeepPlaying(): boolean {
-    const available = pickNewPlayer(this.usedRosterNames);
-    return available !== null;
+    return this.waitlist.length > 0;
   }
 
   /** Keep playing after a victory — fill table with new opponents and continue */
@@ -792,10 +936,9 @@ export class GameManager {
       const seatIndex = this.seatByPlayerId.get(id);
       if (seatIndex === undefined) continue;
 
-      const newEntry = pickNewPlayer(this.usedRosterNames);
+      const newEntry = this.dequeueWaitlistPlayer();
       if (!newEntry) continue;
 
-      this.usedRosterNames.add(newEntry.name);
       this.pendingReplacements.push({ seatIndex, engineId: id, entry: newEntry });
     }
 
@@ -889,9 +1032,10 @@ export class GameManager {
       maxPlayers: GAME_CONFIG.maxPlayers,
     });
 
-    // Pick 7 roster players for the initial table
+    // Shuffle entire roster, seat first 7, rest become ordered waitlist
     const shuffled = [...PLAYER_ROSTER].sort(() => Math.random() - 0.5);
     const initialRoster = shuffled.slice(0, 7);
+    this.waitlist = shuffled.slice(7);
 
     this.playerIdBySeat = ['player'];
     this.displayNameById.set('player', SettingsManager.instance.playerName);
@@ -2041,13 +2185,27 @@ export class GameManager {
             if (potResult.potIndex > 0) {
               const losers = eligible.filter(id => !potResult.winnerIds.includes(id));
               for (const lid of losers) {
+                if (lid === 'player') continue;
                 const endChips = postWinChips.get(lid) ?? 0;
                 if (endChips <= 0 && !this.eliminatedPlayers.has(lid)) {
                   this.eliminatedPlayers.add(lid);
+                  this.totalKnockouts++;
+                  const eliminatedName = this.getDisplayName(lid);
+                  const hn = String(this.handCounter).padStart(3, '0');
+                  this.handHistory.addEntry(`Hand ${hn}: Player ${eliminatedName} eliminated.`);
                   const slot = this.getSlotForPlayer(lid);
                   if (slot) {
                     slot.playKnockoutAnimation();
                     this.audioManager.playKnockoutSound();
+                  }
+                  // Queue replacement for the eliminated player's seat
+                  const seatIdx = this.seatByPlayerId.get(lid);
+                  if (seatIdx !== undefined) {
+                    const newEntry = this.dequeueWaitlistPlayer();
+                    if (newEntry) {
+                      const handsRemaining = 1 + Math.floor(Math.random() * 4);
+                      this.deferredReplacements.push({ seatIndex: seatIdx, engineId: lid, entry: newEntry, handsRemaining });
+                    }
                   }
                 }
               }
@@ -2156,10 +2314,35 @@ export class GameManager {
       if (this.totalKnockouts >= PLAYER_ROSTER.length) return;
 
       if (this.engine && !this.engine.isHandInProgress()) {
+        // Catch-all: detect any players who reached 0 chips but weren't caught
+        // by the post-award check (e.g., blinded out in a folded hand).
+        this.checkForEliminatedPlayers(true);
+
+        // Process pending bounty — pause and show bounty modal before continuing
+        if (this._pendingBounty) {
+          const bounty = this._pendingBounty;
+          this._pendingBounty = null;
+          // Award bounty chips to player
+          const enginePlayers = (this.engine as any).players as { id: string; chips: number }[];
+          const playerEng = enginePlayers.find(p => p.id === 'player');
+          if (playerEng) {
+            const fromChips = playerEng.chips;
+            playerEng.chips += bounty.amount;
+            const toChips = playerEng.chips;
+            // Fire callback to show bounty modal — continuation happens when modal is dismissed
+            this.onBounty?.(bounty.name, bounty.amount);
+            // After modal dismissal, update UI and continue (handled by onBountyDismissed)
+            this._bountyChipsFrom = fromChips;
+            this._bountyChipsTo = toChips;
+            return; // pause — scheduleNextHand will be called again from onBountyDismissed
+          }
+        }
+
         // Apply debug rigs if queued
         this.applyDebugSidePots();
         this.applyDebugEndgame();
         this.applyDebugMikoKO();
+        this.applyDebugMiraKO();
         this.applyDebugClearTable();
         if (this.handPhase === 'idle') return;  // victory was triggered
 
@@ -2854,7 +3037,7 @@ export class GameManager {
     for (const { id, seatIndex } of newlyEliminated) {
       if (id === 'player') continue;
 
-      const newEntry = pickNewPlayer(this.usedRosterNames);
+      const newEntry = this.dequeueWaitlistPlayer();
       if (!newEntry) {
         // No more roster players — hide the seat
         const slot = this.getSlotForPlayer(id);
@@ -2862,12 +3045,11 @@ export class GameManager {
         continue;
       }
 
-      this.usedRosterNames.add(newEntry.name);
       const engineId = id; // reuse same engine slot ID (ai1, ai2, etc.)
 
-      // Defer replacement: wait 2-4 hands before new player joins
-      // (decremented at start of each new hand, so effective wait is 1-3 hands with empty seat)
-      const handsRemaining = 2 + Math.floor(Math.random() * 3); // 2, 3, or 4 ticks → 1-3 hands empty
+      // Defer replacement: wait 1-3 hands before new player joins
+      // (decremented at start of each new hand; seat fills when counter reaches 0)
+      const handsRemaining = 1 + Math.floor(Math.random() * 4); // 1, 2, or 3 ticks
       this.deferredReplacements.push({ seatIndex, engineId, entry: newEntry, handsRemaining });
     }
 
@@ -2912,6 +3094,13 @@ export class GameManager {
       this.handPhase = 'idle';
       this.onGameOver?.('You ran out of chips!');
       return;
+    }
+
+    // Check MiraNova bounty — player knocked out MiraNova this hand
+    const miraKnockedOutThisHand = this._newlyEliminatedNames.includes('MiraNova');
+    if (miraKnockedOutThisHand && this.lastHandWinners.includes('player')) {
+      if (DEBUG_ENABLED) console.log('[BOUNTY] 💰 MiraNova knocked out by player! 10k bounty!');
+      this._pendingBounty = { name: 'MiraNova', amount: 10000 };
     }
 
     // Check MikoPoker knockout win — only if MikoPoker was eliminated THIS hand

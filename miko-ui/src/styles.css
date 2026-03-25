@@ -373,6 +373,147 @@ html, body {
   cursor: pointer;
 }
 
+/* Waitlist modal */
+#waitlist-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 8600;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+}
+#waitlist-modal.open {
+  display: flex;
+}
+#waitlist-panel {
+  background: #1a1a2e;
+  border: 2px solid #5588aa;
+  border-radius: 12px;
+  padding: 24px 32px;
+  min-width: 300px;
+  max-width: 380px;
+  color: #fff;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+#waitlist-panel h2 {
+  margin: 0 0 16px;
+  font-size: 24px;
+  font-weight: bold;
+}
+#waitlist-scroll {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+.waitlist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(85, 136, 170, 0.2);
+}
+.waitlist-row:last-child {
+  border-bottom: none;
+}
+.waitlist-position {
+  color: #5588aa;
+  font-size: 13px;
+  font-weight: bold;
+  min-width: 24px;
+  text-align: right;
+}
+.waitlist-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.waitlist-avatar canvas {
+  width: 100%;
+  height: 100%;
+}
+.waitlist-name {
+  font-size: 15px;
+  color: #dde;
+  text-align: left;
+}
+.waitlist-empty {
+  color: #888;
+  font-style: italic;
+  padding: 20px 0;
+}
+
+/* Bounty modal */
+#bounty-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+}
+#bounty-modal.open {
+  display: flex;
+}
+#bounty-fireworks-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9001;
+  display: none;
+}
+#bounty-modal.open #bounty-fireworks-canvas {
+  display: block;
+}
+#bounty-panel {
+  position: relative;
+  z-index: 9002;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%);
+  border: 3px solid #ffd700;
+  border-radius: 16px;
+  padding: 40px 56px;
+  min-width: 320px;
+  color: #fff;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  box-shadow: 0 0 40px rgba(255, 215, 0, 0.3), 0 0 80px rgba(255, 215, 0, 0.1);
+}
+#bounty-title {
+  margin: 0 0 12px;
+  font-size: 42px;
+  font-weight: bold;
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+}
+#bounty-message {
+  font-size: 20px;
+  color: #dde;
+  margin: 0 0 8px;
+}
+#bounty-amount {
+  font-size: 28px;
+  font-weight: bold;
+  color: #4ade80;
+  margin: 0 0 28px;
+  text-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
+}
+#bounty-continue-btn {
+  padding: 12px 48px;
+  font-size: 18px;
+  border: 2px solid #ffd700;
+  background: rgba(255, 215, 0, 0.15);
+  color: #ffd700;
+}
+#bounty-continue-btn:hover {
+  background: rgba(255, 215, 0, 0.3);
+}
+
 /* Game Over modal */
 #gameover-modal {
   display: none;
