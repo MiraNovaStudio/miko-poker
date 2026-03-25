@@ -35,7 +35,7 @@ function nameHash(name: string): number {
 // [name, playstyle, gender, avatarName?]
 const ROSTER_DATA: [string, Playstyle, Gender, string?][] = [
   // --- Passive ---
-  ['TiltedGrandma',   'passive', 'female'],
+  ['QuiltedGrandma',   'passive', 'female'],
   ['LuckyRiver13',    'passive', 'male'],
   ['Hiker420',        'passive', 'male'],
   ['QuantumCaller',   'passive', 'male'],
