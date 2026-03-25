@@ -70,6 +70,7 @@ export class GameManager {
 
   // All-in runout sequencing
   private allInRunout = false;
+  private allInBetSnapshot: { startX: number; startY: number }[] | null = null;
   private _foldWinDeferred = false;
   private _lastKoCount = 0;
   private _newlyEliminatedNames: string[] = [];
@@ -700,6 +701,7 @@ export class GameManager {
     this.humanFolded = false;
     this.humanActedThisStreet = false;
     this.allInRunout = false;
+    this.allInBetSnapshot = null;
     this._foldWinDeferred = false;
     this.streetQueue = [];
     this.pendingHandResult = null;
@@ -859,7 +861,6 @@ export class GameManager {
       document.body.appendChild(overlay);
       this._pauseOverlay = overlay;
     }
-    console.log('⏸️ Game paused');
   }
 
   unpause(): void {
@@ -875,7 +876,6 @@ export class GameManager {
     for (const { fn, ms } of queue) {
       this.delayed(fn, ms);
     }
-    console.log('▶️ Game resumed');
   }
 
   // ─── Engine Init ───────────────────────────────────────────
@@ -1117,6 +1117,8 @@ export class GameManager {
         for (const p of activePlayers) {
           if (p.allIn) this.getSlotForPlayer(p.id)?.showAllIn();
         }
+        // Snapshot bet positions BEFORE clearing so we can animate them to pot
+        this.allInBetSnapshot = this.snapshotBetPositions();
         this.revealAllCardsAtShowdown();
         this.allInRunout = true;
         this.potFrozen = false;  // all-in runout manages pot display directly
@@ -1585,8 +1587,23 @@ export class GameManager {
 
     const streetDelay = 2000; // 2s between each street reveal
 
-    // Clear bets before the runout starts
+    // Animate bets flying into pot before starting the runout
+    const betSnapshot = this.allInBetSnapshot;
+    this.allInBetSnapshot = null;
+    if (betSnapshot && betSnapshot.length > 0) {
+      this.animateBetsToPot(betSnapshot, () => {
+        this.startStreetRunout(queue, streetDelay);
+      });
+      return;
+    }
+
+    // No bets to animate — start runout immediately
     this.slotLayout.getAllSlots().forEach(s => s.clearBet());
+    this.startStreetRunout(queue, streetDelay);
+  }
+
+  /** Run the queued street reveals after bets have been collected */
+  private startStreetRunout(queue: { street: string; cards: EngineCard[] }[], streetDelay: number): void {
 
     queue.forEach((item, idx) => {
       this.delayed(() => {
@@ -1687,7 +1704,7 @@ export class GameManager {
       }
     }
 
-    // Update all chip labels (pot label updates at end of betting round)
+    // Update all chip labels
     this.updateAllChipLabels();
 
     // Flash action name in chip overlay AFTER chip labels are updated
@@ -1895,9 +1912,10 @@ export class GameManager {
         color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
       }));
 
-      // Track which players have been revealed / logged so far
+      // Track which players have been revealed / logged / highlighted so far
       const revealedPlayers = new Set<string>();
       const loggedPlayers = new Set<string>();
+      const highlightedPlayers = new Set<string>();
 
       // Build eligibility map: for each potResult, which players are eligible
       // (non-folded players whose totalBet >= the pot's contribution threshold)
@@ -1983,10 +2001,12 @@ export class GameManager {
           }
           this.highlightWinnerNames(potResult.winnerIds, potSubtitle, winHandName);
 
-          // Highlight winning board + hole cards for this pot's winners
-          potResult.winnerIds.forEach(wid => {
+          // Highlight winning board + hole cards for this pot's winners (only once per player)
+          const newHighlights = potResult.winnerIds.filter(wid => !highlightedPlayers.has(wid));
+          newHighlights.forEach(wid => {
             this.highlightWinningBoardCards(wid);
             this.highlightWinningHoleCards(wid);
+            highlightedPlayers.add(wid);
           });
           this.dimNonWinningCards(potResult.winnerIds);
 
@@ -2409,7 +2429,7 @@ export class GameManager {
         prevBound = bound;
       }
 
-      // Anything above the highest all-in level
+      // Anything above the highest all-in level (uncalled bet if only 1 eligible)
       const highestAllIn = boundaries[boundaries.length - 1];
       let topLayer = 0;
       for (const p of contributors) {
@@ -2418,16 +2438,21 @@ export class GameManager {
       }
       if (topLayer > 0) {
         const topEligible = nonFolded.filter((p: PlayerState) => p.totalBet > highestAllIn);
-        rawLayers.push({ amount: topLayer, eligibleCount: topEligible.length, eligibleIds: topEligible.map(p => p.id) });
+        // Only add the top layer if 2+ players are eligible — otherwise it's
+        // an uncalled bet that gets returned, not a real side pot.
+        if (topEligible.length >= 2) {
+          rawLayers.push({ amount: topLayer, eligibleCount: topEligible.length, eligibleIds: topEligible.map(p => p.id) });
+        }
       }
 
       // Merge layers with 0 eligible players into the previous layer
-      // (no one can win that slice). During active play, layers with eligible === 1
-      // are legitimate side pots — other players may still call/fold.
+      // (no one can win that slice — folded contributors).
       const potLayers: { amount: number; eligibleIds: string[] }[] = [];
       for (const layer of rawLayers) {
         if (layer.eligibleCount === 0 && potLayers.length > 0) {
           potLayers[potLayers.length - 1].amount += layer.amount;
+        } else if (layer.eligibleCount === 0) {
+          // No eligible players and no previous pot — skip
         } else {
           potLayers.push({ amount: layer.amount, eligibleIds: layer.eligibleIds });
         }
@@ -2576,6 +2601,7 @@ export class GameManager {
   private getDetailedHandName(
     strength: HandStrength,
     holeCards?: EngineCard[],
+    allCards?: EngineCard[],
   ): string {
     const rankVal = strength.kickers[0];
     const rankName = getRankName(rankVal);
@@ -2584,6 +2610,15 @@ export class GameManager {
 
     if (strength.category === 1) {
       return `Pair of ${plural}`;
+    }
+
+    // Two Pair — "Aces and Threes"
+    if (strength.category === 2) {
+      const pair1Name = getRankName(strength.kickers[0]);
+      const pair2Name = getRankName(strength.kickers[1]);
+      const pl1 = pair1Name === 'Six' ? 'Sixes' : pair1Name + 's';
+      const pl2 = pair2Name === 'Six' ? 'Sixes' : pair2Name + 's';
+      return `${pl1} and ${pl2}`;
     }
 
     if (strength.category === 7) {
@@ -2605,6 +2640,33 @@ export class GameManager {
       return `Trip ${plural}`;
     }
 
+    // Flush — "Heart Flush", "Spade Flush"
+    if (strength.category === 5) {
+      const cards = allCards ?? (holeCards ? [...holeCards, ...this.currentCommunityCards] : []);
+      if (cards.length >= 5) {
+        const suitCounts: Record<string, number> = {};
+        for (const c of cards) {
+          suitCounts[c.suit] = (suitCounts[c.suit] ?? 0) + 1;
+        }
+        const flushSuit = Object.entries(suitCounts).find(([, count]) => count >= 5)?.[0];
+        if (flushSuit) {
+          const suitNames: Record<string, string> = { hearts: 'Heart', diamonds: 'Diamond', clubs: 'Club', spades: 'Spade' };
+          const suitLabel = suitNames[flushSuit] ?? flushSuit;
+          return `${suitLabel} Flush`;
+        }
+      }
+      return 'Flush';
+    }
+
+    // Full House — "Kings Full of Aces"
+    if (strength.category === 6) {
+      const tripsName = getRankName(strength.kickers[0]);
+      const pairName = getRankName(strength.kickers[1]);
+      const tripsPlural = tripsName === 'Six' ? 'Sixes' : tripsName + 's';
+      const pairPlural = pairName === 'Six' ? 'Sixes' : pairName + 's';
+      return `${tripsPlural} Full of\n    ${pairPlural}`;
+    }
+
     return getHandName(strength);
   }
 
@@ -2623,7 +2685,7 @@ export class GameManager {
       let name = '';
       if (cardsForEval.length >= 5) {
         const strength = evaluateHand(cardsForEval as EngineCard[]);
-        name = this.getDetailedHandName(strength, hole);
+        name = this.getDetailedHandName(strength, hole, cardsForEval as EngineCard[]);
       } else {
         const [c1, c2] = hole;
         if (c1 && c2 && c1.rank === c2.rank) {

@@ -117,6 +117,20 @@ export class StatusBar extends Container {
     };
   }
 
+  /** Return the visual center of a specific pot line by index (scene coords).
+   *  Index 0 = Main pot line, 1 = Side pot 1, etc. */
+  getPotLineScenePosition(lineIndex: number): { x: number; y: number } {
+    return {
+      x: this.x + POT_LABEL_X - 30,
+      y: this.y + POT_LABEL_Y + lineIndex * LINE_HEIGHT + 11,
+    };
+  }
+
+  /** Return number of pot dot lines currently displayed */
+  getPotLineCount(): number {
+    return this._potDotColors.length;
+  }
+
   getPotText(): string {
     return this._potText;
   }

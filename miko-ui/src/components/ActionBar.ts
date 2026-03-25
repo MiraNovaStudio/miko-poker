@@ -354,8 +354,11 @@ export class ActionBar extends Container {
     if (this.sliderPanel) {
       const panelX = screenX + 340 * scale;
       const panelY = screenY - 160 * scale;
-      this.sliderPanel.style.left = `${panelX}px`;
-      this.sliderPanel.style.top = `${panelY}px`;
+      // Clamp to viewport so the panel doesn't overflow off-screen
+      const panelW = 120 * scale;  // approximate scaled width of panel
+      const maxX = window.innerWidth - panelW - 4;
+      this.sliderPanel.style.left = `${Math.min(panelX, maxX)}px`;
+      this.sliderPanel.style.top = `${Math.max(panelY, 4)}px`;
       this.sliderPanel.style.right = '';
       this.sliderPanel.style.transform = `scale(${scale})`;
       this.sliderPanel.style.transformOrigin = 'top left';

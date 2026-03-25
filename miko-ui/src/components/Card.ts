@@ -30,7 +30,7 @@ const SUIT_COLORS_4: Record<string, number> = {
   spades: 0x111111,
 };
 
-const CARD_BG = 0xf5f5f0;
+const CARD_BG = 0xffffff;
 const CARD_BORDER = 0x888888;
 const CARD_RADIUS = 6;
 

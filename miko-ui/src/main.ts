@@ -162,13 +162,21 @@ async function init() {
     };
 
     deckPngBtn?.addEventListener('click', async () => {
-      await AssetManager.loadCardPngs(); // load PNGs BEFORE switching deck type
+      deckPngBtn.textContent = 'Loading...';
+      deckPngBtn.style.pointerEvents = 'none';
+      await AssetManager.loadCardPngs();
+      deckPngBtn.textContent = 'PNG';
+      deckPngBtn.style.pointerEvents = '';
       settings.deckType = 'png';
       updateDeckButtons();
     });
 
     deckSvgBtn?.addEventListener('click', async () => {
-      await AssetManager.loadCardSvgs(); // load SVGs BEFORE switching deck type
+      deckSvgBtn.textContent = 'Loading...';
+      deckSvgBtn.style.pointerEvents = 'none';
+      await AssetManager.loadCardSvgs();
+      deckSvgBtn.textContent = 'SVG';
+      deckSvgBtn.style.pointerEvents = '';
       settings.deckType = 'svg';
       updateDeckButtons();
     });
@@ -235,7 +243,11 @@ async function init() {
     fourColorOnBtn?.addEventListener('click', async () => {
       // Pre-load 4-color SVG variants if needed
       if (settings.deckType === 'svg') {
+        fourColorOnBtn.textContent = 'Loading...';
+        fourColorOnBtn.style.pointerEvents = 'none';
         await AssetManager.loadCardSvgs4Color();
+        fourColorOnBtn.textContent = 'On';
+        fourColorOnBtn.style.pointerEvents = '';
       }
       settings.fourColorDeck = true;
       updateFourColorButtons();
