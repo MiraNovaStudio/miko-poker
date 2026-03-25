@@ -67,6 +67,7 @@ export class AudioManager {
       { name: 'fireworks', path: 'assets/sounds/freesound_community-fireworks-generated-31449.mp3' },
       { name: 'chipsCollect', path: 'assets/sounds/freesound_community-poker_chips1-87592.mp3' },
       { name: 'playerJoin', path: 'assets/sounds/universfield-the-notification-email-143029.mp3' },
+      { name: 'chipsWin', path: 'assets/sounds/universfield-level-up-06-370051.mp3' },
     ];
 
     await Promise.all(
@@ -236,6 +237,7 @@ export class AudioManager {
   playChipsCollectSound(): void { this.play('chipsCollect'); }
   playDealSound(): void { this.play('deal'); }
   playPlayerJoinSound(): void { this.play('playerJoin'); }
+  playChipsWinSound(): void { this.play('chipsWin'); }
 
   private fireworksSource: AudioBufferSourceNode | null = null;
 

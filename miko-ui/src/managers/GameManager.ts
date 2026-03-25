@@ -3154,9 +3154,9 @@ export class GameManager {
     // Position hand labels so they don't get covered by raised community cards
     const seatIdx = slot.seatIndex;
     if (seatIdx === 2 || seatIdx === 6) {
-      // Side seats: position under name label
+      // Side seats: position well below name label to avoid overlap
       label.x = slot.x;
-      label.y = slot.y + 70;
+      label.y = slot.y + 100;
     } else if (seatIdx === 3 || seatIdx === 4 || seatIdx === 5) {
       // Top row: place ABOVE the cards so raised board cards don't cover them
       label.x = slot.x;
@@ -3212,7 +3212,9 @@ export class GameManager {
     });
     label.anchor.set(0.5);
     label.x = slot.x;
-    label.y = slot.y + 48;
+    // Side seats need more offset to clear the name label
+    const seatIdx = slot.seatIndex;
+    label.y = (seatIdx === 2 || seatIdx === 6) ? slot.y + 100 : slot.y + 48;
     label.alpha = 0;
     label.zIndex = 100;
     scene.addChild(label);
@@ -3342,6 +3344,7 @@ export class GameManager {
               const fromChips = preWinChips.get(pid) ?? 0;
               const toChips = postWinChips.get(pid) ?? fromChips;
               slot.animateChipsTo(fromChips, toChips);
+              if (toChips > fromChips) this.audioManager.playChipsWinSound();
             }
             return;
           }
@@ -3446,6 +3449,7 @@ export class GameManager {
         if (!stale) {
           slot.pulseChipOverlay();
           slot.animateChipsTo(fromChips, toChips);
+          if (toChips > fromChips) this.audioManager.playChipsWinSound();
         }
         return;
       }
