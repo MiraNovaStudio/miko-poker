@@ -66,20 +66,13 @@ export class PotChips extends Container {
 
   /** Reduce the visual stack by the given amount and redraw. */
   deduct(amount: number): void {
-    let remaining = amount;
-    // Remove chips from the stack (largest first) until we've deducted enough
-    for (let i = 0; i < this._chipStack.length && remaining > 0; ) {
-      if (this._chipStack[i].value <= remaining) {
-        remaining -= this._chipStack[i].value;
-        this._chipStack.splice(i, 1);
-      } else {
-        i++;
-      }
-    }
-    // If we couldn't deduct exactly, just remove chips from the end
-    while (remaining > 0 && this._chipStack.length > 0) {
-      remaining -= this._chipStack.pop()!.value;
-    }
+    // Compute the current total, subtract, and recompose from scratch.
+    // This avoids the "can't make change" problem where removing chips
+    // by denomination would over-deduct (e.g., popping a $500 chip to
+    // cover a $100 shortfall, emptying the stack prematurely).
+    const currentTotal = this._chipStack.reduce((sum, c) => sum + c.value, 0);
+    const newTotal = Math.max(0, currentTotal - amount);
+    this._chipStack = this.decompose(newTotal);
     this.draw();
   }
 

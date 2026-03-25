@@ -1982,24 +1982,10 @@ export class GameManager {
           );
           potResult.winnerIds.forEach(id => loggedPlayers.add(id));
 
-          // Show WINNER! with pot type below and hand name above (matching normal showdown style)
+          // Show WINNER! with pot type subtitle (hand name already shown as scene label)
           this.audioManager.playWinSound();
           const potSubtitle = potResult.potIndex === 0 ? 'Main Pot' : 'Side Pot';
-          // Get detailed hand name for the winner
-          let winHandName = '';
-          if (gameState) {
-            const firstWinner = gameState.players.find(p => p.id === potResult.winnerIds[0]);
-            if (firstWinner?.cards?.length) {
-              try {
-                const combined = [...(firstWinner.cards as EngineCard[]), ...this.currentCommunityCards];
-                if (combined.length >= 5) {
-                  const strength = evaluateHand(combined as EngineCard[]);
-                  winHandName = this.getDetailedHandName(strength, firstWinner.cards as EngineCard[]);
-                }
-              } catch { /* ignore */ }
-            }
-          }
-          this.highlightWinnerNames(potResult.winnerIds, potSubtitle, winHandName);
+          this.highlightWinnerNames(potResult.winnerIds, potSubtitle);
 
           // Highlight winning board + hole cards for this pot's winners (only once per player)
           const newHighlights = potResult.winnerIds.filter(wid => !highlightedPlayers.has(wid));
@@ -2022,6 +2008,14 @@ export class GameManager {
           const perWinner = Math.floor(potResult.amount / potResult.winnerIds.length);
           const remainder = potResult.amount % potResult.winnerIds.length;
 
+          // Determine fly origin: side pots fly from their label, main pot from chip area
+          let flyOrigin: { x: number; y: number } | undefined;
+          if (potResult.potIndex > 0) {
+            // Side pot — fly from its label row position
+            flyOrigin = this.statusBar.getPotLineScenePosition(potResult.potIndex);
+          }
+          // Main pot (potIndex 0) — flyOrigin remains undefined, flies from chip area
+
           // Animate chips flying to each winner of this pot
           potResult.winnerIds.forEach((pid, widx) => {
             const winAmount = perWinner + (widx < remainder ? 1 : 0);
@@ -2029,7 +2023,7 @@ export class GameManager {
             const toChips = fromChips + winAmount;
             runningChips.set(pid, toChips);
 
-            this.animateSinglePotAward(pid, winAmount, fromChips, toChips);
+            this.animateSinglePotAward(pid, winAmount, fromChips, toChips, flyOrigin);
           });
 
           // After fly animation lands: remove pot line/dots, knock out losers
@@ -2256,7 +2250,13 @@ export class GameManager {
       return;
     }
 
-    this.engine.processAction('player', { type: actionType as 'bet' | 'raise', amount });
+    // If the raise amount equals remaining chips, treat as all-in
+    // (prevents leaving $SB behind when engine interprets amount as total bet)
+    if (amount >= maxAmount) {
+      this.engine.processAction('player', { type: 'allin', amount: maxAmount });
+    } else {
+      this.engine.processAction('player', { type: actionType as 'bet' | 'raise', amount });
+    }
     this.humanActedThisStreet = true;
     this.actionBar.hide();
     this.delayed(() => this.advanceGame(), 500);
@@ -2618,7 +2618,7 @@ export class GameManager {
       const pair2Name = getRankName(strength.kickers[1]);
       const pl1 = pair1Name === 'Six' ? 'Sixes' : pair1Name + 's';
       const pl2 = pair2Name === 'Six' ? 'Sixes' : pair2Name + 's';
-      return `${pl1} and ${pl2}`;
+      return `${pl1} and\n    ${pl2}`;
     }
 
     if (strength.category === 7) {
@@ -3073,18 +3073,18 @@ export class GameManager {
   }
 
   /** Show hand names for specific players (non-winners get italic label, winners get animated) */
+  /** Show hand names for a subset of players (used in multi-pot sequential reveals).
+   *  Winners get gold bold label, losers get yellow italic label.
+   *  All labels are scene-level so they persist over knockout/WINNER animations. */
   private showHandNamesForPlayers(playerIds: string[], winnerIds: string[]): void {
     if (!this.engine) return;
     const idSet = new Set(playerIds);
     const winnerSet = new Set(winnerIds);
     const gameState = this.engine.getGameState();
 
-    // Show losing hand names (italic on bet label)
     gameState.players.forEach((p: PlayerState) => {
       if (!idSet.has(p.id)) return;
       if (!p.cards || p.cards.length === 0 || p.folded) return;
-      if (winnerSet.has(p.id)) return; // winners get animated label below
-      if (this.eliminatedPlayers.has(p.id)) return;
       try {
         const combined = [...(p.cards as EngineCard[]), ...this.currentCommunityCards];
         if (combined.length < 5) return;
@@ -3092,20 +3092,20 @@ export class GameManager {
         const handName = this.getDetailedHandName(strength, p.cards as EngineCard[]);
         const slot = this.getSlotForPlayer(p.id);
         if (!slot) return;
-        if (slot.seatIndex === 3 || slot.seatIndex === 4 || slot.seatIndex === 5) {
-          this.showLosingHandAtSlot(handName, slot);
+        if (winnerSet.has(p.id)) {
+          this.showWinningHandAtSlot(handName, slot);
         } else {
-          slot.setBetSmallItalic(handName);
+          this.showLosingHandAtSlot(handName, slot);
         }
       } catch (err) {
         console.warn('Failed to set showdown hand for', p.id, err);
       }
     });
-
-    // Winner hand name is shown via the WINNER label's handName parameter
-    // in the multi-pot award path — no separate label needed here.
   }
 
+  /** Show hand names for ALL showdown players (single-pot path).
+   *  Winners get gold bold label, losers get yellow italic label.
+   *  All labels are scene-level so they persist over knockout/WINNER animations. */
   private showShowdownHandNames(winnerIds: string[]): void {
     if (!this.engine) return;
     const winnerSet = new Set(winnerIds);
@@ -3113,8 +3113,6 @@ export class GameManager {
 
     gameState.players.forEach((p: PlayerState) => {
       if (!p.cards || p.cards.length === 0 || p.folded) return;
-      if (winnerSet.has(p.id)) return; // winners get the animated label at their position
-      if (this.eliminatedPlayers.has(p.id)) return; // skip players with knockout animation playing
       try {
         const combined = [...(p.cards as EngineCard[]), ...this.currentCommunityCards];
         if (combined.length < 5) return;
@@ -3122,31 +3120,13 @@ export class GameManager {
         const handName = this.getDetailedHandName(strength, p.cards as EngineCard[]);
         const slot = this.getSlotForPlayer(p.id);
         if (!slot) return;
-        // Top-row seats: show hand name as a scene-level label above the
-        // community cards, since bet labels inside slots get occluded
-        if (slot.seatIndex === 3 || slot.seatIndex === 4 || slot.seatIndex === 5) {
-          this.showLosingHandAtSlot(handName, slot);
+        if (winnerSet.has(p.id)) {
+          this.showWinningHandAtSlot(handName, slot);
         } else {
-          slot.setBetSmallItalic(handName);
+          this.showLosingHandAtSlot(handName, slot);
         }
       } catch (err) {
         console.warn('Failed to set showdown hand for', p.id, err);
-      }
-    });
-
-    // Show animated winning hand name at winner's bet label position
-    winnerIds.forEach(winnerId => {
-      const winner = gameState.players.find(p => p.id === winnerId);
-      if (!winner?.cards?.length) return;
-      try {
-        const combined = [...(winner.cards as EngineCard[]), ...this.currentCommunityCards];
-        if (combined.length < 5) return;
-        const strength = evaluateHand(combined as EngineCard[]);
-        const handName = this.getDetailedHandName(strength, winner.cards as EngineCard[]);
-        const slot = this.getSlotForPlayer(winnerId);
-        if (slot) this.showWinningHandAtSlot(handName, slot);
-      } catch (err) {
-        console.warn('Failed to evaluate winning hand:', err);
       }
     });
   }
@@ -3399,14 +3379,16 @@ export class GameManager {
     });
   }
 
-  /** Animate a single pot award: chips fly from pot position to one player. */
+  /** Animate a single pot award: chips fly from an origin to one player.
+   *  If origin is provided, chips spawn there (for side pots flying from their label).
+   *  If omitted, chips fly from the main chip stack area. */
   private animateSinglePotAward(
     pid: string,
     winAmount: number,
     fromChips: number,
     toChips: number,
+    origin?: { x: number; y: number },
   ): void {
-    const potPos = this.statusBar.getPotLabelScenePosition();
     const scene = this.statusBar.parent;
     if (!scene) return;
 
@@ -3416,20 +3398,22 @@ export class GameManager {
     const targetX = slot.x;
     const targetY = slot.y + CHIP_OVERLAY_Y;
 
+    // Determine where chips and text originate from
+    const chipStartX = origin?.x ?? this.potChips.x;
+    const chipStartY = origin?.y ?? this.potChips.y;
+
     // Create floating text showing the pot award amount
     const floatingText = new Text({
       text: `+${formatChips(winAmount)}`,
       style: FONTS.potLabel as TextStyleOptions,
     });
     floatingText.anchor.set(0.5);
-    floatingText.x = potPos.x;
-    floatingText.y = potPos.y;
+    floatingText.x = chipStartX;
+    floatingText.y = chipStartY;
     scene.addChild(floatingText);
 
-    // Create a few flying chip graphics
+    // Create a few flying chip graphics at the origin
     const flyingChips = this.potChips.createFlyingChips(3);
-    const chipStartX = this.potChips.x;
-    const chipStartY = this.potChips.y;
     const chipOrigins: { x: number; y: number }[] = [];
     flyingChips.forEach((chip, ci) => {
       const ox = chipStartX + (Math.random() - 0.5) * 16;
@@ -3482,9 +3466,9 @@ export class GameManager {
           ? 4 * chipT * chipT * chipT
           : 1 - Math.pow(-2 * chipT + 2, 3) / 2;
 
-        const origin = chipOrigins[ci] ?? { x: chipStartX, y: chipStartY };
-        chip.x = origin.x + (targetX - origin.x) * chipEase;
-        chip.y = origin.y + (targetY - origin.y) * chipEase;
+        const cOrigin = chipOrigins[ci] ?? { x: chipStartX, y: chipStartY };
+        chip.x = cOrigin.x + (targetX - cOrigin.x) * chipEase;
+        chip.y = cOrigin.y + (targetY - cOrigin.y) * chipEase;
         chip.alpha = 1 - 0.3 * chipEase;
         chip.scale.set(1 - 0.4 * chipEase);
       });
@@ -3558,8 +3542,6 @@ export class GameManager {
     const gameState = this.engine.getGameState();
     const board = this.currentCommunityCards;
     const winnerSet = new Set(winnerIds);
-    const DIM_ALPHA = 0.25;
-
     // Collect board indices used by any winner
     const usedBoardIndices = new Set<number>();
     for (const wid of winnerIds) {
@@ -3573,11 +3555,12 @@ export class GameManager {
       } catch { /* skip */ }
     }
 
-    // Dim board cards not used in winning hand
+    // Dim board cards not used in winning hand by adding a dark overlay.
+    // Using an overlay instead of alpha keeps card backgrounds pure white.
     board.forEach((_, idx) => {
       if (usedBoardIndices.has(idx)) return;
-      const card = this.communityCards.children[idx];
-      if (card) card.alpha = 1 - DIM_ALPHA;
+      const card = this.communityCards.children[idx] as Container;
+      if (card) this.addDimOverlay(card);
     });
 
     // Dim losing players' hole cards and winner's unused hole cards
@@ -3592,7 +3575,7 @@ export class GameManager {
 
       if (!winnerSet.has(player.id)) {
         // Losing player — dim all hole cards
-        slotCards.children.forEach(c => { c.alpha = 1 - DIM_ALPHA; });
+        slotCards.children.forEach(c => { this.addDimOverlay(c as Container); });
       } else {
         // Winner — dim only unused hole cards
         const hole = player.cards as EngineCard[];
@@ -3602,13 +3585,25 @@ export class GameManager {
           hole.forEach((card, idx) => {
             if (!this.isHoleCardUsed(card, hand, combined)) {
               if (slotCards.children[idx]) {
-                slotCards.children[idx].alpha = 1 - DIM_ALPHA;
+                this.addDimOverlay(slotCards.children[idx] as Container);
               }
             }
           });
         } catch { /* skip */ }
       }
     });
+  }
+
+  /** Add a semi-transparent dark overlay on top of a card to dim it
+   *  without changing alpha (which makes white backgrounds look gray). */
+  private addDimOverlay(card: Container): void {
+    const DIM_OVERLAY_ALPHA = 0.3;
+    const bounds = card.getLocalBounds();
+    const overlay = new Graphics();
+    overlay.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, 6);
+    overlay.fill({ color: 0x000000, alpha: DIM_OVERLAY_ALPHA });
+    overlay.label = '__dimOverlay';
+    card.addChild(overlay);
   }
 
   private isHoleCardUsed(

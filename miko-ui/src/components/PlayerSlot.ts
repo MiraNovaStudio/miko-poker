@@ -779,10 +779,26 @@ export class PlayerSlot extends Container {
       if (!this._folded) return;
       if (this.cardsContainer.visible) {
         this.cardsContainer.visible = false;
-        this.cardsContainer.alpha = 1;
+        // Remove dim overlays
+        this.cardsContainer.children.forEach(child => {
+          const overlay = (child as Container).children?.find(
+            (c: any) => c.label === '__foldDimOverlay'
+          );
+          if (overlay) (child as Container).removeChild(overlay);
+        });
       } else {
         this.cardsContainer.visible = true;
-        this.cardsContainer.alpha = 0.5;
+        // Add dark overlay to each card instead of reducing alpha
+        // (alpha makes white backgrounds look gray on dark table)
+        this.cardsContainer.children.forEach(child => {
+          const card = child as Container;
+          const bounds = card.getLocalBounds();
+          const overlay = new Graphics();
+          overlay.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, 6);
+          overlay.fill({ color: 0x000000, alpha: 0.4 });
+          overlay.label = '__foldDimOverlay';
+          card.addChild(overlay);
+        });
       }
     });
   }

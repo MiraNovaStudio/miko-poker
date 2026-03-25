@@ -241,16 +241,16 @@ export class ActionBar extends Container {
         SettingsManager.instance.chipDisplay === 'bb' ? 'decimal' : 'numeric';
     }
     if (this.betInputContainer) {
-      this.betInputContainer.style.display = 'block';
+      this.betInputContainer.style.display = this.hasBetOption ? 'block' : 'none';
     }
-    if (this.sliderPanel && this.hasBetOption) {
-      this.sliderPanel.style.display = 'flex';
+    if (this.sliderPanel) {
+      this.sliderPanel.style.display = this.hasBetOption ? 'flex' : 'none';
     }
     // Trigger resize to ensure HTML overlays are correctly positioned
     window.dispatchEvent(new Event('resize'));
-    // Show normal buttons
+    // Show normal buttons — hide Raise/Bet button when player can't raise
     this.leftBtn.visible = true;
-    this.middleBtn.visible = true;
+    this.middleBtn.visible = this.hasBetOption;
     this.rightBtn.visible = true;
   }
 
