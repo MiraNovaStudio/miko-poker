@@ -112,10 +112,19 @@ export class HandLog {
     });
   }
 
+  /** Record street change. cards is the cumulative community cards up to this street. */
   recordStreet(street: string, cards: EngineCard[]): void {
     if (!this.current) return;
     this.currentStreet = street;
-    this.current.communityCards.set(street, formatCards(cards));
+    // Store only the NEW cards for this street (exclude cards already recorded)
+    let prevCount = 0;
+    if (street === 'flop') prevCount = 0;
+    else if (street === 'turn') prevCount = 3;
+    else if (street === 'river') prevCount = 4;
+    const newCards = cards.slice(prevCount);
+    this.current.communityCards.set(street, formatCards(newCards));
+    // Store full board for the Board line
+    this.current.communityCards.set('_board', formatCards(cards));
     this.lastBet.clear();
   }
 
@@ -180,6 +189,13 @@ export class HandLog {
         lines.push(`  ${a.player} ${a.action}${amt}`);
       }
 
+      lines.push('');
+    }
+
+    // Board (full community cards)
+    const board = hand.communityCards.get('_board');
+    if (board) {
+      lines.push(`--- Board [${board}] ---`);
       lines.push('');
     }
 

@@ -122,6 +122,47 @@ describe('Hand Evaluator', () => {
     ];
     const hand = evaluateHand(cards);
     expect(hand.category).toBe(2); // Two pair
+    expect(hand.kickers).toEqual([13, 9, 5]); // KK 99 kicker 5
+  });
+
+  it('should pick highest kicker for two pair with 3 pairs in 7 cards', () => {
+    // Board: Ks 3d Qc Kh Qd — Player holds Ah 3h
+    // Three pairs: KK, QQ, 33 — best hand is KK QQ with Ace kicker
+    const cards: Card[] = [
+      { rank: 'A', suit: 'hearts' },
+      { rank: '3', suit: 'hearts' },
+      { rank: 'K', suit: 'spades' },
+      { rank: '3', suit: 'diamonds' },
+      { rank: 'Q', suit: 'clubs' },
+      { rank: 'K', suit: 'hearts' },
+      { rank: 'Q', suit: 'diamonds' },
+    ];
+    const hand = evaluateHand(cards);
+    expect(hand.category).toBe(2); // Two pair
+    expect(hand.kickers).toEqual([13, 12, 14]); // KK QQ kicker Ace
+  });
+
+  it('should correctly compare two pair hands with different kickers from 3-pair boards', () => {
+    // Board: Ks 3d Qc Kh Qd
+    // Player: Ah 3h → KK QQ A kicker
+    const playerCards: Card[] = [
+      { rank: 'A', suit: 'hearts' }, { rank: '3', suit: 'hearts' },
+      { rank: 'K', suit: 'spades' }, { rank: '3', suit: 'diamonds' },
+      { rank: 'Q', suit: 'clubs' }, { rank: 'K', suit: 'hearts' },
+      { rank: 'Q', suit: 'diamonds' },
+    ];
+    // AI: 8d 5c → KK QQ 8 kicker
+    const aiCards: Card[] = [
+      { rank: '8', suit: 'diamonds' }, { rank: '5', suit: 'clubs' },
+      { rank: 'K', suit: 'spades' }, { rank: '3', suit: 'diamonds' },
+      { rank: 'Q', suit: 'clubs' }, { rank: 'K', suit: 'hearts' },
+      { rank: 'Q', suit: 'diamonds' },
+    ];
+    const playerHand = evaluateHand(playerCards);
+    const aiHand = evaluateHand(aiCards);
+    expect(playerHand.category).toBe(2);
+    expect(aiHand.category).toBe(2);
+    expect(compareHands(playerHand, aiHand)).toBeGreaterThan(0); // Player wins
   });
 
   it('should recognize one pair', () => {
@@ -146,6 +187,166 @@ describe('Hand Evaluator', () => {
     ];
     const hand = evaluateHand(cards);
     expect(hand.category).toBe(0); // High card
+  });
+
+  // --- Kicker tests ---
+
+  it('should pick correct kickers for one pair (5 cards)', () => {
+    const cards: Card[] = [
+      { rank: 'A', suit: 'hearts' }, { rank: 'A', suit: 'diamonds' },
+      { rank: 'K', suit: 'clubs' }, { rank: 'Q', suit: 'spades' },
+      { rank: 'J', suit: 'hearts' },
+    ];
+    const hand = evaluateHand(cards);
+    expect(hand.category).toBe(1);
+    expect(hand.kickers).toEqual([14, 13, 12, 11]); // AA kickers K Q J
+  });
+
+  it('should pick best 3 kickers for one pair from 7 cards', () => {
+    // Pair of 9s with A K Q 7 3 — kickers should be A K Q
+    const cards: Card[] = [
+      { rank: '9', suit: 'hearts' }, { rank: '9', suit: 'diamonds' },
+      { rank: 'A', suit: 'clubs' }, { rank: '3', suit: 'spades' },
+      { rank: 'K', suit: 'hearts' }, { rank: '7', suit: 'clubs' },
+      { rank: 'Q', suit: 'diamonds' },
+    ];
+    const hand = evaluateHand(cards);
+    expect(hand.category).toBe(1);
+    expect(hand.kickers).toEqual([9, 14, 13, 12]); // 99 kickers A K Q
+  });
+
+  it('should compare one pair hands by kickers', () => {
+    // Both have pair of Kings, player has A kicker, AI has Q kicker
+    const player: Card[] = [
+      { rank: 'K', suit: 'hearts' }, { rank: 'K', suit: 'diamonds' },
+      { rank: 'A', suit: 'clubs' }, { rank: '5', suit: 'spades' },
+      { rank: '3', suit: 'hearts' },
+    ];
+    const ai: Card[] = [
+      { rank: 'K', suit: 'clubs' }, { rank: 'K', suit: 'spades' },
+      { rank: 'Q', suit: 'hearts' }, { rank: '5', suit: 'diamonds' },
+      { rank: '3', suit: 'clubs' },
+    ];
+    expect(compareHands(evaluateHand(player), evaluateHand(ai))).toBeGreaterThan(0);
+  });
+
+  it('should pick correct kickers for three of a kind (5 cards)', () => {
+    const cards: Card[] = [
+      { rank: 'J', suit: 'hearts' }, { rank: 'J', suit: 'diamonds' },
+      { rank: 'J', suit: 'clubs' }, { rank: 'A', suit: 'spades' },
+      { rank: '3', suit: 'hearts' },
+    ];
+    const hand = evaluateHand(cards);
+    expect(hand.category).toBe(3);
+    expect(hand.kickers).toEqual([11, 14, 3]); // JJJ kickers A 3
+  });
+
+  it('should pick best 2 kickers for three of a kind from 7 cards', () => {
+    // Trip 7s with A K 4 2 — kickers should be A K
+    const cards: Card[] = [
+      { rank: '7', suit: 'hearts' }, { rank: '7', suit: 'diamonds' },
+      { rank: '7', suit: 'clubs' }, { rank: '2', suit: 'spades' },
+      { rank: 'A', suit: 'hearts' }, { rank: '4', suit: 'clubs' },
+      { rank: 'K', suit: 'diamonds' },
+    ];
+    const hand = evaluateHand(cards);
+    expect(hand.category).toBe(3);
+    expect(hand.kickers).toEqual([7, 14, 13]); // 777 kickers A K
+  });
+
+  it('should compare three of a kind hands by kickers', () => {
+    // Both have trip 5s; player has A K kickers, AI has Q J kickers
+    const player: Card[] = [
+      { rank: '5', suit: 'hearts' }, { rank: '5', suit: 'diamonds' },
+      { rank: '5', suit: 'clubs' }, { rank: 'A', suit: 'spades' },
+      { rank: 'K', suit: 'hearts' },
+    ];
+    const ai: Card[] = [
+      { rank: '5', suit: 'spades' }, { rank: '5', suit: 'clubs' },
+      { rank: '5', suit: 'hearts' }, { rank: 'Q', suit: 'diamonds' },
+      { rank: 'J', suit: 'clubs' },
+    ];
+    expect(compareHands(evaluateHand(player), evaluateHand(ai))).toBeGreaterThan(0);
+  });
+
+  it('should pick correct kicker for four of a kind (5 cards)', () => {
+    const cards: Card[] = [
+      { rank: 'A', suit: 'hearts' }, { rank: 'A', suit: 'diamonds' },
+      { rank: 'A', suit: 'clubs' }, { rank: 'A', suit: 'spades' },
+      { rank: 'K', suit: 'hearts' },
+    ];
+    const hand = evaluateHand(cards);
+    expect(hand.category).toBe(7);
+    expect(hand.kickers).toEqual([14, 13]); // AAAA kicker K
+  });
+
+  it('should pick highest kicker for four of a kind from 7 cards with a pair', () => {
+    // AAAA 33 K — kicker must be K (13), not 3
+    const cards: Card[] = [
+      { rank: 'A', suit: 'hearts' }, { rank: 'A', suit: 'diamonds' },
+      { rank: 'A', suit: 'clubs' }, { rank: 'A', suit: 'spades' },
+      { rank: '3', suit: 'hearts' }, { rank: '3', suit: 'diamonds' },
+      { rank: 'K', suit: 'clubs' },
+    ];
+    const hand = evaluateHand(cards);
+    expect(hand.category).toBe(7);
+    expect(hand.kickers).toEqual([14, 13]); // AAAA kicker K, not 3
+  });
+
+  it('should compare four of a kind hands by kicker', () => {
+    const player: Card[] = [
+      { rank: '9', suit: 'hearts' }, { rank: '9', suit: 'diamonds' },
+      { rank: '9', suit: 'clubs' }, { rank: '9', suit: 'spades' },
+      { rank: 'A', suit: 'hearts' },
+    ];
+    const ai: Card[] = [
+      { rank: '9', suit: 'hearts' }, { rank: '9', suit: 'diamonds' },
+      { rank: '9', suit: 'clubs' }, { rank: '9', suit: 'spades' },
+      { rank: 'K', suit: 'clubs' },
+    ];
+    expect(compareHands(evaluateHand(player), evaluateHand(ai))).toBeGreaterThan(0);
+  });
+
+  it('should pick best 5 flush cards from 7 cards', () => {
+    // 7 cards, 6 hearts — flush should be top 5 heart values
+    const cards: Card[] = [
+      { rank: 'A', suit: 'hearts' }, { rank: 'K', suit: 'hearts' },
+      { rank: '9', suit: 'hearts' }, { rank: '7', suit: 'hearts' },
+      { rank: '3', suit: 'hearts' }, { rank: '2', suit: 'hearts' },
+      { rank: 'Q', suit: 'diamonds' },
+    ];
+    const hand = evaluateHand(cards);
+    expect(hand.category).toBe(5);
+    expect(hand.kickers).toEqual([14, 13, 9, 7, 3]); // A K 9 7 3 (drops 2)
+  });
+
+  it('should compare flushes by highest differing card', () => {
+    // Both have heart flush, player has A-high, AI has K-high
+    const player: Card[] = [
+      { rank: 'A', suit: 'hearts' }, { rank: 'J', suit: 'hearts' },
+      { rank: '9', suit: 'hearts' }, { rank: '7', suit: 'hearts' },
+      { rank: '3', suit: 'hearts' },
+    ];
+    const ai: Card[] = [
+      { rank: 'K', suit: 'hearts' }, { rank: 'J', suit: 'hearts' },
+      { rank: '9', suit: 'hearts' }, { rank: '7', suit: 'hearts' },
+      { rank: '3', suit: 'hearts' },
+    ];
+    expect(compareHands(evaluateHand(player), evaluateHand(ai))).toBeGreaterThan(0);
+  });
+
+  it('should compare flushes by second card when first matches', () => {
+    const player: Card[] = [
+      { rank: 'A', suit: 'spades' }, { rank: 'Q', suit: 'spades' },
+      { rank: '9', suit: 'spades' }, { rank: '7', suit: 'spades' },
+      { rank: '3', suit: 'spades' },
+    ];
+    const ai: Card[] = [
+      { rank: 'A', suit: 'clubs' }, { rank: 'J', suit: 'clubs' },
+      { rank: '9', suit: 'clubs' }, { rank: '7', suit: 'clubs' },
+      { rank: '3', suit: 'clubs' },
+    ];
+    expect(compareHands(evaluateHand(player), evaluateHand(ai))).toBeGreaterThan(0);
   });
 
   it('should recognize the wheel (A-2-3-4-5 straight)', () => {

@@ -129,7 +129,6 @@ else
   echo ""
   echo "    2. Enable nginx proxy (optional):"
   echo "       sudo ln -sf /etc/nginx/sites-available/mikopoker /etc/nginx/sites-enabled/"
-  echo "       # Edit server_name in /etc/nginx/sites-available/mikopoker"
   echo "       sudo nginx -t && sudo systemctl reload nginx"
   echo ""
   echo "    3. Check status:"

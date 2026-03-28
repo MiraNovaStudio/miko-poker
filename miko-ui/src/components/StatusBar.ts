@@ -43,7 +43,7 @@ export class StatusBar extends Container {
     this.handLabel = new Text({ text: '', style: FONTS.handLabel as TextStyleOptions });
     this.handLabel.anchor.set(0, 0.5);
     this.handLabel.x = -460;
-    this.handLabel.y = 430;
+    this.handLabel.y = 350;
     this.addChild(this.handLabel);
   }
 

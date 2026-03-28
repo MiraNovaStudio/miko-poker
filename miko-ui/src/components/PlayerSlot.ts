@@ -414,7 +414,7 @@ export class PlayerSlot extends Container {
 
     const hasExtra = !!(subtitle || handName);
     const container = new Container();
-    container.y = hasExtra ? -55 : -20; // shift up more when extra text present
+    container.y = hasExtra ? 50 : 55; // below chip overlay so card tops remain visible
     container.scale.set(0);
     container.alpha = 0;
     this.addChild(container);

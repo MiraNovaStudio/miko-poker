@@ -2056,10 +2056,9 @@ export class GameManager {
         color: POT_DOT_COLORS[Math.min(i, POT_DOT_COLORS.length - 1)],
       }));
 
-      // Track which players have been revealed / logged / highlighted so far
+      // Track which players have been revealed / logged so far
       const revealedPlayers = new Set<string>();
       const loggedPlayers = new Set<string>();
-      const highlightedPlayers = new Set<string>();
 
       // Build eligibility map: for each potResult, which players are eligible
       // (non-folded players whose totalBet >= the pot's contribution threshold)
@@ -2131,12 +2130,11 @@ export class GameManager {
           const potSubtitle = potResult.potIndex === 0 ? 'Main Pot' : 'Side Pot';
           this.highlightWinnerNames(potResult.winnerIds, potSubtitle);
 
-          // Highlight winning board + hole cards for this pot's winners (only once per player)
-          const newHighlights = potResult.winnerIds.filter(wid => !highlightedPlayers.has(wid));
-          newHighlights.forEach(wid => {
+          // Reset card positions/overlays from previous pot, then highlight for this pot
+          this.resetCardHighlights();
+          potResult.winnerIds.forEach(wid => {
             this.highlightWinningBoardCards(wid);
             this.highlightWinningHoleCards(wid);
-            highlightedPlayers.add(wid);
           });
           this.dimNonWinningCards(potResult.winnerIds);
 
@@ -3340,19 +3338,15 @@ export class GameManager {
       } as TextStyleOptions,
     });
     label.anchor.set(0.5);
-    // Position hand labels so they don't get covered by raised community cards
+    // Position hand labels below name label so card tops remain visible
     const seatIdx = slot.seatIndex;
+    label.x = slot.x;
     if (seatIdx === 2 || seatIdx === 6) {
-      // Side seats: position well below name label to avoid overlap
-      label.x = slot.x;
-      label.y = slot.y + 100;
+      label.y = slot.y + 100; // side seats: well below name
     } else if (seatIdx === 3 || seatIdx === 4 || seatIdx === 5) {
-      // Top row: place ABOVE the cards so raised board cards don't cover them
-      label.x = slot.x;
-      label.y = slot.y - 95;
+      label.y = slot.y - 120; // top row: above cards
     } else {
-      label.x = slot.x + betLabelPos.x;
-      label.y = slot.y + betLabelPos.y;
+      label.y = slot.y - 120; // bottom row: on the table above avatar
     }
     label.alpha = 0;
     label.scale.set(0.5);
@@ -3401,9 +3395,15 @@ export class GameManager {
     });
     label.anchor.set(0.5);
     label.x = slot.x;
-    // Side seats need more offset to clear the name label
+    // Position losing hand labels below name label so card tops remain visible
     const seatIdx = slot.seatIndex;
-    label.y = (seatIdx === 2 || seatIdx === 6) ? slot.y + 100 : slot.y + 48;
+    if (seatIdx === 2 || seatIdx === 6) {
+      label.y = slot.y + 100;
+    } else if (seatIdx === 3 || seatIdx === 4 || seatIdx === 5) {
+      label.y = slot.y - 120;
+    } else {
+      label.y = slot.y - 100; // bottom row: on the table above avatar
+    }
     label.alpha = 0;
     label.zIndex = 100;
     scene.addChild(label);
@@ -3672,6 +3672,36 @@ export class GameManager {
   }
 
   // ─── Winning card highlighting ─────────────────────────────
+
+  /** Reset all board and hole card positions/overlays to their default state.
+   *  Called between sequential pot awards so each pot starts fresh. */
+  private resetCardHighlights(): void {
+    // Reset community card positions to y=0 and remove dim overlays
+    for (const card of this.communityCards.children) {
+      card.y = 0;
+      // Remove dim overlays
+      const container = card as Container;
+      const overlays = container.children?.filter((c: any) => c.label === '__dimOverlay');
+      overlays?.forEach(o => container.removeChild(o));
+    }
+
+    // Reset hole card positions and remove dim overlays
+    if (this.engine) {
+      const gameState = this.engine.getGameState();
+      gameState.players.forEach((_, seatIdx) => {
+        const slot = this.slotLayout.getSlot(seatIdx);
+        if (!slot) return;
+        const slotCards = slot.children[0]; // cardsContainer
+        if (!slotCards) return;
+        slotCards.children.forEach(c => {
+          c.y = 0;
+          const container = c as Container;
+          const overlays = container.children?.filter((ch: any) => ch.label === '__dimOverlay');
+          overlays?.forEach(o => container.removeChild(o));
+        });
+      });
+    }
+  }
 
   private highlightWinningBoardCards(winnerId: string): void {
     if (!this.engine) return;

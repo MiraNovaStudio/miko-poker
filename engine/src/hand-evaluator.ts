@@ -68,7 +68,10 @@ export function evaluateHand(cards: Card[]): HandStrength {
   // Four of a kind
   if (groups[0]?.count === 4) {
     const fourValue = groups[0].value;
-    const kicker = groups.find(g => g.value !== fourValue)!.value;
+    const kicker = groups
+      .filter(g => g.value !== fourValue)
+      .map(g => g.value)
+      .sort((a, b) => b - a)[0];
     return { category: 7, kickers: [fourValue, kicker] };
   }
 
@@ -111,7 +114,10 @@ export function evaluateHand(cards: Card[]): HandStrength {
   const pairs = groups.filter(g => g.count === 2).map(g => g.value);
   if (pairs.length >= 2) {
     const [pair1, pair2] = pairs.slice(0, 2).sort((a, b) => b - a);
-    const kicker = groups.find(g => g.value !== pair1 && g.value !== pair2)!.value;
+    const kicker = groups
+      .filter(g => g.value !== pair1 && g.value !== pair2)
+      .map(g => g.value)
+      .sort((a, b) => b - a)[0];
     return { category: 2, kickers: [pair1, pair2, kicker] };
   }
 
