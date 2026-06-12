@@ -15,7 +15,6 @@ SIZE_ONLY="--size-only"
 usage() {
       echo "Usage: $0 [-i]"
       echo "  -i    Invalidate CloudFront cache after deployment"
-      echo "  -f    Include date timestamp any new file if size is same"
 }
 
 
@@ -24,9 +23,6 @@ while getopts "ihf" opt; do
   case $opt in
     i)
       INVALIDATE_CACHE=true
-      ;;
-    f)
-      SIZE_ONLY=""
       ;;
     h)
       usage
@@ -40,18 +36,10 @@ while getopts "ihf" opt; do
   esac
 done
 
-echo "🚀 Building Project **"
-./build.sh
-
-if [ "$?" -ne "0" ]; then
-	echo "Build failed. (Run npm install?)"
-	exit
-fi
-
 echo "🚀 Deploying Miranova Studios site to S3..."
 
 # Run the deploy command and capture exit status
-aws s3 sync ./public/ s3://mikopoker.miranova.studio --delete ${SIZE_ONLY}
+aws s3 sync ./public/ s3://mikopoker.miranova.studio --delete 
 status=$?
 
 if [ $status -ne 0 ]; then
