@@ -48,7 +48,7 @@ Production UI builds are minified and obfuscated. The dev server is not.
 
 **UI** (`@miko/ui`)
 
-- PixiJS v8 table, authored at 960×720 and scaled to the window
+- PixiJS v8 table, authored at 960 × 720 and scaled to the window
 - Eight seats, a 52-card deck with flip animation, and chip stacks
 - Web Audio cues for check, bet, fold, and chips, plus background music
 - An HTML bet field positioned over the canvas
@@ -88,6 +88,43 @@ PokerGameEngine
 | `game_mode_changed` | The game type changes (cash, sit-and-go, or tournament) |
 | `level_changed` | The tournament blind level increases |
 | `game_over` | The tournament or game ends |
+
+## Usage
+
+Subscribe to events, then start a hand. `cards_dealt` fires once per player. The listener below only logs engine data.
+
+```typescript
+import { PokerGameEngine } from '@miko/engine';
+
+const engine = new PokerGameEngine({
+  smallBlind: 5,
+  bigBlind: 10,
+  startingChips: 1000,
+  maxPlayers: 3,
+});
+
+engine.on((event) => {
+  switch (event.type) {
+    case 'hand_started':
+      console.log('New hand');
+      break;
+    case 'cards_dealt':
+      console.log(event.playerId, event.cards);
+      break;
+    case 'street_changed':
+      console.log(event.street, event.communityCards);
+      break;
+    case 'hand_complete':
+      console.log(event.result.winners, event.result.winningHand);
+      break;
+  }
+});
+
+engine.initGame(['player', 'ai1', 'ai2']);
+engine.startNewHand();
+```
+
+The PixiJS app imports this same build through the `@engine` alias. Drawing cards and announcing a winner belong in that UI, not in the engine.
 
 ## Layout
 
