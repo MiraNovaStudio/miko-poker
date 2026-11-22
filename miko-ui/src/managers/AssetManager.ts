@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 import { Assets, Texture } from 'pixi.js';
 import { RANK_TO_FILENAME } from '../utils/constants.js';
 import { SettingsManager } from './SettingsManager.js';

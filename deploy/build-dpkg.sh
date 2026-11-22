@@ -72,7 +72,7 @@ Priority: optional
 Architecture: all
 Depends: nodejs (>= 18)
 Recommends: nginx
-Maintainer: MiraNova Studios
+Maintainer: MiraNova Studio
 Description: MikoPoker — Texas Hold'em poker game
  A single-player Texas Hold'em poker game with AI opponents,
  procedural avatars, and a PixiJS browser UI.

@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 /**
  * HandLog — records per-hand data for post-hand debugging.
  * Call debugHandLog(handNum) in the browser console to view a hand summary.

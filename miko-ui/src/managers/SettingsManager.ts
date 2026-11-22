@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 export type DeckType = 'png' | 'unicode' | 'svg';
 export type ChipDisplay = 'dollar' | 'bb';
 export type TableStyle = 'table1' | 'table2';

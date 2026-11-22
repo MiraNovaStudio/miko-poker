@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 
 const MUTE_KEY = 'miko_muted';
 const SHUFFLE_KEY = 'miko_shuffleMusic';

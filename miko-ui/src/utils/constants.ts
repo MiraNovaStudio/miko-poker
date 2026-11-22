@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 /** Layout and style constants ported from MikoPokerUI */
 
 /** Seat positions for 8-max rectangular layout (origin = center of table) */

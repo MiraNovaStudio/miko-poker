@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================
-# Miranova Studios - Website Deploy Script
+# Miranova Studio - Website Deploy Script
 # ============================================
 #
 #echo "⚠️  Deploy temporarily disabled — exiting safely."

@@ -1,4 +1,4 @@
-// (c) 2025 MiraNova Studios
+// (c) 2025 MiraNova Studio
 /**
  * Post-flop AI decision logic
  */

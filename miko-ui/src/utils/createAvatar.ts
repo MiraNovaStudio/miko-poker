@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 /**
  * Procedural avatar generator — creates unique player avatars at runtime
  * using PixiJS Graphics primitives. Randomness is seeded from the player

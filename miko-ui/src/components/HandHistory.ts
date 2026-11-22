@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 const MAX_ENTRIES = 100;
 
 export class HandHistory {

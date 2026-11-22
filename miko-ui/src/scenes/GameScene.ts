@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 import { Container, Sprite, type Renderer } from 'pixi.js';
 import { AssetManager } from '../managers/AssetManager.js';
 import { SettingsManager } from '../managers/SettingsManager.js';

@@ -152,4 +152,4 @@ build.sh           engine → UI → public/
 
 ## License
 
-[MIT](LICENSE) © 2026 MiraNova Studios.
+[MIT](LICENSE) © 2026 MiraNova Studio.

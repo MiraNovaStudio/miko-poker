@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 /**
  * PotChips — renders a small stack of poker chip discs above the pot label.
  * Chips are drawn with Graphics primitives (no sprite assets needed).

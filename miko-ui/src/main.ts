@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 import { Application } from 'pixi.js';
 import { AssetManager } from './managers/AssetManager.js';
 import { AudioManager } from './managers/AudioManager.js';

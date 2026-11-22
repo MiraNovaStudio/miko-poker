@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 import { Container, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
 import { Card, type CardData } from './Card.js';
 import {

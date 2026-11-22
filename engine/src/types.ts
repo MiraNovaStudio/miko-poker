@@ -1,4 +1,4 @@
-// (c) 2025 MiraNova Studios
+// (c) 2025 MiraNova Studio
 /**
  * Core type definitions for the poker engine
  */

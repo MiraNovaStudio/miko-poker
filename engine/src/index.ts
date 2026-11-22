@@ -1,4 +1,4 @@
-// (c) 2025 MiraNova Studios
+// (c) 2025 MiraNova Studio
 /**
  * MikoPoker Engine - Pure TypeScript Texas Hold'em Engine
  * UI-agnostic poker game logic

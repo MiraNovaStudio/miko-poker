@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 import { Container, Graphics, Text, type TextStyleOptions } from 'pixi.js';
 import { FONTS } from '../utils/constants.js';
 import { SettingsManager, formatChips } from '../managers/SettingsManager.js';

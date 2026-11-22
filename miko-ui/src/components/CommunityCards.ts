@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 import { Container } from 'pixi.js';
 import { Card, type CardData } from './Card.js';
 import { COMMUNITY_CARD_WIDTH, COMMUNITY_CARD_HEIGHT, CARD_SPACING_COMMUNITY } from '../utils/constants.js';

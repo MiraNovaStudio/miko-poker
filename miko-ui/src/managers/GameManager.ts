@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 /**
  * GameManager — ports the game-flow orchestration from Cocos GameTable.ts to PixiJS.
  * Engine code is NOT modified; only UI calls change.

@@ -1,4 +1,4 @@
-// (c) 2026 MiraNova Studios
+// (c) 2026 MiraNova Studio
 /**
  * Player roster — 32 named AI opponents with consistent playstyles.
  *
