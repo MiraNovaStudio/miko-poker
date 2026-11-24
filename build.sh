@@ -28,13 +28,12 @@ cd "$PROJECT_ROOT/miko-ui"
 npm run build
 echo "  UI built."
 
-# Step 3: Deploy to public/
-echo "[3/3] Deploying to public/..."
+# Step 3: Copy the UI build to public/
+echo "[3/3] Copying build to public/..."
 rm -rf "$PROJECT_ROOT/public"
 cp -r "$PROJECT_ROOT/miko-ui/dist" "$PROJECT_ROOT/public"
-echo "  Deployed to $PROJECT_ROOT/public/"
+echo "  Copied to $PROJECT_ROOT/public/"
 
 echo ""
 echo "=== Build complete ==="
 echo "Serve with: npx serve public -l 9001"
-echo "Publish public/ with: ./deploy.sh   (set S3_BUCKET first; see deploy.env.example)"

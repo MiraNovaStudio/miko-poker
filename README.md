@@ -17,7 +17,7 @@ npm run dev             # http://localhost:3000
 ```bash
 npm test                # engine tests, then UI tests
 npm run build           # engine → UI → public/
-npm run serve           # http://localhost:9001
+npm run serve           # npx serve public -l 9001
 ```
 
 | Script | What it does |
@@ -26,20 +26,14 @@ npm run serve           # http://localhost:9001
 | `npm run build` | Full build, then copy `miko-ui/dist` to `public/` |
 | `npm run build:engine` | Compile `@miko/engine` only |
 | `npm run build:ui` | Bundle `@miko/ui` only |
-| `npm run serve` | Serve `public/` on port 9001 |
+| `npm run serve` | `npx serve public -l 9001` |
 | `npm test` | Engine tests, then UI tests |
 | `npm run test:engine` | Engine tests only |
 | `npm run test:ui` | UI tests only |
 | `npm run lint` | Lint the engine |
 | `npm run clean` | Delete `engine/dist` |
 
-Production UI builds are minified and obfuscated. The dev server is not.
-
-## Publishing
-
-`./deploy.sh` syncs `public/` to an S3 bucket you create. The bucket name is yours. Copy `deploy.env.example` to `deploy.env`, set `S3_BUCKET`, and run the script. Pass `-i` to invalidate your CloudFront distribution; that asks for `CLOUDFRONT_DISTRIBUTION_ID` when it is not already set. `deploy.env` is gitignored. Details are in `SETUP.md`.
-
-A self-hosted package is also described in `SETUP.md`. The nginx sample uses `poker.example.com` until you replace it.
+`npm run dev` opens the Vite dev server at http://localhost:3000. `npm run build` writes the production UI into `public/`. Those builds are minified and obfuscated. `npm run serve` runs `npx serve public -l 9001`, which opens the built game at http://localhost:9001.
 
 ## Features
 
@@ -68,7 +62,7 @@ The repo is an npm workspace with two packages:
 - `@miko/engine` compiles with `tsc` to `engine/dist`
 - `@miko/ui` bundles with Vite
 
-The UI does not import engine source. `miko-ui/tsconfig.json` and `miko-ui/vite.config.ts` both alias `@engine` to `../engine/dist`. `npm run build` runs `build.sh`: compile the engine, require `engine/dist/index.js`, bundle the UI, and replace `public/` with `miko-ui/dist`. Card art, the table, and sounds live in `miko-ui/static/` (Vite `publicDir`).
+The UI does not import engine source. `miko-ui/tsconfig.json` and `miko-ui/vite.config.ts` both alias `@engine` to `../engine/dist`. `npm run build` runs `build.sh`: compile the engine, require `engine/dist/index.js`, bundle the UI, and replace `public/` with `miko-ui/dist`. `npm run serve` then serves that folder. Card art, the table, and sounds live in `miko-ui/static/` (Vite `publicDir`).
 
 ```
 UI (StartScene, GameScene, managers)

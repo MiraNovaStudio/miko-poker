@@ -10,10 +10,6 @@ coverage/
 engine/dist/
 miko-ui/dist/
 public/
-deploy/*.deb
-
-# Local publish targets (S3 bucket, CloudFront distribution)
-deploy.env
 
 # OS cruft
 .DS_Store
