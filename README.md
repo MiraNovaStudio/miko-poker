@@ -35,6 +35,12 @@ npm run serve           # http://localhost:9001
 
 Production UI builds are minified and obfuscated. The dev server is not.
 
+## Publishing
+
+`./deploy.sh` syncs `public/` to an S3 bucket you create. The bucket name is yours. Copy `deploy.env.example` to `deploy.env`, set `S3_BUCKET`, and run the script. Pass `-i` to invalidate your CloudFront distribution; that asks for `CLOUDFRONT_DISTRIBUTION_ID` when it is not already set. `deploy.env` is gitignored. Details are in `SETUP.md`.
+
+A self-hosted package is also described in `SETUP.md`. The nginx sample uses `poker.example.com` until you replace it.
+
 ## Features
 
 **Engine** (`@miko/engine`)

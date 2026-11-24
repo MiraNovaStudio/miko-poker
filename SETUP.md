@@ -6,6 +6,36 @@
 - **Server**: Ubuntu 22.04+ / Debian 12+ with Node.js 20+ installed
 - **Domain**: DNS pointed to the server (e.g., `poker.yourdomain.com`)
 
+There are two ways to publish a build: upload `public/` to an S3 bucket you own, or install the Debian package on a server you control. The repo does not include a shared bucket or a CloudFront distribution.
+
+## Publish to your own S3 bucket
+
+`./deploy.sh` syncs `./public/` to whatever bucket you name. Create that bucket in your AWS account first. The name is yours, for example `s3://your-bucket-name`. It is not supplied by this project.
+
+You need the AWS CLI, with credentials that can write to that bucket.
+
+```bash
+cp deploy.env.example deploy.env
+```
+
+Edit `deploy.env` and set `S3_BUCKET` to your bucket. `deploy.env` is gitignored.
+
+```bash
+npm run build
+./deploy.sh
+```
+
+If `S3_BUCKET` is empty and you are at a terminal, the script asks for the bucket name and then exits if you leave it blank. A non-interactive run with no bucket set exits with the same instructions.
+
+CloudFront is optional. `./deploy.sh -i` invalidates `/*` on your distribution. Set `CLOUDFRONT_DISTRIBUTION_ID` in `deploy.env`, or let the script ask for it when you pass `-i`. Skip `-i` if you are not using CloudFront.
+
+You can export the same variables instead of using `deploy.env`:
+
+```bash
+export S3_BUCKET=s3://your-bucket-name
+./deploy.sh
+```
+
 ## 1. Build the Debian Package
 
 On your dev machine:
@@ -42,7 +72,7 @@ The package automatically:
 ```bash
 # Edit the domain in the config
 sudo nano /etc/nginx/sites-available/mikopoker
-# Change: server_name poker.yourdomain.com;
+# Replace poker.example.com with your domain.
 
 # Enable the site
 sudo ln -sf /etc/nginx/sites-available/mikopoker /etc/nginx/sites-enabled/

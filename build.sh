@@ -3,6 +3,11 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
+if [[ ! -x "$PROJECT_ROOT/node_modules/.bin/tsc" && ! -f "$PROJECT_ROOT/node_modules/.bin/tsc.cmd" ]]; then
+  echo "ERROR: TypeScript is not installed. From the repo root, run: npm install"
+  exit 1
+fi
+
 echo "=== Building MikoPoker ==="
 
 # Step 1: Build engine
@@ -32,4 +37,4 @@ echo "  Deployed to $PROJECT_ROOT/public/"
 echo ""
 echo "=== Build complete ==="
 echo "Serve with: npx serve public -l 9001"
-echo " OR PUSH TO S3"
+echo "Publish public/ with: ./deploy.sh   (set S3_BUCKET first; see deploy.env.example)"
