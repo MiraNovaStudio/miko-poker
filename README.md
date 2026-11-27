@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Texas Hold'em in the browser. The rules live in a UI-agnostic TypeScript engine; the table is a PixiJS v8 app. Version **0.6.4**.
+Texas Hold'em in the browser. The rules live in a UI-agnostic TypeScript engine; the table is a PixiJS v8 app. Version **0.6.5**.
 
 ## Quick start
 
@@ -24,6 +24,7 @@ npm run serve           # npx serve public -l 9001
 |--------|----------------|
 | `npm run dev` | Vite dev server on port 3000 |
 | `npm run build` | Full build, then copy `miko-ui/dist` to `public/` |
+| `npm run build:win` | Desktop build, then a Windows setup exe |
 | `npm run build:engine` | Compile `@miko/engine` only |
 | `npm run build:ui` | Bundle `@miko/ui` only |
 | `npm run serve` | `npx serve public -l 9001` |
@@ -34,6 +35,10 @@ npm run serve           # npx serve public -l 9001
 | `npm run clean` | Delete `engine/dist` |
 
 `npm run dev` opens the Vite dev server at http://localhost:3000. `npm run build` writes the production UI into `public/`. Those builds are minified and obfuscated. `npm run serve` runs `npx serve public -l 9001`, which opens the built game at http://localhost:9001.
+
+## Windows installer
+
+`npm run build:win` packages that same game as a Windows setup exe. The installed game does not need Node. The machine that builds the installer needs Rust, Visual Studio with the C++ desktop workload, and the WebView2 loader. The setup file is written under `desktop/src-tauri/target/release/bundle/nsis/`.
 
 ## Features
 
@@ -140,8 +145,10 @@ miko-ui/           @miko/ui — PixiJS app
   src/tests/
   static/          cards, table art, sounds
 public/            production output (gitignored)
+desktop/           Tauri shell for the Windows installer
 nova/              changelogs and planning notes
 build.sh           engine → UI → public/
+build-win.sh       desktop build, then the setup exe
 ```
 
 ## Requirements
@@ -149,6 +156,8 @@ build.sh           engine → UI → public/
 - Node.js 20+
 - npm 9+
 - TypeScript 5+
+
+`npm run build:win` also needs Rust (rustup, stable) and Visual Studio with the Desktop development with C++ workload.
 
 ## License
 

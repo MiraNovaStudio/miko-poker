@@ -5,7 +5,11 @@ import javascriptObfuscator from 'vite-plugin-javascript-obfuscator';
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf-8'));
 
+// Desktop packages load files from a folder, so asset URLs must be relative.
+const desktop = process.env.MIKO_DESKTOP === '1';
+
 export default defineConfig(({ mode }) => ({
+  base: desktop ? './' : '/',
   publicDir: 'static',
   resolve: {
     alias: {

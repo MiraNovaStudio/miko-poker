@@ -10,6 +10,7 @@ coverage/
 engine/dist/
 miko-ui/dist/
 public/
+desktop/src-tauri/target/
 
 # OS cruft
 .DS_Store

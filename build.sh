@@ -23,7 +23,12 @@ if [ ! -f "$PROJECT_ROOT/engine/dist/index.js" ]; then
 fi
 
 # Step 2: Build miko-ui
-echo "[2/3] Building miko-ui..."
+# MIKO_DESKTOP=1 emits relative asset paths for the Windows package.
+if [[ "${MIKO_DESKTOP:-}" == "1" ]]; then
+  echo "[2/3] Building miko-ui (desktop)..."
+else
+  echo "[2/3] Building miko-ui..."
+fi
 cd "$PROJECT_ROOT/miko-ui"
 npm run build
 echo "  UI built."
